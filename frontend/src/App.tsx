@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -28,35 +29,35 @@ const App = () => (
     <Sonner />
     <BrowserRouter>
       <Routes>
-          {/* Public */}
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-          </Route>
+        {/* Public */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Index />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+        </Route>
 
-          {/* Admin */}
-          <Route element={<AppLayout variant="admin" />}>
-            <Route path="/admin" element={<AdminOverview />} />
-            <Route path="/admin/onboard" element={<AdminOnboard />} />
-            <Route path="/admin/clients/:id" element={<AdminClientDetail />} />
-          </Route>
+        {/* Admin — requires super_admin */}
+        <Route element={<ProtectedRoute requireAdmin={true}><AppLayout variant="admin" /></ProtectedRoute>}>
+          <Route path="/admin" element={<AdminOverview />} />
+          <Route path="/admin/onboard" element={<AdminOnboard />} />
+          <Route path="/admin/clients/:id" element={<AdminClientDetail />} />
+        </Route>
 
-          {/* Dashboard */}
-          <Route element={<AppLayout variant="dashboard" />}>
-            <Route path="/dashboard" element={<DashboardOverview />} />
-            <Route path="/dashboard/conversations" element={<Conversations />} />
-            <Route path="/dashboard/knowledge" element={<Knowledge />} />
-            <Route path="/dashboard/agent" element={<Agent />} />
-            <Route path="/dashboard/analytics" element={<Analytics />} />
-            <Route path="/dashboard/billing" element={<Billing />} />
-          </Route>
+        {/* Dashboard — requires authenticated user */}
+        <Route element={<ProtectedRoute><AppLayout variant="dashboard" /></ProtectedRoute>}>
+          <Route path="/dashboard" element={<DashboardOverview />} />
+          <Route path="/dashboard/conversations" element={<Conversations />} />
+          <Route path="/dashboard/knowledge" element={<Knowledge />} />
+          <Route path="/dashboard/agent" element={<Agent />} />
+          <Route path="/dashboard/analytics" element={<Analytics />} />
+          <Route path="/dashboard/billing" element={<Billing />} />
+        </Route>
 
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
+  </TooltipProvider>
 );
 
 export default App;
