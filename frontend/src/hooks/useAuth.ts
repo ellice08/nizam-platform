@@ -7,11 +7,14 @@ export function useAuth() {
 
   useEffect(() => {
     async function fetchTenant(userId: string) {
-      const { data } = await supabase
+      console.log("Fetching tenant for user:", userId);
+      const { data, error } = await supabase
         .from('tenant_users')
         .select('tenant_id, role')
         .eq('user_id', userId)
         .single();
+      console.log("Tenant result:", JSON.stringify(data));
+      if (error) console.log("Tenant error:", error.message, error.code);
       if (data) {
         setTenant(data.tenant_id as string, data.role as string);
       }
@@ -21,7 +24,11 @@ export function useAuth() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUser(session.user);
-        await fetchTenant(session.user.id);
+        try {
+          await fetchTenant(session.user.id);
+        } catch (err) {
+          console.log("fetchTenant threw during init:", err);
+        }
       }
       setLoading(false);
     }
@@ -30,10 +37,17 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state changed:", event);
         if (event === 'SIGNED_IN' && session?.user) {
+          setLoading(true);
           setUser(session.user);
-          await fetchTenant(session.user.id);
-          setLoading(false);
+          try {
+            await fetchTenant(session.user.id);
+          } catch (err) {
+            console.log("fetchTenant threw on SIGNED_IN:", err);
+          } finally {
+            setLoading(false);
+          }
         } else if (event === 'SIGNED_OUT') {
           clear();
         }
