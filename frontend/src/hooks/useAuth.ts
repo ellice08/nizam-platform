@@ -6,31 +6,42 @@ export function useAuth() {
   const { setUser, setTenant, setLoading, clear } = useAuthStore();
 
   useEffect(() => {
-    async function fetchTenant(userId: string) {
+    async function fetchTenant(userId: string): Promise<void> {
       console.log("Fetching tenant for user:", userId);
-      const { data, error } = await supabase
-        .from('tenant_users')
-        .select('tenant_id, role')
-        .eq('user_id', userId)
-        .single();
-      console.log("Tenant result:", JSON.stringify(data));
-      if (error) console.log("Tenant error:", error.message, error.code);
-      if (data) {
+      try {
+        const { data, error } = await supabase
+          .from('tenant_users')
+          .select('tenant_id, role')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (error) {
+          console.log("Tenant fetch error:", error.message);
+          return;
+        }
+        if (!data) {
+          console.log("No tenant found for user:", userId);
+          return;
+        }
+        console.log("Tenant result:", JSON.stringify(data));
         setTenant(data.tenant_id as string, data.role as string);
+      } catch (err) {
+        console.log("Tenant fetch threw:", err);
       }
     }
 
     async function init() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        try {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser(session.user);
           await fetchTenant(session.user.id);
-        } catch (err) {
-          console.log("fetchTenant threw during init:", err);
         }
+      } catch (err) {
+        console.log("Auth init error:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     void init();
@@ -43,8 +54,6 @@ export function useAuth() {
           setUser(session.user);
           try {
             await fetchTenant(session.user.id);
-          } catch (err) {
-            console.log("fetchTenant threw on SIGNED_IN:", err);
           } finally {
             setLoading(false);
           }
