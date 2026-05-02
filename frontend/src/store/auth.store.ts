@@ -18,7 +18,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   tenantId: null,
   role: null,
   isAdmin: false,
-  isLoading: true,
+  isLoading: false,
 
   setUser: (user) => set({ user }),
 
