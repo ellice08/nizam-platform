@@ -8,6 +8,7 @@ import logger from './utils/logger.js';
 import { AppError } from './utils/errors.js';
 import { ApiResponse } from './utils/response.js';
 import { testConnection } from './lib/test-connection.js';
+import { registerRoutes } from './api/index.js';
 
 const app = express();
 
@@ -28,10 +29,6 @@ app.get('/health/db', async (_req: Request, res: Response) => {
     res.status(503).json({ connected: false, error: result.error });
   }
 });
-
-function registerRoutes(_app: typeof app): void {
-  // TODO: register route handlers here
-}
 
 registerRoutes(app);
 
