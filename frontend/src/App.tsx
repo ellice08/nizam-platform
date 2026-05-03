@@ -2,7 +2,6 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -11,11 +10,9 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
-
 import AdminOverview from "./pages/admin/AdminOverview";
 import AdminClientDetail from "./pages/admin/AdminClientDetail";
 import AdminOnboard from "./pages/admin/AdminOnboard";
-
 import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import Conversations from "./pages/dashboard/Conversations";
 import Knowledge from "./pages/dashboard/Knowledge";
@@ -37,14 +34,26 @@ const App = () => (
         </Route>
 
         {/* Admin — requires super_admin */}
-        <Route element={<ProtectedRoute requireAdmin={true}><AppLayout variant="admin" /></ProtectedRoute>}>
+        <Route
+          element={
+            <ProtectedRoute requireAdmin={true}>
+              <AppLayout variant="admin" />
+            </ProtectedRoute>
+          }
+        >
           <Route path="/admin" element={<AdminOverview />} />
           <Route path="/admin/onboard" element={<AdminOnboard />} />
           <Route path="/admin/clients/:id" element={<AdminClientDetail />} />
         </Route>
 
         {/* Dashboard — requires authenticated user */}
-        <Route element={<ProtectedRoute><AppLayout variant="dashboard" /></ProtectedRoute>}>
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout variant="dashboard" />
+            </ProtectedRoute>
+          }
+        >
           <Route path="/dashboard" element={<DashboardOverview />} />
           <Route path="/dashboard/conversations" element={<Conversations />} />
           <Route path="/dashboard/knowledge" element={<Knowledge />} />

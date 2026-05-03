@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth.store";
 
 type NavItem = {
   to: string;
@@ -55,6 +56,9 @@ type AppSidebarProps = {
 export function AppSidebar({ variant }: AppSidebarProps) {
   const sections = variant === "admin" ? adminSections : dashboardSections;
   const { pathname } = useLocation();
+  const { user, role, isAdmin } = useAuthStore();
+  const email = user?.email ?? "";
+  const roleLabel = isAdmin ? "Admin" : (role ?? "");
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -124,7 +128,14 @@ export function AppSidebar({ variant }: AppSidebarProps) {
       </nav>
 
       <div className="border-t border-sidebar-border px-6 py-4 text-xs text-sidebar-foreground/50">
-        <p className="font-display italic">Order, refined.</p>
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <p className="truncate">{email}</p>
+          {roleLabel && (
+            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-[0.15em] bg-sidebar-accent text-sidebar-accent-foreground">
+              {roleLabel}
+            </span>
+          )}
+        </div>
       </div>
     </aside>
   );
