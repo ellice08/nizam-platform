@@ -13,19 +13,19 @@ const Login = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     try {
-      setLoading(true);
-      setError(null);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      setLoading(true)
+      setError(null)
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
       setTimeout(() => navigate('/redirect'), 0)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <section className="container max-w-md py-20">
