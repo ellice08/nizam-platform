@@ -19,7 +19,7 @@ const Login = () => {
       setError(null);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      navigate("/redirect");
+      setTimeout(() => navigate('/redirect'), 0)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
