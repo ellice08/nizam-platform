@@ -8,7 +8,6 @@ export const apiClient = axios.create({
   },
 })
 
-// Request interceptor — attach JWT token
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -17,14 +16,13 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${session.access_token}`
       }
     } catch (err) {
-      console.error('Failed to get session for request:', err)
+      console.error('Session fetch error:', err)
     }
     return config
   },
   (error) => Promise.reject(error)
 )
 
-// Response interceptor — handle auth errors
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
