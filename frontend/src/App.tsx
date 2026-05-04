@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
+import Redirect from "./pages/auth/Redirect";
 import AdminOverview from "./pages/admin/AdminOverview";
 import AdminClientDetail from "./pages/admin/AdminClientDetail";
 import AdminOnboard from "./pages/admin/AdminOnboard";
@@ -31,6 +32,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/redirect" element={<Redirect />} />
         </Route>
 
         {/* Admin — requires super_admin */}
