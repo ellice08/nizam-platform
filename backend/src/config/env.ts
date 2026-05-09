@@ -17,6 +17,8 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
   FRONTEND_URL: z.string().url(),
+  RESEND_API_KEY: z.string().min(1),
+  RESEND_FROM_EMAIL: z.string().email(),
 });
 
 const parsed = envSchema.safeParse(process.env);

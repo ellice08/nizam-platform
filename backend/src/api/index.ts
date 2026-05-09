@@ -1,8 +1,10 @@
 import type { Express } from 'express';
-import tenantRoutes from './tenant.routes.js';
+import authRoutes from './auth.routes.js';
+import organisationRoutes from './organisation.routes.js';
 import conversationRoutes from './conversation.routes.js';
 
 export function registerRoutes(app: Express): void {
-  app.use('/api/tenants', tenantRoutes);
+  app.use('/api/auth', authRoutes);
+  app.use('/api/organisations', organisationRoutes);
   app.use('/api/conversations', conversationRoutes);
 }
