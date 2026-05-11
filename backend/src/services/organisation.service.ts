@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../utils/errors.js';
+import { agentService } from './agent.service.js';
 
 class OrganisationService {
   async getAllOrganisations() {
@@ -51,10 +52,18 @@ class OrganisationService {
       throw new AppError(error.message);
     }
 
-    await supabase.from('branches').insert({
-      organisation_id: (org as Record<string, unknown>).id,
-      name: 'Main Office',
-    });
+    const { data: branch } = await supabase
+      .from('branches')
+      .insert({ organisation_id: (org as Record<string, unknown>).id, name: 'Main Office' })
+      .select()
+      .single();
+
+    if (branch) {
+      await agentService.createAgent(
+        (branch as Record<string, unknown>).id as string,
+        { name: 'Aria', niche: data.industry, tone: 'professional' }
+      );
+    }
 
     return org;
   }
