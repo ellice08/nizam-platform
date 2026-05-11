@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/axios'
+import { supabase } from '@/lib/supabase'
 import type {
   Organisation,
   OrganisationWithDetails,
@@ -103,6 +104,59 @@ const updateAgent = async (agentId: string, payload: UpdateAgentPayload): Promis
   return response.data.data
 }
 
+const uploadDocuments = async (
+  branchId: string,
+  files: File[]
+): Promise<{
+  results: Array<{ filename: string; chunksCreated: number; error?: string }>
+  totalChunks: number
+}> => {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+
+  const formData = new FormData()
+  formData.append('branch_id', branchId)
+  files.forEach(file => formData.append('files', file))
+
+  const response = await fetch(
+    `${import.meta.env.VITE_API_URL as string}/api/ingest/upload`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    }
+  )
+  const json = await response.json() as { data: { results: Array<{ filename: string; chunksCreated: number; error?: string }>; totalChunks: number }; error?: { message?: string } }
+  if (!response.ok) throw new Error(json.error?.message ?? 'Upload failed')
+  return json.data
+}
+
+const getKnowledgeSources = async (branchId: string): Promise<Array<{
+  source_url: string
+  source_type: string
+  chunk_count: number
+  last_crawled_at: string | null
+}>> => {
+  const response = await apiClient.get<ApiSuccess<Array<{
+    source_url: string
+    source_type: string
+    chunk_count: number
+    last_crawled_at: string | null
+  }>>>(`/api/ingest/sources/${branchId}`)
+  return response.data.data
+}
+
+const deleteKnowledgeSource = async (
+  branchId: string,
+  sourceUrl: string
+): Promise<{ deleted: number }> => {
+  const response = await apiClient.delete<ApiSuccess<{ deleted: number }>>(
+    '/api/ingest/source',
+    { data: { branch_id: branchId, source_url: sourceUrl } }
+  )
+  return response.data.data
+}
+
 export const organisationApi = {
   getAllOrganisations,
   getOrganisationById,
@@ -116,4 +170,7 @@ export const organisationApi = {
   getAgentsByOrg,
   createAgent,
   updateAgent,
+  uploadDocuments,
+  getKnowledgeSources,
+  deleteKnowledgeSource,
 }

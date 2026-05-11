@@ -12,6 +12,8 @@ export {
   useAgentByBranch,
   useAgentsByOrg,
   useUpdateAgent,
+  useKnowledgeSources,
+  useDeleteKnowledgeSource,
 } from './useOrganisations'
 export {
   useConversations,

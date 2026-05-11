@@ -111,3 +111,23 @@ export const useUpdateAgent = () => {
     },
   })
 }
+
+export const useKnowledgeSources = (branchId: string | null) => {
+  return useQuery({
+    queryKey: ['knowledge', 'sources', branchId],
+    queryFn: () => organisationApi.getKnowledgeSources(branchId!),
+    enabled: !!branchId,
+    staleTime: 30000,
+  })
+}
+
+export const useDeleteKnowledgeSource = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ branchId, sourceUrl }: { branchId: string; sourceUrl: string }) =>
+      organisationApi.deleteKnowledgeSource(branchId, sourceUrl),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'sources'] })
+    },
+  })
+}
