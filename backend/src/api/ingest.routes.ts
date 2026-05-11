@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { ragService } from '../services/rag.service.js';
@@ -38,6 +37,7 @@ async function extractText(
   filename: string
 ): Promise<string> {
   if (mimetype === 'application/pdf') {
+    const { default: pdfParse } = await import('pdf-parse');
     const result = await pdfParse(buffer);
     return result.text;
   }
