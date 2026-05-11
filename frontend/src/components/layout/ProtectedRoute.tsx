@@ -1,22 +1,45 @@
-import type { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuthStore } from '@/store';
+import { Navigate } from 'react-router-dom'
+import { useAuthStore } from '@/store'
 
 interface ProtectedRouteProps {
-  children: ReactNode;
-  requireAdmin?: boolean;
+  children: React.ReactNode
+  requireAdmin?: boolean
 }
 
-export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) {
-  const { user, isAdmin } = useAuthStore();
+export const ProtectedRoute = ({
+  children,
+  requireAdmin = false,
+}: ProtectedRouteProps) => {
+  const { user, isAdmin, isLoading } = useAuthStore()
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
+  // Wait for useAuth to finish restoring session
+  // isLoading starts true and is set false by useAuth
+  // after getSession resolves — so this is never a permanent block
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: '#0E0E0C',
+          color: '#FAFAFA',
+          fontSize: '13px',
+          fontFamily: 'Arial, sans-serif',
+          letterSpacing: '0.08em',
+        }}
+      >
+        Loading...
+      </div>
+    )
   }
 
-  if (requireAdmin && !isAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  // Session restored — now make routing decisions
+  if (!user) return <Navigate to="/login" replace />
+  if (requireAdmin && !isAdmin) return <Navigate to="/dashboard" replace />
 
-  return <>{children}</>;
+  return <>{children}</>
 }
+
+export default ProtectedRoute

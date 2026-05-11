@@ -3,30 +3,32 @@ import type { User } from '@supabase/supabase-js';
 
 interface AuthState {
   user: User | null;
-  tenantId: string | null;
+  organisationId: string | null;
+  branchId: string | null;
   role: string | null;
   isAdmin: boolean;
   isLoading: boolean;
   setUser: (user: User | null) => void;
-  setTenant: (tenantId: string, role: string) => void;
+  setOrganisation: (organisationId: string, branchId: string | null, role: string) => void;
   setLoading: (loading: boolean) => void;
   clear: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  tenantId: null,
+  organisationId: null,
+  branchId: null,
   role: null,
   isAdmin: false,
-  isLoading: false,
+  isLoading: true,
 
   setUser: (user) => set({ user }),
 
-  setTenant: (tenantId, role) =>
-    set({ tenantId, role, isAdmin: role === 'super_admin' }),
+  setOrganisation: (organisationId, branchId, role) =>
+    set({ organisationId, branchId, role, isAdmin: role === 'super_admin' }),
 
   setLoading: (loading) => set({ isLoading: loading }),
 
   clear: () =>
-    set({ user: null, tenantId: null, role: null, isAdmin: false, isLoading: false }),
+    set({ user: null, organisationId: null, branchId: null, role: null, isAdmin: false, isLoading: false }),
 }));
