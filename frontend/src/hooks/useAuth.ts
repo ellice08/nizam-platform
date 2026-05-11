@@ -14,7 +14,7 @@ const fetchAndSetOrganisation = async (userId: string) => {
   try {
     const { data, error } = await supabase
       .from('tenant_users')
-      .select('organisation_id, branch_id, role')
+      .select('organisation_id, branch_id, role, first_login')
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
 
@@ -41,6 +41,7 @@ const fetchAndSetOrganisation = async (userId: string) => {
       best.branch_id,
       best.role
     )
+    useAuthStore.getState().setFirstLogin(best.first_login ?? false)
   } catch (err) {
     console.error('Organisation fetch error:', err)
   }

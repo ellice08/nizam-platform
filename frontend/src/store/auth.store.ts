@@ -8,9 +8,11 @@ interface AuthState {
   role: string | null;
   isAdmin: boolean;
   isLoading: boolean;
+  firstLogin: boolean;
   setUser: (user: User | null) => void;
   setOrganisation: (organisationId: string, branchId: string | null, role: string) => void;
   setLoading: (loading: boolean) => void;
+  setFirstLogin: (firstLogin: boolean) => void;
   clear: () => void;
 }
 
@@ -21,6 +23,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   role: null,
   isAdmin: false,
   isLoading: true,
+  firstLogin: false,
 
   setUser: (user) => set({ user }),
 
@@ -29,6 +32,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setLoading: (loading) => set({ isLoading: loading }),
 
+  setFirstLogin: (firstLogin) => set({ firstLogin }),
+
   clear: () =>
-    set({ user: null, organisationId: null, branchId: null, role: null, isAdmin: false, isLoading: false }),
+    set({ user: null, organisationId: null, branchId: null, role: null, isAdmin: false, isLoading: false, firstLogin: false }),
 }));
