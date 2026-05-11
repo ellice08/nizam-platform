@@ -35,11 +35,41 @@ class AgentService {
 
   async createAgent(
     branchId: string,
-    input: { name?: string; niche?: string; tone?: string; system_prompt?: string }
+    agentData: {
+      name?: string;
+      voice_id?: string;
+      tone?: string;
+      language?: string;
+      niche?: string;
+      system_prompt?: string;
+      channels?: string[];
+      escalation_contacts?: unknown[];
+      response_time_config?: unknown;
+      orgName?: string;
+    }
   ) {
+    const { orgName, ...insertFields } = agentData;
+    let systemPrompt = insertFields.system_prompt;
+
+    // If no system prompt provided, resolve from niche template
+    if (!systemPrompt && insertFields.niche) {
+      const { data: template } = await supabase
+        .from('niche_templates')
+        .select('system_prompt_template')
+        .eq('niche', insertFields.niche)
+        .maybeSingle();
+
+      if (template && (template as Record<string, unknown>).system_prompt_template) {
+        systemPrompt = (template as Record<string, unknown>).system_prompt_template as string;
+        systemPrompt = systemPrompt
+          .replace(/\{\{agent_name\}\}/g, agentData.name ?? 'Aria')
+          .replace(/\{\{company_name\}\}/g, orgName ?? '[Company Name]');
+      }
+    }
+
     const { data, error } = await supabase
       .from('agents')
-      .insert({ branch_id: branchId, ...input })
+      .insert({ branch_id: branchId, ...insertFields, system_prompt: systemPrompt })
       .select()
       .single();
 

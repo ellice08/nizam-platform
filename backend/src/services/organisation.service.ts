@@ -61,7 +61,7 @@ class OrganisationService {
     if (branch) {
       await agentService.createAgent(
         (branch as Record<string, unknown>).id as string,
-        { name: 'Aria', niche: data.industry, tone: 'professional' }
+        { name: 'Aria', niche: data.industry, tone: 'professional', orgName: data.name }
       );
     }
 

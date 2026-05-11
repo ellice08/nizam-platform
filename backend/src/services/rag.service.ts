@@ -1,0 +1,219 @@
+import OpenAI from 'openai';
+import { supabase } from '../lib/supabase.js';
+import { env } from '../config/env.js';
+import { AppError } from '../utils/errors.js';
+import logger from '../utils/logger.js';
+
+const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+
+const CHUNK_SIZE = 500;
+const CHUNK_OVERLAP = 50;
+const CHARS_PER_TOKEN = 4;
+
+class RagService {
+
+  private chunkText(text: string): string[] {
+    const chunkChars = CHUNK_SIZE * CHARS_PER_TOKEN;
+    const overlapChars = CHUNK_OVERLAP * CHARS_PER_TOKEN;
+    const chunks: string[] = [];
+
+    const paragraphs = text.split(/\n\n+/);
+    let current = '';
+
+    for (const para of paragraphs) {
+      if ((current + para).length > chunkChars && current.length > 0) {
+        chunks.push(current.trim());
+        const words = current.split(' ');
+        const overlapWords = words.slice(
+          Math.max(0, words.length - Math.floor(overlapChars / 5))
+        );
+        current = overlapWords.join(' ') + ' ' + para;
+      } else {
+        current = current ? current + '\n\n' + para : para;
+      }
+    }
+
+    if (current.trim().length > 0) {
+      chunks.push(current.trim());
+    }
+
+    if (chunks.length === 0 && text.length > 0) {
+      for (let i = 0; i < text.length; i += chunkChars - overlapChars) {
+        chunks.push(text.slice(i, i + chunkChars).trim());
+      }
+    }
+
+    return chunks.filter(c => c.length > 50);
+  }
+
+  private async embedText(text: string): Promise<number[]> {
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-ada-002',
+      input: text.replace(/\n/g, ' '),
+    });
+    return response.data[0].embedding;
+  }
+
+  async ingestText(params: {
+    text: string;
+    branchId: string;
+    sourceType: 'upload' | 'website_crawl';
+    sourceUrl?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ chunksCreated: number }> {
+    const { text, branchId, sourceType, sourceUrl, metadata = {} } = params;
+
+    if (!text || text.trim().length < 10) {
+      throw new AppError('Document text is too short to index', 400);
+    }
+
+    const chunks = this.chunkText(text);
+
+    if (chunks.length === 0) {
+      throw new AppError('No indexable content found in document', 400);
+    }
+
+    logger.info(`Ingesting ${chunks.length} chunks for branch ${branchId}`);
+
+    let inserted = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+
+      try {
+        const embedding = await this.embedText(chunk);
+
+        const { error } = await supabase
+          .from('document_chunks')
+          .insert({
+            branch_id: branchId,
+            content: chunk,
+            metadata: {
+              ...metadata,
+              chunk_index: i,
+              total_chunks: chunks.length,
+              source_url: sourceUrl ?? null,
+            },
+            source_type: sourceType,
+            source_url: sourceUrl ?? null,
+            embedding,
+          });
+
+        if (error) {
+          logger.error(`Failed to insert chunk ${i} for branch ${branchId}: ${error.message}`);
+        } else {
+          inserted++;
+        }
+      } catch (err) {
+        logger.error(`Failed to embed chunk ${i}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    logger.info(`Ingested ${inserted}/${chunks.length} chunks for branch ${branchId}`);
+
+    return { chunksCreated: inserted };
+  }
+
+  async getContext(params: {
+    query: string;
+    branchId: string;
+    matchCount?: number;
+    matchThreshold?: number;
+  }): Promise<string> {
+    const { query, branchId, matchCount = 5, matchThreshold = 0.78 } = params;
+
+    try {
+      const embedding = await this.embedText(query);
+
+      const { data, error } = await supabase.rpc('match_documents', {
+        query_embedding: embedding,
+        p_branch_id: branchId,
+        match_count: matchCount,
+        match_threshold: matchThreshold,
+      });
+
+      if (error) {
+        logger.error(`RAG search error: ${error.message}`);
+        return '';
+      }
+
+      if (!data || data.length === 0) return '';
+
+      return (data as Array<{ content: string }>)
+        .map(row => row.content)
+        .join('\n\n---\n\n');
+    } catch (err) {
+      logger.error(`getContext error: ${err instanceof Error ? err.message : String(err)}`);
+      return '';
+    }
+  }
+
+  async deleteChunksBySource(params: {
+    branchId: string;
+    sourceUrl: string;
+  }): Promise<{ deleted: number }> {
+    const { branchId, sourceUrl } = params;
+
+    const { data, error } = await supabase
+      .from('document_chunks')
+      .delete()
+      .eq('branch_id', branchId)
+      .eq('source_url', sourceUrl)
+      .select();
+
+    if (error) throw new AppError(error.message, 500);
+    return { deleted: data?.length ?? 0 };
+  }
+
+  async deleteAllChunks(branchId: string): Promise<{ deleted: number }> {
+    const { data, error } = await supabase
+      .from('document_chunks')
+      .delete()
+      .eq('branch_id', branchId)
+      .select();
+
+    if (error) throw new AppError(error.message, 500);
+    return { deleted: data?.length ?? 0 };
+  }
+
+  async listSources(branchId: string): Promise<Array<{
+    source_url: string;
+    source_type: string;
+    chunk_count: number;
+    last_crawled_at: string | null;
+  }>> {
+    const { data, error } = await supabase
+      .from('document_chunks')
+      .select('source_url, source_type, last_crawled_at')
+      .eq('branch_id', branchId)
+      .not('source_url', 'is', null);
+
+    if (error) throw new AppError(error.message, 500);
+
+    const sourceMap = new Map<string, {
+      source_url: string;
+      source_type: string;
+      chunk_count: number;
+      last_crawled_at: string | null;
+    }>();
+
+    for (const row of data ?? []) {
+      const key = row.source_url as string;
+      if (!key) continue;
+      if (sourceMap.has(key)) {
+        sourceMap.get(key)!.chunk_count++;
+      } else {
+        sourceMap.set(key, {
+          source_url: key,
+          source_type: row.source_type as string,
+          chunk_count: 1,
+          last_crawled_at: (row.last_crawled_at as string | null) ?? null,
+        });
+      }
+    }
+
+    return Array.from(sourceMap.values());
+  }
+}
+
+export const ragService = new RagService();
