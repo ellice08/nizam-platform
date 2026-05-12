@@ -77,6 +77,12 @@ class AgentService {
     return data;
   }
 
+  async getOrCreateAgent(branchId: string) {
+    const existing = await this.getAgentByBranch(branchId);
+    if (existing) return existing;
+    return await this.createAgent(branchId, { name: 'Aria', tone: 'professional' });
+  }
+
   async updateAgent(
     agentId: string,
     branchId: string,

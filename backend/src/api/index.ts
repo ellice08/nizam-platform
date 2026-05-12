@@ -4,6 +4,7 @@ import organisationRoutes from './organisation.routes.js';
 import conversationRoutes from './conversation.routes.js';
 import agentRoutes from './agent.routes.js';
 import ingestRoutes from './ingest.routes.js';
+import chatRoutes from './chat.routes.js';
 
 export function registerRoutes(app: Express): void {
   app.use('/api/auth', authRoutes);
@@ -11,4 +12,5 @@ export function registerRoutes(app: Express): void {
   app.use('/api/conversations', conversationRoutes);
   app.use('/api/agents', agentRoutes);
   app.use('/api/ingest', ingestRoutes);
+  app.use('/api/chat', chatRoutes);
 }
