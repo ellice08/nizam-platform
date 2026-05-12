@@ -1,23 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Copy } from "lucide-react";
+import { Copy, Send, Bot, User } from "lucide-react";
 import { toast } from 'sonner'
 import { cn } from "@/lib/utils";
 import { useAuthStore } from '@/store'
-import { useAgentsByOrg, useUpdateAgent } from '@/hooks'
+import { useAgentsByOrg, useUpdateAgent, useBranches } from '@/hooks'
+import { organisationApi } from '@/api'
 
 const tones = ["professional", "friendly", "formal"] as const;
 type Tone = typeof tones[number];
 
 const Agent = () => {
-  const { organisationId } = useAuthStore()
+  const { organisationId, branchId: storeBranchId } = useAuthStore()
   const { data: agents, isLoading } = useAgentsByOrg(organisationId ?? '')
   const { mutate: updateAgent, isPending: saving } = useUpdateAgent()
 
+  // Resolve branch_id for org-level users
+  const { data: branches } = useBranches(
+    storeBranchId ? '' : (organisationId ?? '')
+  )
+  const resolvedBranchId = storeBranchId ?? branches?.[0]?.id ?? null
+
   const agent = agents?.[0]
 
+  // Agent config form state
   const [name, setName] = useState('')
   const [tone, setTone] = useState<Tone>('professional')
   const [systemPrompt, setSystemPrompt] = useState('')
@@ -54,6 +62,52 @@ const Agent = () => {
     })
   }
 
+  // Test chat state
+  const [testMessages, setTestMessages] = useState<Array<{
+    role: 'user' | 'assistant'
+    content: string
+    requiresHuman?: boolean
+  }>>([])
+  const [testInput, setTestInput] = useState('')
+  const [testLoading, setTestLoading] = useState(false)
+  const [sessionId] = useState(() => crypto.randomUUID())
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [testMessages])
+
+  const handleTestSend = async () => {
+    if (!testInput.trim() || testLoading || !resolvedBranchId) return
+
+    const userMessage = testInput.trim()
+    setTestInput('')
+    setTestLoading(true)
+
+    setTestMessages(prev => [...prev, { role: 'user', content: userMessage }])
+
+    try {
+      const result = await organisationApi.sendChatMessage({
+        message: userMessage,
+        branchId: resolvedBranchId,
+        sessionId,
+        channel: 'chat',
+      })
+      setTestMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: result.reply, requiresHuman: result.requiresHuman },
+      ])
+    } catch {
+      setTestMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: 'Something went wrong. Please try again.', requiresHuman: false },
+      ])
+    } finally {
+      setTestLoading(false)
+    }
+  }
+
+  // Embed code
   const embedCode = `<script src="https://app.ellice.io/widget.js"\n  data-org-id="${organisationId ?? ''}"></script>`
 
   const handleCopy = async () => {
@@ -90,7 +144,6 @@ const Agent = () => {
             </div>
           ) : (
             <div className="space-y-6 max-w-2xl">
-              {/* Agent name */}
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   Agent name
@@ -103,7 +156,6 @@ const Agent = () => {
                 />
               </div>
 
-              {/* Tone */}
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   Tone
@@ -127,7 +179,6 @@ const Agent = () => {
                 </div>
               </div>
 
-              {/* System prompt */}
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   System prompt
@@ -143,7 +194,6 @@ const Agent = () => {
                 </p>
               </div>
 
-              {/* After hours message */}
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   After hours message
@@ -156,7 +206,6 @@ const Agent = () => {
                 />
               </div>
 
-              {/* Confirmation hours */}
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   Confirmation response time
@@ -182,6 +231,115 @@ const Agent = () => {
               </Button>
             </div>
           )}
+        </div>
+
+        {/* Test your agent */}
+        <div className="lg:col-span-2 rounded-lg border border-border bg-surface overflow-hidden">
+          {/* Panel header */}
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] font-medium">
+                Test your agent
+              </p>
+              <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">
+                Send a message to see how your agent responds
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-[#4CAF50]" />
+              <span className="text-xs text-[hsl(var(--text-secondary))]">Live</span>
+            </div>
+          </div>
+
+          {/* Messages area */}
+          <div className="h-80 overflow-y-auto p-4 space-y-4 bg-[#0A0A08]">
+            {testMessages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <Bot size={28} strokeWidth={1.5} className="text-[hsl(var(--text-tertiary))] mb-3" />
+                <p className="text-sm text-[hsl(var(--text-secondary))]">Ask your agent anything</p>
+                <p className="text-xs text-[hsl(var(--text-tertiary))] mt-1 max-w-xs">
+                  Responses are grounded in your knowledge base
+                </p>
+              </div>
+            ) : (
+              <>
+                {testMessages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex gap-3",
+                      msg.role === 'user' ? 'justify-end' : 'justify-start'
+                    )}
+                  >
+                    {msg.role === 'assistant' && (
+                      <div className="h-7 w-7 rounded-full bg-surface border border-border flex items-center justify-center shrink-0 mt-0.5">
+                        <Bot size={14} strokeWidth={1.5} className="text-[hsl(var(--text-secondary))]" />
+                      </div>
+                    )}
+                    <div
+                      className={cn(
+                        "max-w-[75%] rounded-lg px-3 py-2 text-sm leading-relaxed",
+                        msg.role === 'user'
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-surface border border-border text-foreground"
+                      )}
+                    >
+                      {msg.content}
+                      {msg.requiresHuman && (
+                        <p className="text-xs mt-1.5 text-[#F0C5CC]">↑ Escalation triggered</p>
+                      )}
+                    </div>
+                    {msg.role === 'user' && (
+                      <div className="h-7 w-7 rounded-full bg-surface border border-border flex items-center justify-center shrink-0 mt-0.5">
+                        <User size={14} strokeWidth={1.5} className="text-[hsl(var(--text-secondary))]" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {testLoading && (
+                  <div className="flex gap-3 justify-start">
+                    <div className="h-7 w-7 rounded-full bg-surface border border-border flex items-center justify-center shrink-0">
+                      <Bot size={14} strokeWidth={1.5} className="text-[hsl(var(--text-secondary))]" />
+                    </div>
+                    <div className="bg-surface border border-border rounded-lg px-3 py-2">
+                      <div className="flex gap-1 items-center h-4">
+                        <div className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--text-tertiary))] animate-bounce [animation-delay:0ms]" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--text-tertiary))] animate-bounce [animation-delay:150ms]" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--text-tertiary))] animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+
+          {/* Input area */}
+          <div className="px-4 py-3 border-t border-border flex gap-2 items-end">
+            <textarea
+              value={testInput}
+              onChange={e => setTestInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void handleTestSend()
+                }
+              }}
+              placeholder="Type a message to test your agent…"
+              rows={1}
+              className="flex-1 bg-[#0A0A08] border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] resize-none outline-none focus:border-primary transition-colors duration-150 max-h-32 overflow-y-auto"
+              style={{ fieldSizing: 'content' } as React.CSSProperties}
+              disabled={testLoading || !resolvedBranchId}
+            />
+            <button
+              onClick={() => void handleTestSend()}
+              disabled={testLoading || !testInput.trim() || !resolvedBranchId}
+              className="h-9 w-9 rounded-lg bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shrink-0 transition-colors duration-150"
+            >
+              <Send size={14} strokeWidth={1.5} className="text-primary-foreground" />
+            </button>
+          </div>
         </div>
 
         {/* Embed code */}

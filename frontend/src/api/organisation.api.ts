@@ -157,6 +157,31 @@ const deleteKnowledgeSource = async (
   return response.data.data
 }
 
+const sendChatMessage = async (params: {
+  message: string
+  branchId: string
+  sessionId?: string
+  channel?: 'chat' | 'voice' | 'whatsapp'
+}): Promise<{
+  reply: string
+  sessionId: string
+  conversationId: string
+  requiresHuman: boolean
+}> => {
+  const response = await apiClient.post<ApiSuccess<{
+    reply: string
+    sessionId: string
+    conversationId: string
+    requiresHuman: boolean
+  }>>('/api/chat', {
+    message: params.message,
+    branch_id: params.branchId,
+    session_id: params.sessionId,
+    channel: params.channel ?? 'chat',
+  })
+  return response.data.data
+}
+
 export const organisationApi = {
   getAllOrganisations,
   getOrganisationById,
@@ -173,4 +198,5 @@ export const organisationApi = {
   uploadDocuments,
   getKnowledgeSources,
   deleteKnowledgeSource,
+  sendChatMessage,
 }
