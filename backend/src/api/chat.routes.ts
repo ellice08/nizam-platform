@@ -34,12 +34,15 @@ router.post('/', authenticate, validate(chatSchema), async (req: Request, res: R
 
     const sessionId = session_id ?? randomUUID();
 
+    const resolvedLeadName = lead_name ??
+      (channel === 'chat' ? 'Dashboard test' : null);
+
     const result = await claudeService.chat({
       branchId: resolvedBranchId,
       message,
       sessionId,
       channel: channel ?? 'chat',
-      leadName: lead_name,
+      leadName: resolvedLeadName ?? undefined,
       leadPhone: lead_phone,
     });
 

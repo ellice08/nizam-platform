@@ -95,8 +95,15 @@ class ClaudeService {
     });
 
     // 3. Build system prompt
-    const basePrompt = (agentRecord.system_prompt as string) ??
-      `You are ${(agentRecord.name as string) ?? 'Aria'}, a helpful assistant.`;
+    const agentName = (agentRecord.name as string) ?? 'Aria';
+
+    const rawPrompt = (agentRecord.system_prompt as string) ??
+      `You are ${agentName}, a warm and helpful assistant.`;
+
+    const basePrompt = rawPrompt
+      .replace(/\{\{agent_name\}\}/g, agentName)
+      .replace(/^You are Aria,/m, `You are ${agentName},`)
+      .replace(/^You are Aria /m, `You are ${agentName} `);
 
     const systemPrompt = context
       ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nAPPROVED KNOWLEDGE BASE:\n---\n${context}\n---`
