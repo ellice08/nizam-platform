@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { conversationApi } from '@/api'
-import type { ConversationFilters } from '@/types/api.types'
+import type { ConversationFilters, ConversationNote } from '@/types/api.types'
 
 export const useConversations = (filters?: ConversationFilters) => {
   return useQuery({
@@ -26,7 +26,15 @@ export const useUpdateConversation = () => {
       data,
     }: {
       id: string
-      data: { resolved?: boolean; requires_human?: boolean; lead_name?: string }
+      data: {
+        resolved?: boolean
+        requires_human?: boolean
+        lead_name?: string
+        notes?: ConversationNote[]
+        actioned_by?: string
+        actioned_at?: string
+        callback_completed?: boolean
+      }
     }) => conversationApi.updateConversation(id, data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['conversations'] })
