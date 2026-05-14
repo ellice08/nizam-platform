@@ -128,7 +128,7 @@ class ConversationService {
       .select('id, branch_id')
       .eq('id', conversationId)
       .in('branch_id', branchIds)
-      .single();
+      .maybeSingle();
 
     if (!existing) throw new AppError('Conversation not found', 404);
 
@@ -139,7 +139,8 @@ class ConversationService {
       .select()
       .single();
 
-    if (error || !conversation) throw new AppError('Conversation not found', 404);
+    if (error) throw new AppError(error.message, 500);
+    if (!conversation) throw new AppError('Conversation not found', 404);
     return conversation;
   }
 }
