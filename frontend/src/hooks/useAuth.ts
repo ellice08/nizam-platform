@@ -75,9 +75,20 @@ export const useAuth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return
+
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user)
+          await fetchAndSetOrganisation(session.user.id)
+          setLoading(false)
+        }
+
         if (event === 'SIGNED_OUT') {
           clear()
           setLoading(false)
+        }
+
+        if (event === 'TOKEN_REFRESHED' && session?.user) {
+          setUser(session.user)
         }
       }
     )
