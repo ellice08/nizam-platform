@@ -35,5 +35,5 @@ export const useAuthStore = create<AuthState>((set) => ({
   setFirstLogin: (firstLogin) => set({ firstLogin }),
 
   clear: () =>
-    set({ user: null, organisationId: null, branchId: null, role: null, isAdmin: false, isLoading: false, firstLogin: false }),
+    set({ user: null, organisationId: null, branchId: null, role: null, isAdmin: false, isLoading: true, firstLogin: false }),
 }));

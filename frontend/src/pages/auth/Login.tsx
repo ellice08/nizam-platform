@@ -1,25 +1,41 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store"
 
 const Login = () => {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
+
+    if (loading) return
+
+    setLoading(true)
+    setError(null)
+
     try {
-      setLoading(true)
-      setError(null)
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      setTimeout(() => navigate('/redirect'), 0)
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+
+      if (authError) {
+        setError(authError.message)
+        return
+      }
+
+      useAuthStore.getState().setLoading(true)
+      navigate('/redirect', { replace: true })
+
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
     } finally {
@@ -29,8 +45,12 @@ const Login = () => {
 
   return (
     <section className="container max-w-md py-20">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-gold mb-2">Welcome back</p>
-      <h1 className="font-display text-4xl font-semibold mb-8">Sign in to Nizam</h1>
+      <p className="text-[10px] uppercase tracking-[0.22em] text-gold mb-2">
+        Welcome back
+      </p>
+      <h1 className="font-display text-4xl font-semibold mb-8">
+        Sign in to Nizam
+      </h1>
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -40,6 +60,8 @@ const Login = () => {
             placeholder="you@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+            autoComplete="email"
           />
         </div>
         <div className="space-y-2">
@@ -50,21 +72,32 @@ const Login = () => {
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+            autoComplete="current-password"
           />
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full" disabled={loading}>
+        {error && (
+          <p className="text-sm text-destructive">{error}</p>
+        )}
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={loading}
+        >
           {loading ? "Signing in..." : "Sign in"}
         </Button>
       </form>
       <p className="mt-6 text-sm text-muted-foreground">
         New to Nizam?{" "}
-        <Link to="/signup" className="text-primary underline-offset-4 hover:underline">
+        <Link
+          to="/signup"
+          className="text-primary underline-offset-4 hover:underline"
+        >
           Create an account
         </Link>
       </p>
     </section>
-  );
-};
+  )
+}
 
-export default Login;
+export default Login
