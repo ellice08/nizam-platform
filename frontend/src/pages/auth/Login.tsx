@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
+import { useAuthStore } from "@/store"
 
 const Login = () => {
   const navigate = useNavigate()
@@ -32,6 +33,10 @@ const Login = () => {
         return
       }
 
+      // Re-arm the loading gate so Redirect.tsx waits for
+      // the SIGNED_IN handler to fully restore the session
+      // before making any routing decision.
+      useAuthStore.getState().setLoading(true)
       navigate('/redirect', { replace: true })
 
     } catch (err: unknown) {

@@ -10,7 +10,15 @@ const ROLE_PRIORITY: Record<string, number> = {
   viewer: 1,
 }
 
-const fetchAndSetOrganisation = async (userId: string) => {
+const fetchAndSetOrganisation = async (userId: string, appRole?: string) => {
+  // Super admin is identified by app_metadata on the Supabase user object.
+  // They may not have a tenant_users row — bypass the DB lookup entirely.
+  if (appRole === 'super_admin') {
+    useAuthStore.getState().setOrganisation('', null, 'super_admin')
+    useAuthStore.getState().setFirstLogin(false)
+    return
+  }
+
   try {
     const { data, error } = await supabase
       .from('tenant_users')
@@ -25,9 +33,6 @@ const fetchAndSetOrganisation = async (userId: string) => {
       return
     }
 
-    // Always pick the highest-privilege role
-    // This prevents a super_admin from being treated as org_admin
-    // when they have multiple tenant_users records
     const best = data.reduce((prev, curr) => {
       const prevPriority = ROLE_PRIORITY[prev.role] ?? 0
       const currPriority = ROLE_PRIORITY[curr.role] ?? 0
@@ -53,6 +58,7 @@ export const useAuth = () => {
   useEffect(() => {
     let mounted = true
 
+    // Restore existing session on page load
     const init = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
@@ -61,7 +67,10 @@ export const useAuth = () => {
 
         if (session?.user) {
           setUser(session.user)
-          await fetchAndSetOrganisation(session.user.id)
+          await fetchAndSetOrganisation(
+            session.user.id,
+            session.user.app_metadata?.role as string | undefined
+          )
         }
       } catch (err) {
         console.error('Auth init error:', err)
@@ -78,13 +87,15 @@ export const useAuth = () => {
 
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user)
-          await fetchAndSetOrganisation(session.user.id)
+          await fetchAndSetOrganisation(
+            session.user.id,
+            session.user.app_metadata?.role as string | undefined
+          )
           setLoading(false)
         }
 
         if (event === 'SIGNED_OUT') {
           clear()
-          setLoading(false)
         }
 
         if (event === 'TOKEN_REFRESHED' && session?.user) {
