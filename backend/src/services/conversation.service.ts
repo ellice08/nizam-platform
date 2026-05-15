@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../utils/errors.js';
+import logger from '../utils/logger.js';
 
 interface ConversationFilters {
   channel?: string;
@@ -103,17 +104,25 @@ class ConversationService {
     return conversation;
   }
 
-  async updateConversation(conversationId: string, branchId: string, data: ConversationUpdateData) {
+  async updateConversation(
+    conversationId: string,
+    branchId: string,
+    data: ConversationUpdateData
+  ) {
     const { data: conversation, error } = await supabase
       .from('conversations')
       .update(data)
       .eq('id', conversationId)
       .eq('branch_id', branchId)
       .select()
-      .single();
+      .maybeSingle()
 
-    if (error || !conversation) throw new AppError('Conversation not found', 404);
-    return conversation;
+    if (error) {
+      logger.error(`updateConversation error: ${error.message} code=${error.code}`)
+      throw new AppError(error.message, 500)
+    }
+    if (!conversation) throw new AppError('Conversation not found', 404)
+    return conversation
   }
 
   async updateConversationForBranches(
