@@ -31,6 +31,7 @@ const Agent = () => {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [afterHoursMessage, setAfterHoursMessage] = useState('')
   const [confirmationHours, setConfirmationHours] = useState(2)
+  const [escalationContacts, setEscalationContacts] = useState<Array<{ name: string; phone: string; email: string }>>([])
 
   useEffect(() => {
     if (agent) {
@@ -39,6 +40,11 @@ const Agent = () => {
       setSystemPrompt(agent.system_prompt ?? '')
       setAfterHoursMessage(agent.response_time_config?.after_hours_message ?? '')
       setConfirmationHours(agent.response_time_config?.confirmation_hours ?? 2)
+      setEscalationContacts(
+        (agent.escalation_contacts as Array<{
+          name: string; phone: string; email: string
+        }>) ?? []
+      )
     }
   }, [agent])
 
@@ -50,6 +56,7 @@ const Agent = () => {
         name,
         tone,
         system_prompt: systemPrompt,
+        escalation_contacts: escalationContacts,
         response_time_config: {
           confirmation_hours: confirmationHours,
           callback_window_hours: agent.response_time_config?.callback_window_hours ?? 1,
@@ -220,6 +227,78 @@ const Agent = () => {
                   />
                   <span className="text-sm text-[hsl(var(--text-secondary))]">hours</span>
                 </div>
+              </div>
+
+              {/* Escalation contacts */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))]">
+                    Escalation contacts
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setEscalationContacts(prev => [
+                      ...prev,
+                      { name: '', phone: '', email: '' }
+                    ])}
+                    className="text-xs text-[hsl(var(--text-secondary))] hover:text-foreground transition-colors duration-150"
+                  >
+                    + Add contact
+                  </button>
+                </div>
+
+                {escalationContacts.length === 0 ? (
+                  <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                    No escalation contacts. Add a contact to receive alerts when the AI cannot answer a question.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {escalationContacts.map((contact, i) => (
+                      <div key={i} className="rounded-lg border border-border p-3 space-y-2 relative">
+                        <button
+                          type="button"
+                          onClick={() => setEscalationContacts(
+                            prev => prev.filter((_, idx) => idx !== i)
+                          )}
+                          className="absolute top-2 right-2 text-xs text-[hsl(var(--text-tertiary))] hover:text-destructive transition-colors"
+                        >
+                          Remove
+                        </button>
+                        <input
+                          className="nz-input w-full"
+                          placeholder="Full name"
+                          value={contact.name}
+                          onChange={e => setEscalationContacts(prev =>
+                            prev.map((c, idx) =>
+                              idx === i ? { ...c, name: e.target.value } : c
+                            )
+                          )}
+                        />
+                        <input
+                          className="nz-input w-full"
+                          placeholder="Phone number"
+                          value={contact.phone}
+                          onChange={e => setEscalationContacts(prev =>
+                            prev.map((c, idx) =>
+                              idx === i ? { ...c, phone: e.target.value } : c
+                            )
+                          )}
+                        />
+                        <input
+                          className="nz-input w-full"
+                          placeholder="Email address"
+                          type="email"
+                          value={contact.email}
+                          onChange={e => setEscalationContacts(prev =>
+                            prev.map((c, idx) =>
+                              idx === i ? { ...c, email: e.target.value } : c
+                            )
+                          )}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <Button
