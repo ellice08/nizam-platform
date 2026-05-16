@@ -6,6 +6,14 @@ import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
 import { useAuthStore } from "@/store"
 
+const ROLE_PRIORITY: Record<string, number> = {
+  super_admin: 5,
+  org_admin: 4,
+  branch_admin: 3,
+  branch_staff: 2,
+  viewer: 1,
+}
+
 const Login = () => {
   const navigate = useNavigate()
   const [email, setEmail] = useState("")
@@ -15,15 +23,13 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    e.stopPropagation()
-
     if (loading) return
 
     setLoading(true)
     setError(null)
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       })
@@ -33,10 +39,52 @@ const Login = () => {
         return
       }
 
-      // Re-arm the loading gate so Redirect.tsx waits for
-      // the SIGNED_IN handler to fully restore the session
-      // before making any routing decision.
-      useAuthStore.getState().setLoading(true)
+      const user = data.user
+      if (!user) {
+        setError("Login failed — please try again.")
+        return
+      }
+
+      // Set the user immediately — we have it right here, no need to
+      // wait for the SIGNED_IN event which is unreliable when a stale
+      // session already exists in the browser.
+      useAuthStore.getState().setUser(user)
+
+      const appRole = user.app_metadata?.role as string | undefined
+
+      if (appRole === 'super_admin') {
+        useAuthStore.getState().setOrganisation('', null, 'super_admin')
+        useAuthStore.getState().setFirstLogin(false)
+      } else {
+        const { data: tenantRows } = await supabase
+          .from('tenant_users')
+          .select('organisation_id, branch_id, role, first_login')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+
+        if (tenantRows && tenantRows.length > 0) {
+          const best = tenantRows.reduce((prev, curr) => {
+            const pp = ROLE_PRIORITY[prev.role as string] ?? 0
+            const cp = ROLE_PRIORITY[curr.role as string] ?? 0
+            return cp > pp ? curr : prev
+          })
+          useAuthStore.getState().setOrganisation(
+            best.organisation_id as string,
+            best.branch_id as string | null,
+            best.role as string
+          )
+          useAuthStore.getState().setFirstLogin((best.first_login as boolean | null) ?? false)
+        } else {
+          // No tenant record — user exists in Auth but not yet provisioned.
+          // Let Redirect.tsx send them back to /login with a clear state.
+          setError("Your account is not yet linked to an organisation. Please contact your administrator.")
+          useAuthStore.getState().clear()
+          return
+        }
+      }
+
+      // Store is fully populated — release the loading gate and route.
+      useAuthStore.getState().setLoading(false)
       navigate('/redirect', { replace: true })
 
     } catch (err: unknown) {

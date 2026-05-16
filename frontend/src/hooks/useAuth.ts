@@ -10,9 +10,7 @@ const ROLE_PRIORITY: Record<string, number> = {
   viewer: 1,
 }
 
-const fetchAndSetOrganisation = async (userId: string, appRole?: string) => {
-  // Super admin is identified by app_metadata on the Supabase user object.
-  // They may not have a tenant_users row — bypass the DB lookup entirely.
+export const fetchAndSetOrganisation = async (userId: string, appRole?: string) => {
   if (appRole === 'super_admin') {
     useAuthStore.getState().setOrganisation('', null, 'super_admin')
     useAuthStore.getState().setFirstLogin(false)
@@ -27,7 +25,6 @@ const fetchAndSetOrganisation = async (userId: string, appRole?: string) => {
       .order('created_at', { ascending: true })
 
     if (error) throw error
-
     if (!data || data.length === 0) {
       console.warn('No tenant_users record found for:', userId)
       return
@@ -58,11 +55,12 @@ export const useAuth = () => {
   useEffect(() => {
     let mounted = true
 
-    // Restore existing session on page load
+    // Restore an existing session when the page loads or is refreshed.
+    // Fresh logins are handled entirely inside Login.tsx — this path
+    // only runs when there is already a stored session in the browser.
     const init = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-
         if (!mounted) return
 
         if (session?.user) {
@@ -84,15 +82,6 @@ export const useAuth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return
-
-        if (event === 'SIGNED_IN' && session?.user) {
-          setUser(session.user)
-          await fetchAndSetOrganisation(
-            session.user.id,
-            session.user.app_metadata?.role as string | undefined
-          )
-          setLoading(false)
-        }
 
         if (event === 'SIGNED_OUT') {
           clear()
