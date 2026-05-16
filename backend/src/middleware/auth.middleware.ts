@@ -17,27 +17,29 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     return;
   }
 
+  req.user = { id: user.id };
+
   // Super admin is determined by app_metadata set via Supabase admin API
   if ((user.app_metadata as Record<string, unknown>)?.role === 'super_admin') {
-    req.tenant = { user_id: user.id, tenant_id: '', role: 'super_admin' };
+    req.tenant = { organisation_id: '', branch_id: null, role: 'super_admin' };
     next();
     return;
   }
 
   const { data: tenantUser, error: tenantError } = await supabase
     .from('tenant_users')
-    .select('tenant_id, role')
+    .select('organisation_id, branch_id, role')
     .eq('user_id', user.id)
     .maybeSingle();
 
   if (tenantError || !tenantUser) {
-    res.status(403).json(ApiResponse.error('User is not associated with any tenant', 'Forbidden'));
+    res.status(403).json(ApiResponse.error('User is not associated with any organisation', 'Forbidden'));
     return;
   }
 
   req.tenant = {
-    user_id: user.id,
-    tenant_id: tenantUser.tenant_id as string,
+    organisation_id: tenantUser.organisation_id as string,
+    branch_id: tenantUser.branch_id as string | null,
     role: tenantUser.role as string,
   };
 

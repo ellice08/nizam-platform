@@ -1,2 +1,2 @@
-export { tenantApi } from './tenant.api'
+export { organisationApi } from './organisation.api'
 export { conversationApi } from './conversation.api'

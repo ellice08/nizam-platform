@@ -2,101 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Nizam brand — dark theme only.
+   All colors HSL. Brand reference (hex):
+   base #0E0E0C  surface #141410  elevated #1A1A16  border #2A2A26
+   text #FAFAFA  textSecondary #888880  textTertiary #555550
+   accent #7A2535  accentHover #8F2D3F  accentSubtle #F0C5CC
+   rose #C4909A  roseSubtle #2A1A1C
 */
 
 @layer base {
   :root {
-    /* Nizam brand — light surface for public/marketing pages */
-    --background: 0 0% 98%;
-    --foreground: 60 6% 8%;
+    --background: 60 8% 5%;            /* #0E0E0C */
+    --foreground: 0 0% 98%;             /* #FAFAFA */
 
-    --card: 0 0% 100%;
-    --card-foreground: 60 6% 8%;
+    --surface: 60 9% 7%;                /* #141410 */
+    --elevated: 60 9% 9%;               /* #1A1A16 */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 60 6% 8%;
+    --card: 60 9% 7%;
+    --card-foreground: 0 0% 98%;
 
-    /* Oxblood — primary CTA */
-    --primary: 350 53% 31%;
+    --popover: 60 9% 7%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 350 53% 31%;             /* #7A2535 */
     --primary-foreground: 0 0% 98%;
+    --primary-hover: 350 52% 37%;       /* #8F2D3F */
 
-    /* Oxblood tint — subtle bg */
-    --secondary: 351 65% 86%;
-    --secondary-foreground: 350 53% 31%;
+    --secondary: 60 9% 9%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 60 6% 95%;
-    --muted-foreground: 60 4% 40%;
+    --muted: 60 9% 9%;
+    --muted-foreground: 60 3% 51%;      /* #888880 */
 
-    /* Gold thread — highlight */
-    --accent: 36 55% 50%;
-    --accent-foreground: 60 6% 8%;
+    --accent: 350 53% 31%;
+    --accent-foreground: 0 0% 98%;
+    --accent-subtle: 351 65% 86%;       /* #F0C5CC */
 
-    --destructive: 0 72% 45%;
-    --destructive-foreground: 0 0% 98%;
+    --rose: 350 27% 67%;                /* #C4909A */
+    --rose-subtle: 354 22% 13%;         /* #2A1A1C */
 
-    --border: 60 6% 90%;
-    --input: 60 6% 90%;
+    --destructive: 350 53% 31%;
+    --destructive-foreground: 351 65% 86%;
+
+    --border: 60 6% 16%;                /* #2A2A26 */
+    --input: 60 6% 16%;
     --ring: 350 53% 31%;
 
-    /* Brand tokens */
-    --obsidian: 60 6% 5%;
-    --architectural-white: 0 0% 98%;
-    --oxblood: 350 53% 31%;
-    --oxblood-tint: 351 65% 86%;
-    --gold: 36 55% 50%;
+    --text-secondary: 60 3% 51%;
+    --text-tertiary: 60 3% 32%;         /* #555550 */
 
     --radius: 0.5rem;
 
-    /* Sidebar — always obsidian dark for app shells */
-    --sidebar-background: 60 6% 5%;
-    --sidebar-foreground: 0 0% 90%;
+    --sidebar-background: 60 11% 4%;    /* #0A0A08 */
+    --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 350 53% 31%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 60 6% 10%;
+    --sidebar-accent: 60 9% 7%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 60 6% 14%;
-    --sidebar-ring: 36 55% 50%;
+    --sidebar-border: 60 6% 16%;
+    --sidebar-ring: 350 53% 31%;
   }
 
   .dark {
-    --background: 60 6% 5%;
+    --background: 60 8% 5%;
     --foreground: 0 0% 98%;
-
-    --card: 60 6% 7%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 60 6% 7%;
-    --popover-foreground: 0 0% 98%;
-
-    --primary: 350 53% 38%;
-    --primary-foreground: 0 0% 98%;
-
-    --secondary: 60 6% 12%;
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 60 6% 12%;
-    --muted-foreground: 60 4% 65%;
-
-    --accent: 36 55% 50%;
-    --accent-foreground: 60 6% 5%;
-
-    --destructive: 0 62% 40%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 60 6% 14%;
-    --input: 60 6% 14%;
-    --ring: 36 55% 50%;
-
-    --sidebar-background: 60 6% 5%;
-    --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 350 53% 38%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 60 6% 10%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 60 6% 14%;
-    --sidebar-ring: 36 55% 50%;
   }
 }
 
@@ -105,12 +74,55 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
-  body {
+  html, body {
     @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "ss01", "cv11";
   }
 
   h1, h2, h3, h4 {
     @apply font-display tracking-tight;
+    font-weight: 500;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.4);
+    color: hsl(var(--foreground));
   }
 }
+
+@layer components {
+  .nz-card {
+    @apply rounded-lg border border-border bg-surface p-6;
+  }
+
+  .nz-stat {
+    @apply nz-card border-l-[3px] border-l-primary;
+  }
+
+  .nz-badge {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider;
+  }
+
+  .nz-input {
+    @apply h-10 w-full rounded-md border border-border bg-background px-3 text-sm
+           text-foreground placeholder:text-[hsl(var(--text-tertiary))]
+           focus:outline-none focus:border-primary transition-colors;
+  }
+
+  .nz-textarea {
+    @apply w-full rounded-md border border-border bg-background px-3 py-2 text-sm
+           text-foreground placeholder:text-[hsl(var(--text-tertiary))]
+           focus:outline-none focus:border-primary transition-colors;
+  }
+
+  .nz-mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+}
+
+/* Subtle skeleton pulse */
+@keyframes nz-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.nz-skeleton { background: hsl(var(--elevated)); animation: nz-pulse 1.6s ease-in-out infinite; border-radius: 6px; }

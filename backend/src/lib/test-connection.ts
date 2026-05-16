@@ -2,7 +2,7 @@ import { supabase } from './supabase.js';
 
 export async function testConnection(): Promise<{ connected: boolean; error?: string }> {
   try {
-    const { error } = await supabase.from('tenants').select('count', { count: 'exact', head: true });
+    const { error } = await supabase.from('organisations').select('count', { count: 'exact', head: true });
     if (error) {
       console.error('Supabase connection failed:', error.message);
       return { connected: false, error: error.message };

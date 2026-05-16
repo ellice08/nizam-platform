@@ -4,8 +4,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAllTenants } from "@/hooks";
-import type { Tenant } from "@/types/api.types";
+import { useAllOrganisations } from "@/hooks";
+import type { Organisation } from "@/types/api.types";
 
 const planStyle: Record<string, React.CSSProperties> = {
   pro:        { backgroundColor: "#7A2535", borderColor: "#7A2535", color: "#fff" },
@@ -19,7 +19,7 @@ const planClass: Record<string, string> = {
   enterprise: "",
 };
 
-function PlanBadge({ plan }: { plan: Tenant["plan"] }) {
+function PlanBadge({ plan }: { plan: Organisation["plan"] }) {
   return (
     <Badge
       variant="outline"
@@ -31,18 +31,24 @@ function PlanBadge({ plan }: { plan: Tenant["plan"] }) {
   );
 }
 
+const industryLabel: Record<string, string> = {
+  real_estate: "Real estate",
+  hospitality: "Hospitality",
+  other:       "Other",
+};
+
 const AdminOverview = () => {
   const navigate = useNavigate();
-  const { data: tenants, isLoading, isError } = useAllTenants();
+  const { data: organisations, isLoading, isError } = useAllOrganisations();
 
-  const total   = tenants?.length ?? 0;
-  const trial   = tenants?.filter((t) => t.plan === "trial").length ?? 0;
-  const paid    = tenants?.filter((t) => t.plan !== "trial").length ?? 0;
+  const total = organisations?.length ?? 0;
+  const trial = organisations?.filter((o) => o.plan === "trial").length ?? 0;
+  const paid  = organisations?.filter((o) => o.plan !== "trial").length ?? 0;
 
   const stats = [
-    { label: "Total clients",   value: isLoading ? null : total },
-    { label: "Trial",           value: isLoading ? null : trial },
-    { label: "Paid",            value: isLoading ? null : paid  },
+    { label: "Total clients", value: isLoading ? null : total },
+    { label: "Trial",         value: isLoading ? null : trial },
+    { label: "Paid",          value: isLoading ? null : paid  },
   ];
 
   return (
@@ -50,7 +56,7 @@ const AdminOverview = () => {
       <PageHeader
         eyebrow="Administration"
         title="Operator console"
-        description="Manage tenants, provision workspaces, and monitor platform health."
+        description="Manage organisations, provision workspaces, and monitor platform health."
       >
         <Button onClick={() => navigate("/admin/onboard")} size="sm">
           + Onboard client
@@ -71,7 +77,7 @@ const AdminOverview = () => {
         ))}
       </div>
 
-      {/* Tenants table */}
+      {/* Organisations table */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
           <h2 className="font-display text-lg font-semibold">Clients</h2>
@@ -79,7 +85,7 @@ const AdminOverview = () => {
 
         {isError && (
           <div className="px-6 py-8 text-sm text-destructive">
-            Failed to load tenants. Check your connection and permissions.
+            Failed to load organisations. Check your connection and permissions.
           </div>
         )}
 
@@ -96,20 +102,23 @@ const AdminOverview = () => {
           </div>
         )}
 
-        {!isLoading && !isError && tenants && (
+        {!isLoading && !isError && organisations && (
           <table className="w-full text-sm">
             <thead className="bg-muted/30">
               <tr>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Name</th>
+                <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Industry</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Plan</th>
+                <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Branches</th>
+                <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Users</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Joined</th>
                 <th className="px-6 py-3 text-right text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {tenants.length === 0 && (
+              {organisations.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">
                     No clients yet.{" "}
                     <button
                       className="text-primary underline-offset-4 hover:underline"
@@ -120,24 +129,29 @@ const AdminOverview = () => {
                   </td>
                 </tr>
               )}
-              {tenants.map((tenant) => (
+              {organisations.map((org) => (
                 <tr
-                  key={tenant.id}
+                  key={org.id}
                   className="hover:bg-muted/20 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/admin/clients/${tenant.id}`)}
+                  onClick={() => navigate(`/admin/clients/${org.id}`)}
                 >
-                  <td className="px-6 py-4 font-medium">{tenant.name}</td>
-                  <td className="px-6 py-4">
-                    <PlanBadge plan={tenant.plan} />
-                  </td>
+                  <td className="px-6 py-4 font-medium">{org.name}</td>
                   <td className="px-6 py-4 text-muted-foreground">
-                    {formatDistanceToNow(new Date(tenant.created_at), { addSuffix: true })}
+                    {industryLabel[org.industry] ?? org.industry}
+                  </td>
+                  <td className="px-6 py-4">
+                    <PlanBadge plan={org.plan} />
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">—</td>
+                  <td className="px-6 py-4 text-muted-foreground">—</td>
+                  <td className="px-6 py-4 text-muted-foreground">
+                    {formatDistanceToNow(new Date(org.created_at), { addSuffix: true })}
                   </td>
                   <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(`/admin/clients/${tenant.id}`)}
+                      onClick={() => navigate(`/admin/clients/${org.id}`)}
                     >
                       View
                     </Button>

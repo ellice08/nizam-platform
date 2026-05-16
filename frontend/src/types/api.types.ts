@@ -1,25 +1,104 @@
-export interface Tenant {
+export interface Organisation {
   id: string
   name: string
   slug: string
+  industry: 'real_estate' | 'hospitality' | 'other'
+  subdomain: string | null
   plan: 'trial' | 'starter' | 'pro' | 'enterprise'
-  retell_agent_id: string | null
-  twilio_phone: string | null
+  paystack_customer_id: string | null
   stripe_customer_id: string | null
+  branding_config: {
+    logo_url: string | null
+    primary_color: string
+    secondary_color: string
+    font: string
+  }
+  implementation_paid: boolean
+  support_expires_at: string | null
   created_at: string
   updated_at: string
 }
 
-export interface TenantWithCounts extends Tenant {
-  agentsCount: number
-  conversationsCount: number
+export interface OrganisationWithDetails extends Organisation {
+  branchCount: number
+  userCount: number
+  branches: Branch[]
 }
 
-export interface TenantStats {
+export interface OrganisationStats {
   total_conversations: number
   resolved_conversations: number
-  active_agents: number
+  active_branches: number
   conversations_today: number
+}
+
+export interface Branch {
+  id: string
+  organisation_id: string
+  name: string
+  location: string | null
+  timezone: string
+  business_hours: {
+    open_time: string
+    close_time: string
+    days_active: string[]
+    after_hours_template: string
+  }
+  created_at: string
+  updated_at: string
+}
+
+export interface TenantUser {
+  id: string
+  organisation_id: string
+  branch_id: string | null
+  user_id: string
+  role: 'super_admin' | 'org_admin' | 'branch_admin' | 'branch_staff' | 'viewer'
+  first_login: boolean
+  created_at: string
+}
+
+export interface PhoneNumber {
+  id: string
+  branch_id: string
+  number: string
+  provider: 'twilio' | 'africas_talking' | 'operator_managed'
+  label: string | null
+  channel: 'voice' | 'whatsapp'
+  is_primary: boolean
+  is_vanity: boolean
+  vanity_operator: string | null
+  africas_talking_virtual_number: string | null
+  divert_code: string | null
+  created_at: string
+}
+
+export interface EscalationContact {
+  name: string
+  phone: string
+  email: string
+}
+
+export interface Agent {
+  id: string
+  branch_id: string
+  name: string
+  voice_id: string | null
+  tone: 'professional' | 'friendly' | 'formal'
+  language: string
+  niche: 'real_estate' | 'hospitality' | 'other'
+  system_prompt: string | null
+  channels: string[]
+  retell_agent_id: string | null
+  escalation_contacts: EscalationContact[]
+  rag_boundary_enforced: boolean
+  response_time_config: {
+    confirmation_hours: number
+    callback_window_hours: number
+    after_hours_message: string
+  }
+  created_at: string
+  updated_at: string
 }
 
 export interface Message {
@@ -27,39 +106,96 @@ export interface Message {
   content: string
 }
 
+export interface ConversationNote {
+  text: string
+  added_by: string
+  added_at: string
+}
+
 export interface Conversation {
   id: string
-  tenant_id: string
+  branch_id: string
+  agent_id: string | null
   channel: 'chat' | 'voice' | 'whatsapp' | 'sms'
+  source_number_id: string | null
   lead_name: string | null
   lead_phone: string | null
+  lead_email: string | null
   messages: Message[]
   call_id: string | null
+  recording_url: string | null
   resolved: boolean
   requires_human: boolean
+  callback_requested: boolean
+  preferred_callback_time: string | null
+  callback_completed: boolean
+  sentiment: string | null
+  niche_fields: Record<string, unknown>
+  actioned_by: string | null
+  actioned_at: string | null
+  notes: ConversationNote[]
   created_at: string
   updated_at: string
-}
-
-export interface CreateTenantPayload {
-  name: string
-  slug: string
-  plan?: 'trial' | 'starter' | 'pro' | 'enterprise'
-}
-
-export interface UpdateTenantPayload {
-  name?: string
-  plan?: 'trial' | 'starter' | 'pro' | 'enterprise'
-  retell_agent_id?: string
-  twilio_phone?: string
 }
 
 export interface ConversationFilters {
   channel?: 'chat' | 'voice' | 'whatsapp' | 'sms'
   resolved?: boolean
+  branch_id?: string
   limit?: number
   offset?: number
-  tenant_id?: string
+}
+
+export interface CreateOrganisationPayload {
+  name: string
+  slug: string
+  industry?: 'real_estate' | 'hospitality' | 'other'
+  plan?: 'trial' | 'starter' | 'pro' | 'enterprise'
+}
+
+export interface UpdateOrganisationPayload {
+  name?: string
+  industry?: 'real_estate' | 'hospitality' | 'other'
+  plan?: 'trial' | 'starter' | 'pro' | 'enterprise'
+  subdomain?: string
+  branding_config?: Partial<Organisation['branding_config']>
+}
+
+export interface CreateBranchPayload {
+  name: string
+  location?: string
+  timezone?: string
+}
+
+export interface InterestRequest {
+  id: string
+  company_name: string
+  industry: string | null
+  locations_count: number | null
+  channels_needed: string[]
+  contact_name: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  message: string | null
+  status: 'new' | 'contacted' | 'qualified' | 'converted' | 'rejected'
+  created_at: string
+}
+
+export interface LeadCaptureField {
+  field: string
+  label: string
+  type: 'text' | 'select' | 'boolean' | 'date' | 'number'
+  options?: string[]
+}
+
+export interface NicheTemplate {
+  id: string
+  niche: string
+  name: string
+  system_prompt_template: string
+  lead_capture_fields: LeadCaptureField[]
+  default_dashboard_labels: Record<string, string>
+  conversation_flows: unknown[]
 }
 
 export interface ApiSuccess<T> {

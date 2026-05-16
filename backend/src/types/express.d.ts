@@ -1,9 +1,16 @@
-declare module 'express-serve-static-core' {
-  interface Request {
-    tenant: {
-      user_id: string
-      tenant_id: string
-      role: string
+declare global {
+  namespace Express {
+    interface Request {
+      user: {
+        id: string
+      }
+      tenant: {
+        organisation_id: string
+        branch_id: string | null
+        role: string
+      }
     }
   }
 }
+
+export {};
