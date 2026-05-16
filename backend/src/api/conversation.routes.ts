@@ -6,7 +6,6 @@ import { validate } from '../middleware/validate.middleware.js';
 import { conversationService } from '../services/conversation.service.js';
 import { supabase } from '../lib/supabase.js';
 import { ApiResponse } from '../utils/response.js';
-import logger from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -80,8 +79,6 @@ router.get('/:id', authenticate, async (req: Request, res: Response): Promise<vo
 
 // PATCH /api/conversations/:id
 router.patch('/:id', authenticate, validate(updateConversationSchema), async (req: Request, res: Response): Promise<void> => {
-  logger.info(`PATCH conversation ${req.params['id']}: body=${JSON.stringify(req.body)} user=${JSON.stringify(req.user ?? req.tenant)}`);
-
   const branchIds = await getBranchIds(req);
   const updateData = {
     ...(req.body as Partial<{
