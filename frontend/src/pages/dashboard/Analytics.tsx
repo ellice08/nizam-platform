@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/nizam/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,15 +39,43 @@ const Analytics = () => {
   const { data: stats, isLoading: statsLoading } = useOrganisationStats(organisationId ?? '')
   const { data: conversations } = useConversations({ limit: 100 })
 
-  const channelData = [
-    { name: "Chat",     value: conversations?.filter(c => c.channel === 'chat').length     ?? 0 },
-    { name: "Voice",    value: conversations?.filter(c => c.channel === 'voice').length    ?? 0 },
-    { name: "WhatsApp", value: conversations?.filter(c => c.channel === 'whatsapp').length ?? 0 },
-  ]
+  const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d')
 
-  const resolutionRate = stats?.total_conversations
-    ? `${Math.round((stats.resolved_conversations / stats.total_conversations) * 100)}%`
+  const getDateCutoff = (range: '7d' | '30d' | '90d' | 'all') => {
+    if (range === 'all') return null
+    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - days)
+    return cutoff
+  }
+
+  const cutoff = getDateCutoff(dateRange)
+
+  const filteredConversations = (conversations ?? []).filter(c => {
+    if (!cutoff) return true
+    return new Date(c.created_at) >= cutoff
+  })
+
+  const totalFiltered = filteredConversations.length
+  const resolvedFiltered = filteredConversations.filter(c => c.resolved).length
+  const todayFiltered = filteredConversations.filter(c => {
+    const today = new Date()
+    const d = new Date(c.created_at)
+    return (
+      d.getDate() === today.getDate() &&
+      d.getMonth() === today.getMonth() &&
+      d.getFullYear() === today.getFullYear()
+    )
+  }).length
+  const resolutionRate = totalFiltered
+    ? `${Math.round((resolvedFiltered / totalFiltered) * 100)}%`
     : '—'
+
+  const channelData = [
+    { name: "Chat",     value: filteredConversations.filter(c => c.channel === 'chat').length },
+    { name: "Voice",    value: filteredConversations.filter(c => c.channel === 'voice').length },
+    { name: "WhatsApp", value: filteredConversations.filter(c => c.channel === 'whatsapp').length },
+  ]
 
   return (
     <>
@@ -55,25 +84,36 @@ const Analytics = () => {
         title="Analytics"
         description="Volume, sentiment, and outcomes across channels."
       >
-        <select className="nz-input w-44 h-9">
-          <option>Last 7 days</option>
-          <option>Last 30 days</option>
-          <option>Last 90 days</option>
+        <select
+          className="nz-input w-44 h-9"
+          value={dateRange}
+          onChange={e => setDateRange(e.target.value as '7d' | '30d' | '90d' | 'all')}
+        >
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="all">All time</option>
         </select>
       </PageHeader>
 
-      <div className="grid gap-4 md:grid-cols-4 mb-10">
+      <div className="grid gap-4 md:grid-cols-4 mb-4">
         {statsLoading ? (
           [1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)
         ) : (
           <>
-            <StatCard label="Total conversations" value={stats?.total_conversations ?? 0} />
-            <StatCard label="Resolved"            value={stats?.resolved_conversations ?? 0} hint={resolutionRate} />
-            <StatCard label="Today"               value={stats?.conversations_today ?? 0} />
+            <StatCard label="Total conversations" value={totalFiltered} />
+            <StatCard label="Resolved"            value={resolvedFiltered} hint={resolutionRate} />
+            <StatCard label="Today"               value={todayFiltered} />
             <StatCard label="Resolution rate"     value={resolutionRate} />
           </>
         )}
       </div>
+
+      <p className="text-xs text-[hsl(var(--text-tertiary))] mb-6">
+        {dateRange === 'all'
+          ? 'Showing all time data'
+          : `Showing last ${dateRange === '7d' ? '7' : dateRange === '30d' ? '30' : '90'} days`}
+      </p>
 
       <div className="grid gap-6 lg:grid-cols-2 mb-10">
         {/* Channel bar chart — real data */}
