@@ -36,8 +36,6 @@ export const fetchAndSetOrganisation = async (userId: string, appRole?: string) 
       return currPriority > prevPriority ? curr : prev
     })
 
-    console.log('Auth: resolved role:', best.role, 'for user:', userId)
-
     useAuthStore.getState().setOrganisation(
       best.organisation_id,
       best.branch_id,
