@@ -114,6 +114,139 @@ class RagService {
     return { chunksCreated: inserted };
   }
 
+  async crawlAndIngest(params: {
+    url: string
+    branchId: string
+    maxPages?: number
+  }): Promise<{ pagesIndexed: number; chunksCreated: number; errors: string[] }> {
+    const { url, branchId, maxPages = 10 } = params
+
+    // Validate URL
+    let baseUrl: URL
+    try {
+      baseUrl = new URL(url)
+    } catch {
+      throw new AppError('Invalid URL provided', 400)
+    }
+
+    const visited = new Set<string>()
+    const queue: string[] = [url]
+    const errors: string[] = []
+    let pagesIndexed = 0
+    let totalChunks = 0
+
+    // Helper: fetch and extract text from a single page
+    const fetchPage = async (pageUrl: string): Promise<{
+      text: string
+      links: string[]
+    }> => {
+      const { default: fetch } = await import('node-fetch')
+      const { load } = await import('cheerio')
+
+      const response = await fetch(pageUrl, {
+        headers: {
+          'User-Agent': 'NizamBot/1.0 (knowledge base indexer)',
+        },
+        signal: AbortSignal.timeout(10000), // 10s timeout
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${pageUrl}`)
+      }
+
+      const contentType = response.headers.get('content-type') ?? ''
+      if (!contentType.includes('text/html')) {
+        throw new Error(`Not an HTML page: ${contentType}`)
+      }
+
+      const html = await response.text()
+      const $ = load(html)
+
+      // Remove non-content elements
+      $('script, style, nav, footer, header, iframe, noscript, svg').remove()
+      $('[role="navigation"], [role="banner"], [role="complementary"]').remove()
+
+      // Extract visible text
+      const text = $('body').text()
+        .replace(/\s+/g, ' ')
+        .trim()
+
+      // Extract internal links
+      const links: string[] = []
+      $('a[href]').each((_i, el) => {
+        const href = $(el).attr('href')
+        if (!href) return
+
+        try {
+          const absolute = new URL(href, pageUrl)
+          // Only follow links on the same domain
+          if (absolute.hostname === baseUrl.hostname) {
+            // Clean the URL — remove fragments and trailing slashes
+            absolute.hash = ''
+            const clean = absolute.toString().replace(/\/$/, '')
+            if (clean && !visited.has(clean)) {
+              links.push(clean)
+            }
+          }
+        } catch {
+          // Invalid URL — skip
+        }
+      })
+
+      return { text, links }
+    }
+
+    // BFS crawl up to maxPages
+    while (queue.length > 0 && pagesIndexed < maxPages) {
+      const pageUrl = queue.shift()!
+
+      if (visited.has(pageUrl)) continue
+      visited.add(pageUrl)
+
+      try {
+        logger.info(`Crawling: ${pageUrl}`)
+        const { text, links } = await fetchPage(pageUrl)
+
+        if (text.length < 100) {
+          logger.warn(`Skipping thin page: ${pageUrl}`)
+          continue
+        }
+
+        const { chunksCreated } = await this.ingestText({
+          text,
+          branchId,
+          sourceType: 'website_crawl',
+          sourceUrl: pageUrl,
+          metadata: { crawled_at: new Date().toISOString() },
+        })
+
+        totalChunks += chunksCreated
+        pagesIndexed++
+
+        // Add new links to queue
+        for (const link of links) {
+          if (!visited.has(link) && queue.length < maxPages * 2) {
+            queue.push(link)
+          }
+        }
+
+        // Small delay between pages — be polite to the server
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.error(`Failed to crawl ${pageUrl}: ${message}`)
+        errors.push(`${pageUrl}: ${message}`)
+      }
+    }
+
+    logger.info(
+      `Crawl complete: ${pagesIndexed} pages, ${totalChunks} chunks — ${url}`
+    )
+
+    return { pagesIndexed, chunksCreated: totalChunks, errors }
+  }
+
   async getContext(params: {
     query: string;
     branchId: string;

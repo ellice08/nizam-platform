@@ -153,4 +153,56 @@ router.delete(
   }
 );
 
+// POST /api/ingest/crawl
+// Crawl a website and index it into the knowledge base
+router.post(
+  '/crawl',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { url, branch_id, max_pages } = req.body as {
+        url?: string
+        branch_id?: string
+        max_pages?: number
+      }
+
+      if (!url) {
+        throw new AppError('url is required', 400)
+      }
+
+      const branchId: string | undefined =
+        branch_id ?? req.tenant.branch_id ?? undefined
+
+      if (!branchId) {
+        throw new AppError('branch_id is required', 400)
+      }
+
+      // Validate URL format
+      try {
+        new URL(url)
+      } catch {
+        throw new AppError('Invalid URL — must include https://', 400)
+      }
+
+      logger.info(`Starting crawl: ${url} for branch ${branchId}`)
+
+      const result = await ragService.crawlAndIngest({
+        url,
+        branchId,
+        maxPages: max_pages ?? 10,
+      })
+
+      res.status(201).json(
+        ApiResponse.success(
+          result,
+          `Crawled ${result.pagesIndexed} page(s) — ${result.chunksCreated} chunks indexed`
+        )
+      )
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
 export default router;
+
