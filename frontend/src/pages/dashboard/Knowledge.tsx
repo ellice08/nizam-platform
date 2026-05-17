@@ -221,6 +221,7 @@ const Knowledge = () => {
         </p>
         <p className="text-xs text-[hsl(var(--text-tertiary))] mb-4">
           Index your website so the AI can answer questions about your content. Up to 10 pages crawled.
+          Works best with standard websites (WordPress, Webflow, static sites). For React or app-based sites, upload content as a document instead.
         </p>
         <div className="flex gap-2">
           <input
