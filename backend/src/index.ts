@@ -64,8 +64,11 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json(ApiResponse.error('Internal server error'));
 });
 
-app.listen(env.PORT, () => {
-  logger.info(`Server running on port ${env.PORT} [${env.NODE_ENV}]`);
+const PORT = process.env.PORT ?? env.PORT ?? '4000'
+const NODE_ENV = process.env.NODE_ENV ?? env.NODE_ENV ?? 'development'
+
+app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT} [${NODE_ENV}]`);
 });
 
 export default app;

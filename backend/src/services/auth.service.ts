@@ -35,30 +35,34 @@ class AuthService {
     let userId: string;
 
     if (authError) {
-      if (authError.message.toLowerCase().includes('already registered')) {
-        logger.warn(`User already exists in auth — linking to org: ${email}`);
+      const isExisting =
+        authError.code === 'email_exists' ||
+        authError.status === 422 ||
+        (authError.message ?? '').toLowerCase().includes('already registered')
 
-        const { data: existing } = await supabase.auth.admin.listUsers();
-        const existingUser = existing?.users?.find((u) => u.email === email);
-
-        if (!existingUser) {
-          throw new AppError(`Failed to create user account: ${authError.message}`, 400);
-        }
-
-        userId = existingUser.id;
-      } else {
-        logger.error(`Failed to create auth user: ${email}`, { authError });
-        throw new AppError(`Failed to create user account: ${authError.message}`, 400);
+      if (!isExisting) {
+        logger.error(`Failed to create auth user: ${email}`, { authError })
+        throw new AppError(`Failed to create user account: ${authError.message}`, 400)
       }
+
+      logger.info(`User already exists, linking to org: ${email}`)
+      const { data: existingList } = await supabase.auth.admin.listUsers()
+      const existingUser = existingList?.users?.find(u => u.email === email)
+
+      if (!existingUser) {
+        throw new AppError('User exists but could not be found', 400)
+      }
+
+      userId = existingUser.id
     } else {
-      userId = authData.user.id;
+      userId = authData.user.id
     }
 
     // Link user to organisation in tenant_users
     await this.createTenantUserRecord(userId, organisationId, role);
 
     // Send welcome email (non-fatal if it fails)
-    const loginUrl = `${env.FRONTEND_URL}/login`;
+    const loginUrl = `${env.FRONTEND_URL ?? 'https://nizam-platform.vercel.app'}/login`;
     const emailResult = await notificationService.sendWelcomeEmail({
       email,
       otp,
