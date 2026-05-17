@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { supabase } from "@/lib/supabase";
+import type { OrganisationWithDetails } from "@/types/api.types";
 
 type NavItem = {
   to: string;
@@ -50,9 +51,12 @@ const adminSections: NavSection[] = [
   },
 ];
 
-type AppSidebarProps = { variant: "admin" | "dashboard" };
+type AppSidebarProps = {
+  variant: "admin" | "dashboard"
+  org?: OrganisationWithDetails | null
+};
 
-export function AppSidebar({ variant }: AppSidebarProps) {
+export function AppSidebar({ variant, org }: AppSidebarProps) {
   const sections = variant === "admin" ? adminSections : dashboardSections;
   const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -77,7 +81,17 @@ export function AppSidebar({ variant }: AppSidebarProps) {
       <div className="h-16 flex items-center gap-2 px-6 border-b border-sidebar-border">
         <Link to={variant === "admin" ? "/admin" : "/dashboard"} className="flex items-baseline gap-1.5">
           {!collapsed && (
-            <span className="font-display text-2xl tracking-tight text-foreground">nizam</span>
+            variant === "dashboard" && org?.branding_config.logo_url ? (
+              <img
+                src={org.branding_config.logo_url}
+                alt={org.name}
+                className="h-7 max-w-[120px] object-contain"
+              />
+            ) : (
+              <span className="font-display text-2xl tracking-tight text-foreground">
+                {variant === "dashboard" && org?.name ? org.name : "nizam"}
+              </span>
+            )
           )}
           <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
         </Link>

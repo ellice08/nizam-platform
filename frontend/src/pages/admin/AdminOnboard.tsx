@@ -199,8 +199,9 @@ const AdminOnboard = () => {
       { id: "org",      label: "Creating organisation",       status: "idle" },
       { id: "branches", label: "Setting up branches",         status: "idle" },
       { id: "agents",   label: "Configuring AI agents",       status: "idle" },
-      { id: "branding", label: "Saving brand configuration",  status: "idle" },
-      { id: "users",    label: "Inviting branch users",       status: "idle" },
+      { id: "branding",   label: "Saving brand configuration",  status: "idle" },
+      { id: "knowledge",  label: "Uploading knowledge base",   status: "idle" },
+      { id: "users",      label: "Inviting branch users",      status: "idle" },
       { id: "phones",   label: "Setting up phone numbers",    status: "idle" },
       { id: "email",    label: "Sending welcome email",       status: "idle" },
     ];
@@ -263,11 +264,22 @@ const AdminOnboard = () => {
       const b0 = state.branches[0];
 
       if (mainAgent && b0) {
+        const agentName = b0.agentName || 'Aria'
+
+        const existingPrompt = (mainAgent.system_prompt as string) ?? ''
+        const updatedPrompt = existingPrompt
+          .replace(/\{\{agent_name\}\}/g, agentName)
+          .replace(/^You are Aria,/m, `You are ${agentName},`)
+          .replace(/^You are Aria /m, `You are ${agentName} `)
+
         await organisationApi.updateAgent(mainAgent.id, {
-          name: b0.agentName || 'Aria',
+          name: agentName,
           tone: b0.tone,
           language: b0.language,
-          escalation_contacts: b0.escalationContacts.map(({ name, phone, email }) => ({ name, phone, email })),
+          system_prompt: updatedPrompt,
+          escalation_contacts: b0.escalationContacts.map(
+            ({ name, phone, email }) => ({ name, phone, email })
+          ),
           response_time_config: {
             confirmation_hours: b0.confirmationHours ?? 2,
             callback_window_hours: b0.callbackHours ?? 1,
@@ -309,7 +321,48 @@ const AdminOnboard = () => {
       mark("branding", "pending", "Branding could not be saved — update after setup");
     }
 
-    // 3c. Invite branch users
+    // 3c. Upload knowledge base files for each branch
+    mark("knowledge", "running");
+    try {
+      const fetchedBranchesForKb = await organisationApi.getBranches(orgId!);
+      let totalUploaded = 0;
+      let totalFailed = 0;
+
+      for (let i = 0; i < fetchedBranchesForKb.length; i++) {
+        const branch = fetchedBranchesForKb[i];
+        const wizardBranch = state.branches[i];
+        if (!wizardBranch) continue;
+
+        const filesToUpload = wizardBranch.files
+          .filter(f => f.file instanceof File)
+          .map(f => f.file as File);
+
+        if (filesToUpload.length === 0) continue;
+
+        try {
+          const result = await organisationApi.uploadDocuments(
+            branch.id,
+            filesToUpload
+          );
+          totalUploaded += result.totalChunks;
+        } catch {
+          totalFailed++;
+        }
+      }
+
+      if (totalFailed > 0) {
+        mark("knowledge", "pending",
+          `Some files could not be uploaded — add them from the knowledge base page`);
+      } else if (totalUploaded > 0) {
+        mark("knowledge", "done", `${totalUploaded} chunks indexed`);
+      } else {
+        mark("knowledge", "done");
+      }
+    } catch {
+      mark("knowledge", "pending", "Knowledge base upload failed — add files from dashboard");
+    }
+
+    // 3d. Invite branch users
     mark("users", "running");
     try {
       const allUsers = state.branches

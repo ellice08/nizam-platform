@@ -37,7 +37,7 @@ export type Branch = {
   escalationContacts: { id: string; name: string; phone: string; email: string }[];
   afterHoursEnabled: boolean;
   afterHoursMessage: string;
-  files: { id: string; name: string; size: string }[];
+  files: { id: string; name: string; size: string; file?: File }[];
   crawlEnabled: boolean;
   crawlUrl: string;
   crawlFrequency: "ondemand" | "weekly" | "monthly";

@@ -14,7 +14,12 @@ export const Step5Knowledge = ({ state, setBranch }: Props) => {
 
   const onFiles = (files: FileList | null) => {
     if (!files) return;
-    const next = Array.from(files).map((f) => ({ id: `f${Date.now()}-${f.name}`, name: f.name, size: `${Math.round(f.size / 1024)} KB` }));
+    const next = Array.from(files).map((f) => ({
+      id: `f${Date.now()}-${f.name}`,
+      name: f.name,
+      size: `${Math.round(f.size / 1024)} KB`,
+      file: f,
+    }));
     setBranch(active, { files: [...b.files, ...next] });
   };
 
