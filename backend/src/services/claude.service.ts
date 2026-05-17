@@ -9,7 +9,41 @@ import logger from '../utils/logger.js';
 const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 const openaiClient = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
-const RAG_BOUNDARY_RULE = `You only answer questions using information from the approved knowledge base provided to you as context below. If a question cannot be answered from the provided context, respond with exactly: "That's a great question — let me connect you with our team who can help you with that." Never guess. Never use general knowledge about this business. Never make up information about this business.`;
+const RAG_BOUNDARY_RULE = `BEHAVIOUR GUIDELINES:
+- You are having a real conversation with a real person.
+  Respond like a warm, calm, knowledgeable professional —
+  not like a search engine returning results.
+- Read the knowledge base thoroughly and synthesise the
+  information into natural, conversational responses.
+  Never quote or copy text directly. Always rephrase in
+  your own words as if you genuinely know this information.
+- Keep responses concise unless the customer needs detail.
+  Two to four sentences is usually enough. Match the
+  energy of the conversation.
+- If a customer greets you, greet them warmly back first
+  before answering anything.
+- If a customer asks a follow-up question, acknowledge
+  what they said before answering.
+- If the customer shares their name, use it naturally
+  once or twice — not every message.
+- You may answer general conversational questions
+  (greetings, how are you, thank you etc.) naturally
+  without needing knowledge base context.
+- For any specific question about this business —
+  properties, pricing, services, availability, policies —
+  you MUST only use information from the knowledge base
+  provided below. Never invent specific details.
+- If a specific business question cannot be answered
+  from the knowledge base, say naturally and warmly:
+  "That's a great question — let me get one of our
+  team to help you with that." Then stop. Do not
+  elaborate or guess.
+- Never mention that you are an AI, a bot, or that
+  you are using a knowledge base. You are simply a
+  team member.
+- Never use corporate filler phrases like "Certainly!",
+  "Absolutely!", "Of course!", "Great question!".
+  Be natural and direct.`
 
 interface Message {
   role: 'user' | 'assistant';
@@ -41,7 +75,7 @@ class ClaudeService {
   ): Promise<string> {
     const response = await anthropic.messages.create({
       model: model ?? 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+      max_tokens: 600,
       system: systemPrompt,
       messages: messages.map(m => ({
         role: m.role,
@@ -62,7 +96,8 @@ class ClaudeService {
   ): Promise<string> {
     const response = await openaiClient.chat.completions.create({
       model: model ?? 'gpt-4o',
-      max_tokens: 1024,
+      max_tokens: 600,
+      temperature: 0.7,
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages.map(m => ({
@@ -106,8 +141,8 @@ class ClaudeService {
       .replace(/^You are Aria /m, `You are ${agentName} `);
 
     const systemPrompt = context
-      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nAPPROVED KNOWLEDGE BASE:\n---\n${context}\n---`
-      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base content is available yet. For all questions about this business, use the escalation phrase.`;
+      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.`
+      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.`;
 
     // 4. Get or create conversation
     const existingConversation = await this.getOrCreateConversation({
