@@ -85,19 +85,30 @@ class AgentService {
 
   async updateAgent(
     agentId: string,
-    branchId: string,
-    input: Partial<{ name: string; niche: string; tone: string; system_prompt: string; active: boolean }>
+    input: Partial<{
+      name: string
+      niche: string
+      tone: string
+      language: string
+      system_prompt: string
+      channels: string[]
+      escalation_contacts: unknown[]
+      response_time_config: unknown
+      retell_agent_id: string
+    }>
   ) {
     const { data, error } = await supabase
       .from('agents')
       .update(input)
       .eq('id', agentId)
-      .eq('branch_id', branchId)
       .select()
-      .single();
+      .single()
 
-    if (error || !data) throw new AppError('Agent not found', 404);
-    return data;
+    if (error) {
+      throw new AppError(error.message, 500)
+    }
+    if (!data) throw new AppError('Agent not found', 404)
+    return data
   }
 }
 

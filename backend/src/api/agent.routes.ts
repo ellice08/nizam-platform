@@ -28,8 +28,12 @@ const updateAgentSchema = z.object({
   name: z.string().min(1).optional(),
   niche: z.string().optional(),
   tone: z.string().optional(),
+  language: z.string().optional(),
   system_prompt: z.string().optional(),
-  active: z.boolean().optional(),
+  channels: z.array(z.string()).optional(),
+  escalation_contacts: z.array(z.unknown()).optional(),
+  response_time_config: z.unknown().optional(),
+  retell_agent_id: z.string().optional(),
 });
 
 // GET /api/agents/branch/:branchId
@@ -68,15 +72,11 @@ router.post('/branch/:branchId', authenticate, requireOrgAdminOrAbove, validate(
   res.status(201).json(ApiResponse.success(agent, 'Agent created'));
 });
 
-// PATCH /api/agents/:agentId/branch/:branchId
-router.patch('/:agentId/branch/:branchId', authenticate, requireOrgAdminOrAbove, validate(updateAgentSchema), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// PATCH /api/agents/:agentId
+router.patch('/:agentId', authenticate, requireOrgAdminOrAbove, validate(updateAgentSchema), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { agentId, branchId } = req.params;
-    const agent = await agentService.updateAgent(
-      agentId as string,
-      branchId as string,
-      req.body as Partial<{ name: string; niche: string; tone: string; system_prompt: string; active: boolean }>
-    );
+    const { agentId } = req.params;
+    const agent = await agentService.updateAgent(agentId as string, req.body);
     res.json(ApiResponse.success(agent, 'Agent updated'));
   } catch (err) {
     next(err);
