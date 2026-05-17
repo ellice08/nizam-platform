@@ -171,6 +171,10 @@ class RagService {
         .replace(/\s+/g, ' ')
         .trim()
 
+      const title = $('title').text().trim()
+      const metaDesc = $('meta[name="description"]').attr('content') ?? ''
+      const combined = [title, metaDesc, text].filter(Boolean).join('\n\n')
+
       // Extract internal links
       const links: string[] = []
       $('a[href]').each((_i, el) => {
@@ -193,7 +197,7 @@ class RagService {
         }
       })
 
-      return { text, links }
+      return { text: combined, links }
     }
 
     // BFS crawl up to maxPages
@@ -207,8 +211,9 @@ class RagService {
         logger.info(`Crawling: ${pageUrl}`)
         const { text, links } = await fetchPage(pageUrl)
 
-        if (text.length < 100) {
-          logger.warn(`Skipping thin page: ${pageUrl}`)
+        logger.info(`Extracted ${text.length} chars from: ${pageUrl}`)
+        if (text.length < 200) {
+          logger.warn(`Skipping thin page (${text.length} chars): ${pageUrl}`)
           continue
         }
 
