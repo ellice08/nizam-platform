@@ -13,7 +13,25 @@ import { registerRoutes } from './api/index.js';
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: env.FRONTEND_URL }));
+
+const allowedOrigins = [
+  'https://nizam-platform.vercel.app',
+  env.FRONTEND_URL,
+]
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true)
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true)
+    }
+
+    return callback(new Error(`CORS blocked: ${origin}`))
+  },
+  credentials: true,
+}))
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 
