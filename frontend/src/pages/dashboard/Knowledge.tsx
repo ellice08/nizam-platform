@@ -30,6 +30,13 @@ const Knowledge = () => {
     error?: string
   }> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [crawlUrl, setCrawlUrl] = useState('')
+  const [crawling, setCrawling] = useState(false)
+  const [crawlResult, setCrawlResult] = useState<{
+    pagesIndexed: number
+    chunksCreated: number
+    errors: string[]
+  } | null>(null)
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     if (!resolvedBranchId) {
@@ -92,6 +99,40 @@ const Knowledge = () => {
         onError: () => toast.error('Failed to remove document'),
       }
     )
+  }
+
+  const handleCrawl = async () => {
+    if (!crawlUrl.trim() || !resolvedBranchId) return
+
+    try {
+      new URL(crawlUrl)
+    } catch {
+      toast.error('Please enter a valid URL including https://')
+      return
+    }
+
+    try {
+      setCrawling(true)
+      setCrawlResult(null)
+      const result = await organisationApi.crawlWebsite({
+        url: crawlUrl,
+        branchId: resolvedBranchId,
+        maxPages: 10,
+      })
+      setCrawlResult(result)
+      if (result.pagesIndexed > 0) {
+        toast.success(
+          `Crawled ${result.pagesIndexed} page(s) — ${result.chunksCreated} chunks indexed`
+        )
+        void refetch()
+      } else {
+        toast.warning('No pages could be indexed from that URL')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Crawl failed')
+    } finally {
+      setCrawling(false)
+    }
   }
 
   const getFilenameFromUrl = (url: string) => url.replace('upload://', '')
@@ -172,6 +213,53 @@ const Knowledge = () => {
           ))}
         </div>
       )}
+
+      {/* Website crawl */}
+      <div className="rounded-lg border border-border bg-surface p-6 mb-8">
+        <p className="text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] font-medium mb-1">
+          Website crawl
+        </p>
+        <p className="text-xs text-[hsl(var(--text-tertiary))] mb-4">
+          Index your website so the AI can answer questions about your content. Up to 10 pages crawled.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={crawlUrl}
+            onChange={e => setCrawlUrl(e.target.value)}
+            placeholder="https://yourwebsite.com"
+            disabled={crawling}
+            className="flex-1 bg-[#0A0A08] border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] outline-none focus:border-primary transition-colors duration-150 disabled:opacity-50"
+          />
+          <button
+            onClick={() => void handleCrawl()}
+            disabled={crawling || !crawlUrl.trim() || !resolvedBranchId}
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
+          >
+            {crawling ? 'Crawling...' : 'Start crawl'}
+          </button>
+        </div>
+
+        {crawling && (
+          <p className="text-xs text-[hsl(var(--text-tertiary))] mt-3">
+            Crawling pages — this may take up to 30 seconds...
+          </p>
+        )}
+
+        {crawlResult && (
+          <div className="mt-3 p-3 rounded-lg bg-elevated border border-border text-xs space-y-1">
+            <p className="text-foreground">
+              {crawlResult.pagesIndexed} page(s) indexed,{' '}
+              {crawlResult.chunksCreated} chunks created
+            </p>
+            {crawlResult.errors.length > 0 && (
+              <p className="text-[hsl(var(--text-tertiary))]">
+                {crawlResult.errors.length} page(s) could not be crawled
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Indexed documents */}
       <div className="rounded-lg border border-border bg-surface">

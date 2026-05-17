@@ -350,6 +350,26 @@ const AdminOnboard = () => {
         }
       }
 
+      // Also crawl websites if configured
+      for (let i = 0; i < fetchedBranchesForKb.length; i++) {
+        const branch = fetchedBranchesForKb[i];
+        const wizardBranch = state.branches[i];
+        if (!wizardBranch) continue;
+
+        if (wizardBranch.crawlEnabled && wizardBranch.crawlUrl) {
+          try {
+            const crawlResult = await organisationApi.crawlWebsite({
+              url: wizardBranch.crawlUrl,
+              branchId: branch.id,
+              maxPages: 10,
+            });
+            totalUploaded += crawlResult.chunksCreated;
+          } catch {
+            totalFailed++;
+          }
+        }
+      }
+
       if (totalFailed > 0) {
         mark("knowledge", "pending",
           `Some files could not be uploaded — add them from the knowledge base page`);
