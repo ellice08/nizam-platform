@@ -28,14 +28,21 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   pricing, availability, locations, policies —
   use ONLY the knowledge base below. Never invent
   details. Never guess.
-- If something is not in the knowledge base, say
-  warmly: "That one I'll need to pass to our team —
-  could I take your name and best number to reach you?"
-  Then wait for their response.
-- Once they provide contact details, confirm warmly:
-  "Perfect, someone will be in touch with you shortly.
-  Is there anything else I can help you with in the
-  meantime?"
+- If something is not in the knowledge base AND you
+  have not yet collected contact details in this
+  conversation, say warmly: "That one I'll need to
+  pass to our team — could I take your name and either
+  a phone number or email address?" Then wait.
+- If something is not in the knowledge base AND you
+  have ALREADY collected contact details earlier in
+  this conversation, do NOT ask again. Instead say:
+  "I'll add that to the list for our team — they'll
+  cover everything when they reach out to you."
+  Then continue the conversation normally.
+- Once they provide contact details for the first time,
+  confirm warmly: "Perfect, someone will be in touch
+  with you shortly. Is there anything else I can help
+  you with in the meantime?"
 - If they have more questions, continue helping them
   normally. The team will follow up on the escalated
   topic separately — you do not need to end the
@@ -131,7 +138,7 @@ class ClaudeService {
       matchThreshold: 0.75,
     });
 
-    // 3. Build system prompt
+    // 3. Build base prompt (systemPrompt finalised after step 4)
     const agentName = (agentRecord.name as string) ?? 'Aria';
 
     const rawPrompt = (agentRecord.system_prompt as string) ??
@@ -141,10 +148,6 @@ class ClaudeService {
       .replace(/\{\{agent_name\}\}/g, agentName)
       .replace(/^You are Aria,/m, `You are ${agentName},`)
       .replace(/^You are Aria /m, `You are ${agentName} `);
-
-    const systemPrompt = context
-      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.`
-      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.`;
 
     // 4. Get or create conversation
     const existingConversation = await this.getOrCreateConversation({
@@ -158,6 +161,20 @@ class ClaudeService {
 
     const conversationId = existingConversation.id as string;
     const messages = (existingConversation.messages as Message[]) ?? [];
+
+    // 4b. Build final system prompt now that we have conversation state
+    const hasContact = !!(
+      (existingConversation.lead_phone as string | null) ||
+      (existingConversation.lead_email as string | null)
+    )
+
+    const contactContext = hasContact
+      ? '\n\nIMPORTANT: You have already collected this customer\'s contact details earlier in this conversation. If you cannot answer something, do NOT ask for their details again — just say "I\'ll add that to the list for our team — they\'ll cover everything when they reach out."'
+      : ''
+
+    const systemPrompt = context
+      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}`
+      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}`;
 
     // 5. Add user message to history
     const updatedMessages: Message[] = [
