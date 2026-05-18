@@ -11,6 +11,12 @@ import { formatDistanceToNow, format } from 'date-fns'
 import { useConversation, useUpdateConversation } from '@/hooks'
 import { useAuthStore } from '@/store'
 
+type Message = {
+  role: 'user' | 'assistant'
+  content: string
+  escalated?: boolean
+}
+
 interface ConversationPanelProps {
   conversationId: string | null
   onClose: () => void
@@ -210,6 +216,12 @@ const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) 
                       }`}
                     >
                       {msg.content}
+                      {(msg as Message).escalated && (
+                        <p className="text-xs mt-1.5 text-[#F0C5CC] flex items-center gap-1">
+                          <AlertCircle size={10} strokeWidth={1.5} />
+                          Flagged for team follow-up
+                        </p>
+                      )}
                     </div>
                     {msg.role === 'user' && (
                       <div className="h-6 w-6 rounded-full bg-elevated border border-border flex items-center justify-center shrink-0 mt-0.5">
