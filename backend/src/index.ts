@@ -3,12 +3,18 @@ import type { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { env } from './config/env.js';
 import logger from './utils/logger.js';
 import { AppError } from './utils/errors.js';
 import { ApiResponse } from './utils/response.js';
 import { testConnection } from './lib/test-connection.js';
 import { registerRoutes } from './api/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 
@@ -45,6 +51,19 @@ app.get('/health/db', async (_req: Request, res: Response) => {
     res.json({ connected: true });
   } else {
     res.status(503).json({ connected: false, error: result.error });
+  }
+});
+
+app.get('/widget.js', (_req: Request, res: Response) => {
+  try {
+    const widgetPath = join(__dirname, '../public/widget.js');
+    const widgetScript = readFileSync(widgetPath, 'utf-8');
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.send(widgetScript);
+  } catch {
+    res.status(404).send('// Widget not found');
   }
 });
 
