@@ -74,6 +74,7 @@ const Agent = () => {
     role: 'user' | 'assistant'
     content: string
     requiresHuman?: boolean
+    escalated?: boolean
   }>>([])
   const [testInput, setTestInput] = useState('')
   const [testLoading, setTestLoading] = useState(false)
@@ -100,10 +101,21 @@ const Agent = () => {
         sessionId,
         channel: 'chat',
       })
-      setTestMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: result.reply, requiresHuman: result.requiresHuman },
-      ])
+      setTestMessages(prev => {
+        const alreadyEscalated = prev.some(
+          m => m.role === 'assistant' && m.requiresHuman
+        )
+        const isNewEscalation = result.requiresHuman && !alreadyEscalated
+        return [
+          ...prev,
+          {
+            role: 'assistant',
+            content: result.reply,
+            requiresHuman: result.requiresHuman,
+            escalated: isNewEscalation,
+          },
+        ]
+      })
     } catch {
       setTestMessages(prev => [
         ...prev,
