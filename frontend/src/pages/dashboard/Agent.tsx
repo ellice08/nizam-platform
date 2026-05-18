@@ -364,8 +364,10 @@ const Agent = () => {
                       )}
                     >
                       {msg.content}
-                      {msg.requiresHuman && (
-                        <p className="text-xs mt-1.5 text-[#F0C5CC]">↑ Escalation triggered</p>
+                      {(msg as { role: string; content: string; escalated?: boolean; requiresHuman?: boolean }).escalated && (
+                        <p className="text-xs mt-1.5 text-[#F0C5CC] flex items-center gap-1">
+                          Flagged for team follow-up
+                        </p>
                       )}
                     </div>
                     {msg.role === 'user' && (
