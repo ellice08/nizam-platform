@@ -49,6 +49,7 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  escalated?: boolean;
 }
 
 interface ChatParams {
@@ -260,7 +261,11 @@ class ClaudeService {
     // 8. Save updated conversation
     const finalMessages: Message[] = [
       ...updatedMessages,
-      { role: 'assistant', content: reply },
+      {
+        role: 'assistant',
+        content: reply,
+        ...(newEscalation ? { escalated: true } : {}),
+      },
     ];
 
     await supabase
