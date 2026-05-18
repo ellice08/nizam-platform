@@ -11,11 +11,7 @@
     return;
   }
 
-  // Determine API base URL from script src
-  const scriptSrc = scriptTag?.getAttribute('src') ?? '';
-  const API_BASE = scriptSrc
-    ? scriptSrc.replace('/widget.js', '')
-    : 'https://nizam-platform-production.up.railway.app';
+  const API_BASE = 'https://nizam-platform-production.up.railway.app';
 
   // Session persistence
   const SESSION_KEY = `nizam_session_${ORG_ID}`;
