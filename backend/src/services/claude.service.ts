@@ -237,6 +237,12 @@ class ClaudeService {
       'let me connect you with our team',
       'connect you with our team',
       'our team who can help',
+      'pass to our team',
+      'pass this to our team',
+      'need to pass',
+      'someone will be in touch',
+      'team will be in touch',
+      'team reaches out',
     ];
 
     // Once requiresHuman is true it stays true for this
