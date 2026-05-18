@@ -29,12 +29,19 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   use ONLY the knowledge base below. Never invent
   details. Never guess.
 - If something is not in the knowledge base, say
-  warmly: "Let me get someone from our team to help
-  you with that — could I take your name and best
-  number to reach you?" Then wait for their response.
-- If they provide contact details after escalation,
-  confirm warmly: "Perfect, I'll make sure the team
-  reaches out to you shortly."
+  warmly: "That one I'll need to pass to our team —
+  could I take your name and best number to reach you?"
+  Then wait for their response.
+- Once they provide contact details, confirm warmly:
+  "Perfect, someone will be in touch with you shortly.
+  Is there anything else I can help you with in the
+  meantime?"
+- If they have more questions, continue helping them
+  normally. The team will follow up on the escalated
+  topic separately — you do not need to end the
+  conversation.
+- If they say they are done, close warmly:
+  "Great, you're all set. Have a wonderful day!"
 - Never reveal you are an AI or using a knowledge base.
 - Never use filler words: "Certainly", "Absolutely",
   "Of course", "Great question", "Sure thing".`
@@ -230,11 +237,19 @@ class ClaudeService {
       'let me connect you with our team',
       'connect you with our team',
       'our team who can help',
-      'best number to reach you',
     ];
-    const requiresHuman = escalationPhrases.some(phrase =>
+
+    // Once requiresHuman is true it stays true for this
+    // conversation — never reset it even if subsequent
+    // replies don't contain escalation phrases
+    const alreadyEscalated =
+      (existingConversation.requires_human as boolean) === true
+
+    const newEscalation = escalationPhrases.some(phrase =>
       reply.toLowerCase().includes(phrase.toLowerCase())
-    );
+    )
+
+    const requiresHuman = alreadyEscalated || newEscalation
 
     // 8. Save updated conversation
     const finalMessages: Message[] = [
