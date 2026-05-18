@@ -9,41 +9,35 @@ import logger from '../utils/logger.js';
 const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 const openaiClient = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
-const RAG_BOUNDARY_RULE = `BEHAVIOUR GUIDELINES:
-- You are having a real conversation with a real person.
-  Respond like a warm, calm, knowledgeable professional —
-  not like a search engine returning results.
-- Read the knowledge base thoroughly and synthesise the
-  information into natural, conversational responses.
-  Never quote or copy text directly. Always rephrase in
-  your own words as if you genuinely know this information.
-- Keep responses concise unless the customer needs detail.
-  Two to four sentences is usually enough. Match the
-  energy of the conversation.
-- If a customer greets you, greet them warmly back first
-  before answering anything.
-- If a customer asks a follow-up question, acknowledge
-  what they said before answering.
-- If the customer shares their name, use it naturally
-  once or twice — not every message.
-- You may answer general conversational questions
-  (greetings, how are you, thank you etc.) naturally
-  without needing knowledge base context.
-- For any specific question about this business —
-  properties, pricing, services, availability, policies —
-  you MUST only use information from the knowledge base
-  provided below. Never invent specific details.
-- If a specific business question cannot be answered
-  from the knowledge base, say naturally and warmly:
-  "That's a great question — let me get one of our
-  team to help you with that." Then stop. Do not
-  elaborate or guess.
-- Never mention that you are an AI, a bot, or that
-  you are using a knowledge base. You are simply a
-  team member.
-- Never use corporate filler phrases like "Certainly!",
-  "Absolutely!", "Of course!", "Great question!".
-  Be natural and direct.`
+const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
+- You are a calm, warm professional having a real
+  conversation. Not a search engine. Not a brochure.
+- Keep every response SHORT. One to three sentences
+  maximum unless the customer explicitly asks for more
+  detail. If you find yourself writing a paragraph,
+  stop and cut it in half.
+- Be direct. Lead with the answer, not a preamble.
+- Sound like a person, not a system. Vary your phrasing.
+  Never start two consecutive messages the same way.
+- If a customer greets you, greet them back warmly
+  in one sentence before anything else.
+- You may answer small talk naturally
+  (greetings, thank you, etc.) without needing
+  knowledge base content.
+- For all specific business questions — services,
+  pricing, availability, locations, policies —
+  use ONLY the knowledge base below. Never invent
+  details. Never guess.
+- If something is not in the knowledge base, say
+  warmly: "Let me get someone from our team to help
+  you with that — could I take your name and best
+  number to reach you?" Then wait for their response.
+- If they provide contact details after escalation,
+  confirm warmly: "Perfect, I'll make sure the team
+  reaches out to you shortly."
+- Never reveal you are an AI or using a knowledge base.
+- Never use filler words: "Certainly", "Absolutely",
+  "Of course", "Great question", "Sure thing".`
 
 interface Message {
   role: 'user' | 'assistant';
@@ -181,11 +175,62 @@ class ClaudeService {
       throw err;
     }
 
+    // 6b. Check if user is providing contact details
+    // after a previous escalation request
+    const previousMessages = messages // messages before this turn
+    const lastAssistantMessage = [...previousMessages]
+      .reverse()
+      .find(m => m.role === 'assistant')
+
+    const assistantAskedForContact = lastAssistantMessage
+      ? [
+          'take your name',
+          'best number',
+          'reach you',
+          'contact details',
+          'get back to you',
+        ].some(phrase =>
+          lastAssistantMessage.content.toLowerCase().includes(phrase)
+        )
+      : false
+
+    // Simple contact extraction from user message
+    let extractedName: string | null = null
+    let extractedPhone: string | null = null
+    let extractedEmail: string | null = null
+
+    if (assistantAskedForContact) {
+      // Extract phone number pattern
+      const phoneMatch = message.match(
+        /(\+?[\d\s\-().]{7,15})/
+      )
+      if (phoneMatch) {
+        extractedPhone = phoneMatch[1].trim()
+      }
+
+      // Extract email pattern
+      const emailMatch = message.match(
+        /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/
+      )
+      if (emailMatch) {
+        extractedEmail = emailMatch[0]
+      }
+
+      // If no phone/email, treat the whole message as a name
+      // if it's short (likely just a name)
+      if (!extractedPhone && !extractedEmail && message.trim().split(' ').length <= 4) {
+        extractedName = message.trim()
+      }
+    }
+
     // 7. Check if escalation was triggered
     const escalationPhrases = [
+      'let me get someone from our team',
+      'someone from our team to help',
       'let me connect you with our team',
       'connect you with our team',
       'our team who can help',
+      'best number to reach you',
     ];
     const requiresHuman = escalationPhrases.some(phrase =>
       reply.toLowerCase().includes(phrase.toLowerCase())
@@ -202,8 +247,12 @@ class ClaudeService {
       .update({
         messages: finalMessages,
         requires_human: requiresHuman,
-        lead_name: leadName ?? (existingConversation.lead_name as string | null),
-        lead_phone: leadPhone ?? (existingConversation.lead_phone as string | null),
+        lead_name: extractedName ?? leadName ??
+          (existingConversation.lead_name as string | null),
+        lead_phone: extractedPhone ?? leadPhone ??
+          (existingConversation.lead_phone as string | null),
+        lead_email: extractedEmail ??
+          (existingConversation.lead_email as string | null),
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversationId);
