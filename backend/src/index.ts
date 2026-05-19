@@ -18,19 +18,27 @@ const __dirname = dirname(__filename);
 
 const app = express();
 
+// Widget endpoints — open CORS, must be FIRST
+// before helmet and restrictive CORS
+app.use(['/widget.js', '/api/widget'], cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: false,
+}))
+
+// Handle preflight for widget endpoints
+app.options(['/widget.js', '/api/widget/*'], cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: false,
+}))
+
 app.use(helmet());
 
 const allowedOrigins = [
   'https://nizam-platform.vercel.app',
   env.FRONTEND_URL,
 ]
-
-// Open CORS for widget endpoints — must come before
-// the restrictive CORS middleware
-app.use(['/widget.js', '/api/widget'], cors({
-  origin: '*',
-  credentials: false,
-}))
 
 app.use(cors({
   origin: (origin, callback) => {
