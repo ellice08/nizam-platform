@@ -27,7 +27,7 @@ app.use(['/widget.js', '/api/widget'], cors({
 }))
 
 // Handle preflight for widget endpoints
-app.options(['/widget.js', '/api/widget/*'], cors({
+app.options(['/widget.js', '/api/widget', '/api/widget/(.*)'], cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: false,
