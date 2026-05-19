@@ -101,7 +101,9 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction): Pr
       requiresHuman: result.requiresHuman,
     }))
   } catch (err) {
-    logger.error(`Widget chat error: ${err instanceof Error ? err.message : String(err)}`)
+    const message = err instanceof Error ? err.message : JSON.stringify(err)
+    const stack = err instanceof Error ? err.stack : ''
+    logger.error(`Widget chat error: ${message} | stack: ${stack}`)
     next(err)
   }
 })
