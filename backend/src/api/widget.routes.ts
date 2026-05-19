@@ -31,7 +31,7 @@ router.get('/config/:orgId', async (req: Request, res: Response, next: NextFunct
       .select('id')
       .eq('organisation_id', orgId)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     let agentName = 'Assistant'
     if (branch) {
@@ -40,8 +40,8 @@ router.get('/config/:orgId', async (req: Request, res: Response, next: NextFunct
         .select('name')
         .eq('branch_id', branch.id)
         .limit(1)
-        .single()
-      if (agent) agentName = agent.name
+        .maybeSingle()
+      if (agent) agentName = (agent as Record<string, unknown>).name as string
     }
 
     const branding = (org.branding_config as Record<string, unknown>) ?? {}
@@ -79,7 +79,7 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction): Pr
       .select('id')
       .eq('organisation_id', org_id)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (branchError || !branch) {
       throw new AppError('Organisation not configured', 404)

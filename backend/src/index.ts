@@ -25,6 +25,13 @@ const allowedOrigins = [
   env.FRONTEND_URL,
 ]
 
+// Open CORS for widget endpoints — must come before
+// the restrictive CORS middleware
+app.use(['/widget.js', '/api/widget'], cors({
+  origin: '*',
+  credentials: false,
+}))
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Postman)
