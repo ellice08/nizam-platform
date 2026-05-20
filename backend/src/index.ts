@@ -1,7 +1,6 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
-import cors from 'cors';
 import morgan from 'morgan';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -18,14 +17,6 @@ const __dirname = dirname(__filename);
 
 const app = express();
 
-// Widget endpoints — open CORS, must be FIRST
-// before helmet and restrictive CORS
-app.use(['/widget.js', '/api/widget'], cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  credentials: false,
-}))
-
 app.use(helmet());
 
 const allowedOrigins = [
@@ -33,19 +24,48 @@ const allowedOrigins = [
   env.FRONTEND_URL,
 ]
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Postman)
-    if (!origin) return callback(null, true)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const isWidgetPath =
+    req.path.startsWith('/api/widget') ||
+    req.path === '/widget.js'
 
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true)
+  if (isWidgetPath) {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    if (req.method === 'OPTIONS') {
+      res.status(204).end()
+      return
     }
+    next()
+    return
+  }
 
-    return callback(new Error(`CORS blocked: ${origin}`))
-  },
-  credentials: true,
-}))
+  // Restrictive CORS for all other routes
+  const origin = req.headers.origin
+  if (!origin) {
+    next()
+    return
+  }
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Methods',
+        'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+      res.setHeader('Access-Control-Allow-Headers',
+        'Content-Type, Authorization')
+      res.status(204).end()
+      return
+    }
+  } else {
+    logger.warn(`CORS: blocked origin ${origin}`)
+    res.status(403).json({ error: 'CORS blocked' })
+    return
+  }
+  next()
+})
+
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 
