@@ -136,7 +136,7 @@ const Conversations = () => {
                   <tr className="text-left">
                     <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Channel</th>
                     <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Lead</th>
-                    {!selected && <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Phone</th>}
+                    {!selected && <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Contact</th>}
                     <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Time</th>
                     <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Status</th>
                   </tr>
@@ -164,7 +164,7 @@ const Conversations = () => {
                         </td>
                         <td className="px-6 py-4 text-foreground">{r.lead_name ?? 'Unknown caller'}</td>
                         {!selected && (
-                          <td className="px-6 py-4 nz-mono text-[hsl(var(--text-secondary))]">{r.lead_phone ?? '—'}</td>
+                          <td className="px-6 py-4 nz-mono text-[hsl(var(--text-secondary))]">{r.lead_phone ?? r.lead_email ?? '—'}</td>
                         )}
                         <td className="px-6 py-4 nz-mono text-[hsl(var(--text-secondary))]">
                           {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
