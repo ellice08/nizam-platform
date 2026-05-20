@@ -16,6 +16,8 @@
   // Session persistence
   const SESSION_KEY = `nizam_session_${ORG_ID}`;
   let sessionId = sessionStorage.getItem(SESSION_KEY) || null;
+  const ESCALATION_KEY = `nizam_escalated_${ORG_ID}`;
+  let hasShownEscalation = sessionStorage.getItem(ESCALATION_KEY) === 'true';
 
   // State
   let isOpen = false;
@@ -539,7 +541,12 @@
       }
 
       hideTyping();
-      addMessage('assistant', data.data.reply, data.data.requiresHuman);
+      const isNewEscalation = data.data.requiresHuman && !hasShownEscalation;
+      if (isNewEscalation) {
+        hasShownEscalation = true;
+        sessionStorage.setItem(ESCALATION_KEY, 'true');
+      }
+      addMessage('assistant', data.data.reply, isNewEscalation);
 
     } catch (err) {
       hideTyping();
