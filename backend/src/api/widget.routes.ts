@@ -99,6 +99,7 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction): Pr
       reply: result.reply,
       sessionId: result.sessionId,
       requiresHuman: result.requiresHuman,
+      newEscalation: result.newEscalation,
     }))
   } catch (err) {
     const message = err instanceof Error ? err.message : JSON.stringify(err)

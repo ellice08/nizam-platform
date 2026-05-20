@@ -73,6 +73,7 @@ interface ChatResult {
   sessionId: string;
   conversationId: string;
   requiresHuman: boolean;
+  newEscalation: boolean;
 }
 
 class ClaudeService {
@@ -305,7 +306,7 @@ class ClaudeService {
       `requiresHuman=${requiresHuman} provider=${provider}`
     );
 
-    return { reply, sessionId, conversationId, requiresHuman };
+    return { reply, sessionId, conversationId, requiresHuman, newEscalation };
   }
 
   private async getOrCreateConversation(params: {
