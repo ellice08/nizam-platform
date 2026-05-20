@@ -20,6 +20,7 @@
   // State
   let isOpen = false;
   let isLoading = false;
+  let hasShownEscalation = false;
   let config = {
     orgName: 'Chat with us',
     agentName: 'Assistant',
@@ -539,7 +540,11 @@
       }
 
       hideTyping();
-      addMessage('assistant', data.data.reply, data.data.requiresHuman);
+      const isNewEscalation = data.data.requiresHuman && !hasShownEscalation;
+      if (data.data.requiresHuman && !hasShownEscalation) {
+        hasShownEscalation = true;
+      }
+      addMessage('assistant', data.data.reply, isNewEscalation);
 
     } catch (err) {
       hideTyping();
