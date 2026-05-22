@@ -23,7 +23,7 @@ router.post(
   validate(inviteSchema),
   async (req, res, next) => {
     try {
-      if (req.tenant.role !== 'super_admin') {
+      if (!['super_admin', 'org_admin'].includes(req.tenant.role)) {
         throw new AppError('Forbidden', 403);
       }
 
@@ -32,6 +32,12 @@ router.post(
         organisation_id: string;
         role?: string;
       };
+
+      // org_admin can only invite to their own org
+      if (req.tenant.role === 'org_admin' &&
+          organisation_id !== req.tenant.organisation_id) {
+        throw new AppError('Forbidden — cannot invite to another organisation', 403);
+      }
 
       const org = await organisationService.getOrganisationById(organisation_id) as unknown as { name: string };
 
