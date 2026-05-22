@@ -78,6 +78,7 @@ router.get('/', authenticate, requireOrgAdmin, async (req: Request, res: Respons
       return {
         id: tu.user_id,
         email: authUser?.email ?? '',
+        name: (authUser?.user_metadata?.full_name as string) ?? '',
         role: tu.role,
         first_login: tu.first_login,
         active: tu.active ?? true,
@@ -94,9 +95,10 @@ router.get('/', authenticate, requireOrgAdmin, async (req: Request, res: Respons
 // POST /api/users — create a new user in this organisation
 router.post('/', authenticate, requireOrgAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email, role = 'branch_staff' } = req.body as {
+    const { email, role = 'branch_staff', name } = req.body as {
       email?: string
       role?: string
+      name?: string
     }
 
     if (!email) throw new AppError('email is required', 400)
@@ -183,6 +185,7 @@ router.post('/', authenticate, requireOrgAdmin, async (req: Request, res: Respon
       organisationId: orgId,
       organisationName: (org as Record<string, unknown>).name as string,
       role,
+      name,
     })
 
     res.status(201).json(ApiResponse.success(result, 'User invited successfully'))

@@ -20,8 +20,9 @@ class AuthService {
     organisationId: string;
     organisationName: string;
     role?: string;
+    name?: string;
   }): Promise<{ success: boolean; userId?: string }> {
-    const { email, organisationId, organisationName, role = 'org_admin' } = params;
+    const { email, organisationId, organisationName, role = 'org_admin', name } = params;
 
     const otp = this.generateOTP();
 
@@ -30,6 +31,7 @@ class AuthService {
       email,
       password: otp,
       email_confirm: true,
+      user_metadata: name ? { full_name: name, display_name: name } : {},
     });
 
     let userId: string;
