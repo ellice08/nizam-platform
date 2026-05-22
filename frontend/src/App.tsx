@@ -21,6 +21,7 @@ import Knowledge from "./pages/dashboard/Knowledge";
 import Agent from "./pages/dashboard/Agent";
 import Analytics from "./pages/dashboard/Analytics";
 import Billing from "./pages/dashboard/Billing";
+import UsersPage from "./pages/dashboard/Users";
 
 const App = () => (
   <TooltipProvider>
@@ -64,6 +65,7 @@ const App = () => (
           <Route path="/dashboard/agent" element={<Agent />} />
           <Route path="/dashboard/analytics" element={<Analytics />} />
           <Route path="/dashboard/billing" element={<Billing />} />
+          <Route path="/dashboard/users" element={<UsersPage />} />
         </Route>
 
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

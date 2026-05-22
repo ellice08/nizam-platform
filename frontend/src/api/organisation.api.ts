@@ -203,6 +203,61 @@ const sendChatMessage = async (params: {
   return response.data.data
 }
 
+export type OrgUser = {
+  id: string
+  email: string
+  role: string
+  first_login: boolean
+  active: boolean
+  created_at: string
+}
+
+const getOrgUsers = async (): Promise<OrgUser[]> => {
+  const response = await apiClient.get<ApiSuccess<OrgUser[]>>('/api/users')
+  return response.data.data
+}
+
+const createOrgUser = async (payload: {
+  email: string
+  role: string
+}): Promise<{ success: boolean; userId?: string }> => {
+  const response = await apiClient.post<ApiSuccess<{
+    success: boolean
+    userId?: string
+  }>>('/api/users', payload)
+  return response.data.data
+}
+
+const updateOrgUser = async (
+  userId: string,
+  payload: { role?: string; active?: boolean }
+): Promise<{ updated: boolean }> => {
+  const response = await apiClient.patch<ApiSuccess<{ updated: boolean }>>(
+    `/api/users/${userId}`,
+    payload
+  )
+  return response.data.data
+}
+
+const resetOrgUserPassword = async (
+  userId: string
+): Promise<{ sent: boolean }> => {
+  const response = await apiClient.post<ApiSuccess<{ sent: boolean }>>(
+    `/api/users/${userId}/reset-password`,
+    {}
+  )
+  return response.data.data
+}
+
+const deleteOrgUser = async (
+  userId: string
+): Promise<{ deleted: boolean }> => {
+  const response = await apiClient.delete<ApiSuccess<{ deleted: boolean }>>(
+    `/api/users/${userId}`
+  )
+  return response.data.data
+}
+
 export const organisationApi = {
   getAllOrganisations,
   getOrganisationById,
@@ -221,4 +276,9 @@ export const organisationApi = {
   getKnowledgeSources,
   deleteKnowledgeSource,
   sendChatMessage,
+  getOrgUsers,
+  createOrgUser,
+  updateOrgUser,
+  resetOrgUserPassword,
+  deleteOrgUser,
 }

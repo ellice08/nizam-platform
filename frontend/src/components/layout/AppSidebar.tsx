@@ -7,6 +7,7 @@ import {
   Bot,
   BarChart3,
   CreditCard,
+  Users,
   UserPlus,
   ShieldCheck,
   ChevronLeft,
@@ -37,6 +38,7 @@ const dashboardSections: NavSection[] = [
       { to: "/dashboard/agent", label: "Agent", icon: Bot },
       { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
       { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
+      { to: "/dashboard/users", label: "Users", icon: Users },
     ],
   },
 ];
