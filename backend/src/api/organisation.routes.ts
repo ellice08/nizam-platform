@@ -65,7 +65,24 @@ router.get('/:id', authenticate, async (req: Request, res: Response): Promise<vo
 });
 
 // PATCH /api/organisations/:id
-router.patch('/:id', authenticate, requireSuperAdmin, validate(updateOrganisationSchema), async (req: Request, res: Response): Promise<void> => {
+router.patch('/:id', authenticate, validate(updateOrganisationSchema), async (req: Request, res: Response): Promise<void> => {
+  const isSuperAdmin = req.tenant.role === 'super_admin'
+  const isOwnOrgAdmin = req.tenant.role === 'org_admin' &&
+    req.tenant.organisation_id === req.params['id']
+
+  if (!isSuperAdmin && !isOwnOrgAdmin) {
+    res.status(403).json(ApiResponse.error('Insufficient permissions', 'Forbidden'))
+    return
+  }
+
+  // org_admin can only update name, industry, branding_config
+  // not plan, subdomain (super_admin only fields)
+  if (!isSuperAdmin) {
+    const body = req.body as Record<string, unknown>
+    delete body.plan
+    delete body.subdomain
+  }
+
   const org = await organisationService.updateOrganisation(
     req.params['id'] as string,
     req.body as Partial<{ name: string; industry: string; plan: string; subdomain: string; branding_config: unknown }>
