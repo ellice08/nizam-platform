@@ -19,6 +19,41 @@ function requireOrgAdmin(req: Request, _res: Response, next: NextFunction) {
   next()
 }
 
+// GET /api/users/available-roles — roles the calling admin can assign
+// Must be registered before /:userId patterns
+router.get('/available-roles', authenticate, requireOrgAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const orgId = req.tenant.organisation_id
+
+    const { data: existingUsers } = await supabase
+      .from('tenant_users')
+      .select('role')
+      .eq('organisation_id', orgId)
+
+    const roles = existingUsers?.map(u => u.role) ?? []
+
+    const hasBranchAdmin = roles.includes('branch_admin')
+    const orgViewerCount = roles.filter(r => r === 'org_viewer').length
+
+    const available = [
+      { value: 'branch_admin', label: 'Branch Admin',
+        disabled: hasBranchAdmin,
+        reason: hasBranchAdmin ? 'Already has a branch admin' : null },
+      { value: 'branch_staff', label: 'Staff',
+        disabled: false, reason: null },
+      { value: 'org_viewer', label: 'Org Viewer',
+        disabled: orgViewerCount >= 2,
+        reason: orgViewerCount >= 2 ? 'Maximum 2 org viewers reached' : null },
+      { value: 'branch_viewer', label: 'Branch Viewer',
+        disabled: false, reason: null },
+    ]
+
+    res.json(ApiResponse.success(available))
+  } catch (err) {
+    next(err)
+  }
+})
+
 // GET /api/users — list users in this organisation
 router.get('/', authenticate, requireOrgAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -67,6 +102,72 @@ router.post('/', authenticate, requireOrgAdmin, async (req: Request, res: Respon
     if (!email) throw new AppError('email is required', 400)
 
     const orgId = req.tenant.organisation_id
+
+    // Validate role is allowed
+    const allowedRoles = [
+      'branch_admin', 'branch_staff',
+      'org_viewer', 'branch_viewer'
+    ]
+    if (!allowedRoles.includes(role)) {
+      throw new AppError(
+        `Invalid role. Allowed: ${allowedRoles.join(', ')}`,
+        400
+      )
+    }
+
+    // Check if user already exists in this org
+    const { data: authList } = await supabase.auth.admin.listUsers()
+    const existingAuthUser = authList?.users?.find(
+      u => u.email === email
+    )
+    if (existingAuthUser) {
+      const { data: existingTenant } = await supabase
+        .from('tenant_users')
+        .select('user_id, role')
+        .eq('user_id', existingAuthUser.id)
+        .eq('organisation_id', orgId)
+        .maybeSingle()
+
+      if (existingTenant) {
+        throw new AppError(
+          'This user already exists in your organisation',
+          409
+        )
+      }
+    }
+
+    // Enforce one branch_admin per org
+    if (role === 'branch_admin') {
+      const { data: existingBranchAdmin } = await supabase
+        .from('tenant_users')
+        .select('user_id')
+        .eq('organisation_id', orgId)
+        .eq('role', 'branch_admin')
+        .maybeSingle()
+
+      if (existingBranchAdmin) {
+        throw new AppError(
+          'This organisation already has a branch admin',
+          409
+        )
+      }
+    }
+
+    // Enforce two org_viewers max per org
+    if (role === 'org_viewer') {
+      const { data: existingViewers } = await supabase
+        .from('tenant_users')
+        .select('user_id')
+        .eq('organisation_id', orgId)
+        .eq('role', 'org_viewer')
+
+      if ((existingViewers ?? []).length >= 2) {
+        throw new AppError(
+          'Maximum of 2 org viewers allowed per organisation',
+          409
+        )
+      }
+    }
 
     // Get org name for welcome email
     const { data: org } = await supabase
@@ -189,8 +290,12 @@ router.delete('/:userId', authenticate, requireOrgAdmin, async (req: Request, re
       .maybeSingle()
 
     if (!tenantUser) throw new AppError('User not found', 404)
-    if ((tenantUser as Record<string, unknown>).role === 'super_admin') {
+    const userRole = (tenantUser as Record<string, unknown>).role as string
+    if (userRole === 'super_admin') {
       throw new AppError('Cannot delete super admin', 403)
+    }
+    if (userRole === 'org_admin') {
+      throw new AppError('Cannot delete org admin — edit their role instead', 403)
     }
 
     // Remove from tenant_users
