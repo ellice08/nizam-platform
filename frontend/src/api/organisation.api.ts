@@ -203,6 +203,20 @@ const sendChatMessage = async (params: {
   return response.data.data
 }
 
+export type AvailableRole = {
+  value: string
+  label: string
+  disabled: boolean
+  reason: string | null
+}
+
+const getAvailableRoles = async (): Promise<AvailableRole[]> => {
+  const response = await apiClient.get<ApiSuccess<AvailableRole[]>>(
+    '/api/users/available-roles'
+  )
+  return response.data.data
+}
+
 export type OrgUser = {
   id: string
   email: string
@@ -281,4 +295,5 @@ export const organisationApi = {
   updateOrgUser,
   resetOrgUserPassword,
   deleteOrgUser,
+  getAvailableRoles,
 }

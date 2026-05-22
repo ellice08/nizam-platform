@@ -8,18 +8,20 @@ import {
   X, AlertTriangle
 } from 'lucide-react'
 import { organisationApi } from '@/api'
-import type { OrgUser } from '@/api/organisation.api'
+import type { OrgUser, AvailableRole } from '@/api/organisation.api'
 import { formatDistanceToNow } from 'date-fns'
 
 const ROLES = [
-  { value: 'org_admin', label: 'Org Admin' },
   { value: 'branch_admin', label: 'Branch Admin' },
   { value: 'branch_staff', label: 'Staff' },
-  { value: 'viewer', label: 'Viewer' },
+  { value: 'org_viewer', label: 'Org Viewer' },
+  { value: 'branch_viewer', label: 'Branch Viewer' },
 ]
 
-const roleLabel = (role: string) =>
-  ROLES.find(r => r.value === role)?.label ?? role
+const roleLabel = (role: string) => {
+  if (role === 'org_admin') return 'Org Admin'
+  return ROLES.find(r => r.value === role)?.label ?? role
+}
 
 const StatusBadge = ({ user }: { user: OrgUser }) => {
   if (user.first_login) return (
@@ -45,6 +47,7 @@ const StatusBadge = ({ user }: { user: OrgUser }) => {
 const Users = () => {
   const [users, setUsers] = useState<OrgUser[]>([])
   const [loading, setLoading] = useState(true)
+  const [availableRoles, setAvailableRoles] = useState<AvailableRole[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [editUser, setEditUser] = useState<OrgUser | null>(null)
   const [deleteUser, setDeleteUser] = useState<OrgUser | null>(null)
@@ -61,8 +64,14 @@ const Users = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const data = await organisationApi.getOrgUsers()
+      const [data, roles] = await Promise.all([
+        organisationApi.getOrgUsers(),
+        organisationApi.getAvailableRoles(),
+      ])
       setUsers(data)
+      setAvailableRoles(roles)
+      const firstEnabled = roles.find(r => !r.disabled)
+      if (firstEnabled) setNewRole(firstEnabled.value)
     } catch {
       toast.error('Failed to load users')
     } finally {
@@ -83,7 +92,8 @@ const Users = () => {
       toast.success(`Invite sent to ${newEmail}`)
       setShowCreate(false)
       setNewEmail('')
-      setNewRole('branch_staff')
+      const firstEnabled = availableRoles.find(r => !r.disabled)
+      setNewRole(firstEnabled?.value ?? 'branch_staff')
       void fetchUsers()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to invite user')
@@ -219,7 +229,7 @@ const Users = () => {
                         onClick={() => void handleResetPassword(user)}
                         disabled={actionLoading === user.id + '-reset'}
                         className="p-1.5 rounded text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface transition-colors duration-150 disabled:opacity-40"
-                        title="Send password reset"
+                        title="Send password reset email"
                       >
                         <RefreshCw size={13} strokeWidth={1.5}
                           className={actionLoading === user.id + '-reset' ? 'animate-spin' : ''} />
@@ -230,21 +240,23 @@ const Users = () => {
                         onClick={() => void handleToggleActive(user)}
                         disabled={actionLoading === user.id + '-toggle'}
                         className="p-1.5 rounded text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface transition-colors duration-150 disabled:opacity-40"
-                        title={user.active ? 'Deactivate' : 'Activate'}
+                        title={user.active ? 'Deactivate user' : 'Activate user'}
                       >
                         {user.active
                           ? <UserX size={13} strokeWidth={1.5} />
                           : <UserCheck size={13} strokeWidth={1.5} />}
                       </button>
 
-                      {/* Delete */}
-                      <button
-                        onClick={() => { setDeleteUser(user); setDeleteConfirm('') }}
-                        className="p-1.5 rounded text-[hsl(var(--text-secondary))] hover:text-destructive hover:bg-surface transition-colors duration-150"
-                        title="Delete user"
-                      >
-                        <Trash2 size={13} strokeWidth={1.5} />
-                      </button>
+                      {/* Delete — hidden for org_admin */}
+                      {user.role !== 'org_admin' && (
+                        <button
+                          onClick={() => { setDeleteUser(user); setDeleteConfirm('') }}
+                          className="p-1.5 rounded text-[hsl(var(--text-secondary))] hover:text-destructive hover:bg-surface transition-colors duration-150"
+                          title="Delete user permanently"
+                        >
+                          <Trash2 size={13} strokeWidth={1.5} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -288,8 +300,14 @@ const Users = () => {
                   onChange={e => setNewRole(e.target.value)}
                   className="nz-input w-full"
                 >
-                  {ROLES.map(r => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
+                  {availableRoles.map(r => (
+                    <option
+                      key={r.value}
+                      value={r.value}
+                      disabled={r.disabled}
+                    >
+                      {r.label}{r.disabled && r.reason ? ` — ${r.reason}` : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -327,20 +345,32 @@ const Users = () => {
               <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                 Role
               </label>
-              <select
-                value={editRole}
-                onChange={e => setEditRole(e.target.value)}
-                className="nz-input w-full"
-              >
-                {ROLES.map(r => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
+              {editUser.role === 'org_admin' ? (
+                <p className="text-sm text-[hsl(var(--text-secondary))]">
+                  Org admin role cannot be changed.
+                </p>
+              ) : (
+                <select
+                  value={editRole}
+                  onChange={e => setEditRole(e.target.value)}
+                  className="nz-input w-full"
+                >
+                  {availableRoles.map(r => (
+                    <option
+                      key={r.value}
+                      value={r.value}
+                      disabled={r.disabled}
+                    >
+                      {r.label}{r.disabled && r.reason ? ` — ${r.reason}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="flex gap-3 mt-6">
               <Button
                 onClick={() => void handleEdit()}
-                disabled={actionLoading === 'edit'}
+                disabled={editUser.role === 'org_admin' || actionLoading === 'edit'}
                 className="flex-1 bg-primary hover:bg-primary-hover text-primary-foreground"
               >
                 {actionLoading === 'edit' ? 'Saving…' : 'Save changes'}
