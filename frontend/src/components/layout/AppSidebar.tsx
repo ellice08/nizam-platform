@@ -29,26 +29,83 @@ type NavItem = {
 
 type NavSection = { label: string; items: NavItem[] };
 
-const dashboardSections: NavSection[] = [
-  {
-    label: "Workspace",
-    items: [
-      { to: "/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
-      { to: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
-      { to: "/dashboard/knowledge", label: "Knowledge", icon: BookOpen },
-      { to: "/dashboard/agent", label: "Agent", icon: Bot },
-      { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-      { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
-      { to: "/dashboard/users", label: "Users", icon: Users },
-    ],
-  },
-  {
-    label: "Organisation",
-    items: [
-      { to: "/dashboard/settings", label: "Settings", icon: Settings },
-    ],
-  },
+// All possible dashboard nav items
+const ALL_WORKSPACE_ITEMS: NavItem[] = [
+  { to: "/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
+  { to: "/dashboard/knowledge", label: "Knowledge", icon: BookOpen },
+  { to: "/dashboard/agent", label: "Agent", icon: Bot },
+  { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
+  { to: "/dashboard/users", label: "Users", icon: Users },
 ];
+
+const ALL_ORG_ITEMS: NavItem[] = [
+  { to: "/dashboard/settings", label: "Settings", icon: Settings },
+];
+
+// Items visible per role
+const ROLE_NAV: Record<string, string[]> = {
+  org_admin: [
+    "/dashboard",
+    "/dashboard/conversations",
+    "/dashboard/knowledge",
+    "/dashboard/agent",
+    "/dashboard/analytics",
+    "/dashboard/billing",
+    "/dashboard/users",
+    "/dashboard/settings",
+  ],
+  branch_admin: [
+    "/dashboard",
+    "/dashboard/conversations",
+    "/dashboard/knowledge",
+    "/dashboard/agent",
+    "/dashboard/analytics",
+    "/dashboard/billing",
+    "/dashboard/settings",
+  ],
+  branch_staff: [
+    "/dashboard",
+    "/dashboard/conversations",
+    "/dashboard/analytics",
+    "/dashboard/settings",
+  ],
+  org_viewer: [
+    "/dashboard",
+    "/dashboard/conversations",
+    "/dashboard/analytics",
+    "/dashboard/settings",
+  ],
+  branch_viewer: [
+    "/dashboard",
+    "/dashboard/conversations",
+    "/dashboard/analytics",
+    "/dashboard/settings",
+  ],
+};
+
+function getDashboardSections(role: string | null): NavSection[] {
+  const allowed = ROLE_NAV[role ?? ""] ?? ROLE_NAV["branch_viewer"];
+
+  const workspaceItems = ALL_WORKSPACE_ITEMS.filter(
+    item => allowed.includes(item.to)
+  );
+  const orgItems = ALL_ORG_ITEMS.filter(
+    item => allowed.includes(item.to)
+  );
+
+  const sections: NavSection[] = [];
+
+  if (workspaceItems.length > 0) {
+    sections.push({ label: "Workspace", items: workspaceItems });
+  }
+  if (orgItems.length > 0) {
+    sections.push({ label: "Organisation", items: orgItems });
+  }
+
+  return sections;
+}
 
 const adminSections: NavSection[] = [
   {
@@ -66,7 +123,9 @@ type AppSidebarProps = {
 };
 
 export function AppSidebar({ variant, org }: AppSidebarProps) {
-  const sections = variant === "admin" ? adminSections : dashboardSections;
+  const sections = variant === "admin"
+    ? adminSections
+    : getDashboardSections(role);
   const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user, role, isAdmin, clear } = useAuthStore();
