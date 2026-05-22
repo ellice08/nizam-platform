@@ -71,6 +71,7 @@ const Settings = () => {
   const [brandingSaving, setBrandingSaving] = useState(false)
 
   // Profile tab state
+  const [fullName, setFullName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -88,9 +89,12 @@ const Settings = () => {
     }
   }, [org])
 
-  // Populate display name from auth user
+  // Populate display name and full name from auth user
   useEffect(() => {
     if (user) {
+      setFullName(
+        (user.user_metadata?.full_name as string) ?? ''
+      )
       setDisplayName(
         (user.user_metadata?.display_name as string) ??
         (user.email?.split('@')[0] ?? '')
@@ -140,7 +144,10 @@ const Settings = () => {
     try {
       setProfileSaving(true)
       const { error } = await supabase.auth.updateUser({
-        data: { display_name: displayName },
+        data: {
+          full_name: fullName,
+          display_name: displayName,
+        },
       })
       if (error) throw error
       toast.success('Profile updated')
@@ -333,6 +340,18 @@ const Settings = () => {
               text-[hsl(var(--text-secondary))] font-medium">
               Profile
             </h3>
+            <div>
+              <label className="block text-xs uppercase tracking-wider
+                text-[hsl(var(--text-secondary))] mb-2">
+                Full name
+              </label>
+              <input
+                className="nz-input w-full"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                placeholder="Your full name"
+              />
+            </div>
             <div>
               <label className="block text-xs uppercase tracking-wider
                 text-[hsl(var(--text-secondary))] mb-2">

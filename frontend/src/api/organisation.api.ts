@@ -220,6 +220,7 @@ const getAvailableRoles = async (): Promise<AvailableRole[]> => {
 export type OrgUser = {
   id: string
   email: string
+  name: string
   role: string
   first_login: boolean
   active: boolean
@@ -234,6 +235,7 @@ const getOrgUsers = async (): Promise<OrgUser[]> => {
 const createOrgUser = async (payload: {
   email: string
   role: string
+  name?: string
 }): Promise<{ success: boolean; userId?: string }> => {
   const response = await apiClient.post<ApiSuccess<{
     success: boolean

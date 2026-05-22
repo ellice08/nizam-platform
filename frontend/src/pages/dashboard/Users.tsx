@@ -56,6 +56,7 @@ const Users = () => {
 
   // Create form state
   const [newEmail, setNewEmail] = useState('')
+  const [newName, setNewName] = useState('')
   const [newRole, setNewRole] = useState('branch_staff')
 
   // Edit form state
@@ -87,11 +88,13 @@ const Users = () => {
       setActionLoading('create')
       await organisationApi.createOrgUser({
         email: newEmail.trim(),
-        role: newRole
+        role: newRole,
+        name: newName.trim() || undefined,
       })
       toast.success(`Invite sent to ${newEmail}`)
       setShowCreate(false)
       setNewEmail('')
+      setNewName('')
       const firstEnabled = availableRoles.find(r => !r.disabled)
       setNewRole(firstEnabled?.value ?? 'branch_staff')
       void fetchUsers()
@@ -192,6 +195,7 @@ const Users = () => {
             <thead>
               <tr className="border-b border-border text-left">
                 <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Email</th>
+                <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Name</th>
                 <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Role</th>
                 <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Status</th>
                 <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Joined</th>
@@ -202,6 +206,9 @@ const Users = () => {
               {users.map(user => (
                 <tr key={user.id} className="hover:bg-elevated transition-colors duration-150">
                   <td className="px-6 py-4 text-foreground">{user.email}</td>
+                  <td className="px-6 py-4 text-[hsl(var(--text-secondary))]">
+                    {user.name || '—'}
+                  </td>
                   <td className="px-6 py-4">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-elevated border border-border text-[hsl(var(--text-secondary))]">
                       {roleLabel(user.role)}
@@ -278,6 +285,18 @@ const Users = () => {
               </button>
             </div>
             <div className="space-y-4">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
+                  Full name
+                </label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Jane Smith"
+                  className="nz-input w-full"
+                />
+              </div>
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   Email address
