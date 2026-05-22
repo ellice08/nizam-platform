@@ -7,6 +7,8 @@ const ROLE_PRIORITY: Record<string, number> = {
   org_admin: 4,
   branch_admin: 3,
   branch_staff: 2,
+  org_viewer: 1,
+  branch_viewer: 1,
   viewer: 1,
 }
 
