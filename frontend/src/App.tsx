@@ -22,6 +22,7 @@ import Agent from "./pages/dashboard/Agent";
 import Analytics from "./pages/dashboard/Analytics";
 import Billing from "./pages/dashboard/Billing";
 import UsersPage from "./pages/dashboard/Users";
+import SettingsPage from "./pages/dashboard/Settings";
 
 const App = () => (
   <TooltipProvider>
@@ -66,6 +67,7 @@ const App = () => (
           <Route path="/dashboard/analytics" element={<Analytics />} />
           <Route path="/dashboard/billing" element={<Billing />} />
           <Route path="/dashboard/users" element={<UsersPage />} />
+          <Route path="/dashboard/settings" element={<SettingsPage />} />
         </Route>
 
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -8,6 +8,7 @@ import {
   BarChart3,
   CreditCard,
   Users,
+  Settings,
   UserPlus,
   ShieldCheck,
   ChevronLeft,
@@ -39,6 +40,12 @@ const dashboardSections: NavSection[] = [
       { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
       { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
       { to: "/dashboard/users", label: "Users", icon: Users },
+    ],
+  },
+  {
+    label: "Organisation",
+    items: [
+      { to: "/dashboard/settings", label: "Settings", icon: Settings },
     ],
   },
 ];
