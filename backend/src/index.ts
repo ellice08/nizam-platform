@@ -21,7 +21,7 @@ app.use(helmet());
 
 const allowedOrigins = [
   "https://nizam-platform.vercel.app",
-  // "http://localhost:8080",
+  "http://localhost:8080",
   // "http://localhost:8081",
   env.FRONTEND_URL,
 ];
