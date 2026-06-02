@@ -58,7 +58,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       );
       res.setHeader(
         "Access-Control-Allow-Headers",
-        "Content-Type, Authorization",
+        "Content-Type, Authorization, x-tenant-org-id",
       );
       res.status(204).end();
       return;
