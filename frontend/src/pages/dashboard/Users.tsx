@@ -8,6 +8,7 @@ import {
   X, AlertTriangle
 } from 'lucide-react'
 import { organisationApi } from '@/api'
+import { useAuthStore } from '@/store'
 import type { OrgUser, AvailableRole } from '@/api/organisation.api'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -80,7 +81,8 @@ const Users = () => {
     }
   }
 
-  useEffect(() => { void fetchUsers() }, [])
+  const { tenantOrgId } = useAuthStore()
+  useEffect(() => { void fetchUsers() }, [tenantOrgId])
 
   const handleCreate = async () => {
     if (!newEmail.trim()) return
