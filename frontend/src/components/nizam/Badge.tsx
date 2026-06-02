@@ -12,9 +12,9 @@ const variants: Record<Variant, string> = {
 };
 
 const bgs: Partial<Record<Variant, string>> = {
-  starter: "bg-[#0F1F0F]",
-  pro: "bg-[#1A0F0F]",
-  enterprise: "bg-[#1A1510]",
+  starter: "bg-green-500/10",
+  pro: "bg-primary/10",
+  enterprise: "bg-rose/10",
 };
 
 export function Badge({ variant = "neutral", children }: { variant?: Variant; children: React.ReactNode }) {
