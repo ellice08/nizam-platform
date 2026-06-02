@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ const industryLabel: Record<string, string> = {
 
 const AdminOverview = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { setTenantOrg } = useAuthStore();
   const { data: organisations, isLoading, isError } = useAllOrganisations();
 
@@ -163,6 +165,7 @@ const AdminOverview = () => {
                       onClick={(e) => {
                         e.stopPropagation()
                         setTenantOrg(org.id, org.name)
+                        void queryClient.invalidateQueries()
                         navigate('/dashboard')
                       }}
                       className="ml-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
