@@ -26,7 +26,10 @@ export function AppLayout({ variant }: AppLayoutProps) {
 
     const config = org.branding_config as {
       primary_color?: string
+      primary_hover_color?: string
       secondary_color?: string
+      accent_color?: string
+      background_color?: string
       font?: string
     }
 
@@ -34,7 +37,25 @@ export function AppLayout({ variant }: AppLayoutProps) {
 
     if (config.primary_color) {
       const hsl = hexToHsl(config.primary_color)
-      if (hsl) root.style.setProperty('--primary', hsl)
+      if (hsl) {
+        root.style.setProperty('--primary', hsl)
+        root.style.setProperty('--ring', hsl)
+        root.style.setProperty('--sidebar-primary', hsl)
+        root.style.setProperty('--sidebar-ring', hsl)
+      }
+    }
+
+    if (config.primary_hover_color) {
+      const hsl = hexToHsl(config.primary_hover_color)
+      if (hsl) root.style.setProperty('--primary-hover', hsl)
+    } else if (config.primary_color) {
+      const hsl = hexToHsl(config.primary_color)
+      if (hsl) {
+        const parts = hsl.split(' ')
+        const l = parseFloat(parts[2])
+        const darkenedL = Math.max(0, l - 6)
+        root.style.setProperty('--primary-hover', `${parts[0]} ${parts[1]} ${darkenedL}%`)
+      }
     }
 
     if (config.secondary_color) {
@@ -42,9 +63,33 @@ export function AppLayout({ variant }: AppLayoutProps) {
       if (hsl) root.style.setProperty('--rose', hsl)
     }
 
+    if (config.accent_color) {
+      const hsl = hexToHsl(config.accent_color)
+      if (hsl) {
+        root.style.setProperty('--accent', hsl)
+        root.style.setProperty('--destructive', hsl)
+      }
+    }
+
+    if (config.background_color) {
+      const hsl = hexToHsl(config.background_color)
+      if (hsl) {
+        root.style.setProperty('--background', hsl)
+        root.style.setProperty('--sidebar-background', hsl)
+      }
+    }
+
     return () => {
       root.style.removeProperty('--primary')
+      root.style.removeProperty('--primary-hover')
+      root.style.removeProperty('--ring')
+      root.style.removeProperty('--sidebar-primary')
+      root.style.removeProperty('--sidebar-ring')
       root.style.removeProperty('--rose')
+      root.style.removeProperty('--accent')
+      root.style.removeProperty('--destructive')
+      root.style.removeProperty('--background')
+      root.style.removeProperty('--sidebar-background')
     }
   }, [org, variant])
 

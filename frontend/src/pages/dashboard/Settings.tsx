@@ -69,6 +69,9 @@ const Settings = () => {
   // Branding tab state
   const [primaryColor, setPrimaryColor] = useState('#7A2535')
   const [secondaryColor, setSecondaryColor] = useState('#C4909A')
+  const [accentColor, setAccentColor] = useState('#7A2535')
+  const [primaryHoverColor, setPrimaryHoverColor] = useState('#8F2D3F')
+  const [backgroundColor, setBackgroundColor] = useState('#0E0E0C')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [logoUploading, setLogoUploading] = useState(false)
   const [brandingSaving, setBrandingSaving] = useState(false)
@@ -89,6 +92,9 @@ const Settings = () => {
       const branding = org.branding_config as Record<string, unknown>
       if (branding?.primary_color) setPrimaryColor(branding.primary_color as string)
       if (branding?.secondary_color) setSecondaryColor(branding.secondary_color as string)
+      if (branding?.accent_color) setAccentColor(branding.accent_color as string)
+      if (branding?.primary_hover_color) setPrimaryHoverColor(branding.primary_hover_color as string)
+      if (branding?.background_color) setBackgroundColor(branding.background_color as string)
       if (branding?.logo_url) setLogoUrl(branding.logo_url as string)
     }
   }, [org])
@@ -132,7 +138,10 @@ const Settings = () => {
           logo_url: org?.branding_config.logo_url ?? null,
           font: org?.branding_config.font ?? '',
           primary_color: primaryColor,
+          primary_hover_color: primaryHoverColor,
           secondary_color: secondaryColor,
+          accent_color: accentColor,
+          background_color: backgroundColor,
         },
       })
       await refetch()
@@ -345,6 +354,21 @@ const Settings = () => {
               value={secondaryColor}
               onChange={setSecondaryColor}
             />
+            <ColourInput
+              label="Primary hover"
+              value={primaryHoverColor}
+              onChange={setPrimaryHoverColor}
+            />
+            <ColourInput
+              label="Accent (highlights & badges)"
+              value={accentColor}
+              onChange={setAccentColor}
+            />
+            <ColourInput
+              label="Background override"
+              value={backgroundColor}
+              onChange={setBackgroundColor}
+            />
 
             {/* Live preview */}
             <div>
@@ -354,34 +378,41 @@ const Settings = () => {
               </p>
               <div className="rounded-lg border border-border bg-elevated p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full"
-                    style={{ background: primaryColor }} />
+                  <div className="h-2 w-2 rounded-full" style={{ background: primaryColor }} />
                   <span className="text-xs text-foreground">Primary</span>
-                  <span className="nz-mono text-xs text-[hsl(var(--text-tertiary))]">
-                    {primaryColor}
-                  </span>
+                  <span className="nz-mono text-xs text-[hsl(var(--text-tertiary))]">{primaryColor}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full"
-                    style={{ background: secondaryColor }} />
+                  <div className="h-2 w-2 rounded-full" style={{ background: primaryHoverColor }} />
+                  <span className="text-xs text-foreground">Primary hover</span>
+                  <span className="nz-mono text-xs text-[hsl(var(--text-tertiary))]">{primaryHoverColor}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full" style={{ background: secondaryColor }} />
                   <span className="text-xs text-foreground">Secondary</span>
-                  <span className="nz-mono text-xs text-[hsl(var(--text-tertiary))]">
-                    {secondaryColor}
-                  </span>
+                  <span className="nz-mono text-xs text-[hsl(var(--text-tertiary))]">{secondaryColor}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full" style={{ background: accentColor }} />
+                  <span className="text-xs text-foreground">Accent</span>
+                  <span className="nz-mono text-xs text-[hsl(var(--text-tertiary))]">{accentColor}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full" style={{ background: backgroundColor }} />
+                  <span className="text-xs text-foreground">Background</span>
+                  <span className="nz-mono text-xs text-[hsl(var(--text-tertiary))]">{backgroundColor}</span>
                 </div>
                 <div className="flex gap-2 pt-1">
-                  <button
-                    className="px-3 py-1.5 rounded text-xs text-white font-medium"
-                    style={{ background: primaryColor }}
-                  >
-                    Button
-                  </button>
-                  <button
-                    className="px-3 py-1.5 rounded text-xs text-white font-medium"
-                    style={{ background: secondaryColor }}
-                  >
-                    Secondary
-                  </button>
+                  <button className="px-3 py-1.5 rounded text-xs text-white font-medium"
+                    style={{ background: primaryColor }}>Button</button>
+                  <button className="px-3 py-1.5 rounded text-xs text-white font-medium"
+                    style={{ background: primaryHoverColor }}>Hover</button>
+                  <button className="px-3 py-1.5 rounded text-xs text-white font-medium"
+                    style={{ background: accentColor }}>Accent</button>
+                  <div className="px-3 py-1.5 rounded text-xs font-medium"
+                    style={{ background: backgroundColor, color: '#FAFAFA', border: '1px solid #2A2A26' }}>
+                    Background
+                  </div>
                 </div>
               </div>
             </div>
