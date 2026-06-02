@@ -21,9 +21,15 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   // Super admin is determined by app_metadata set via Supabase admin API
   if ((user.app_metadata as Record<string, unknown>)?.role === 'super_admin') {
-    req.tenant = { organisation_id: '', branch_id: null, role: 'super_admin' };
-    next();
-    return;
+    // Check if super admin is acting as a client org
+    const tenantOrgId = req.headers['x-tenant-org-id'] as string | undefined
+    req.tenant = {
+      organisation_id: tenantOrgId ?? '',
+      branch_id: null,
+      role: 'super_admin'
+    }
+    next()
+    return
   }
 
   const { data: tenantUser, error: tenantError } = await supabase
