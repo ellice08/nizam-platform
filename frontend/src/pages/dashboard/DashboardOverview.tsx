@@ -17,9 +17,10 @@ const channels = [
 ];
 
 const DashboardOverview = () => {
-  const { organisationId } = useAuthStore()
-  const { data: org } = useOrganisation(organisationId ?? '')
-  const { data: stats, isLoading: statsLoading } = useOrganisationStats(organisationId ?? '')
+  const { organisationId, tenantOrgId } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const { data: org } = useOrganisation(activeOrgId)
+  const { data: stats, isLoading: statsLoading } = useOrganisationStats(activeOrgId)
   const { data: conversations, isLoading: convsLoading } = useConversations({ limit: 5 })
 
   const resolutionHint = stats?.total_conversations
