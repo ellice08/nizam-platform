@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Sun, Moon } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/store'
+import { useAuthStore, useThemeStore } from '@/store'
 import { useOrganisation } from '@/hooks'
 import { organisationApi } from '@/api'
 import { supabase } from '@/lib/supabase'
@@ -14,7 +15,7 @@ const INDUSTRIES = [
   { value: 'other', label: 'Other' },
 ]
 
-const TABS = ['General', 'Branding', 'Profile'] as const
+const TABS = ['General', 'Branding', 'Appearance', 'Profile'] as const
 type Tab = typeof TABS[number]
 
 // Simple hex colour input with preview swatch
@@ -57,6 +58,7 @@ const ColourInput = ({
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState<Tab>('General')
+  const { theme, setTheme } = useThemeStore()
   const { organisationId, tenantOrgId, user } = useAuthStore()
   const activeOrgId = tenantOrgId ?? organisationId ?? ''
   const { data: org, refetch } = useOrganisation(activeOrgId)
@@ -73,6 +75,7 @@ const Settings = () => {
   const [primaryHoverColor, setPrimaryHoverColor] = useState('#8F2D3F')
   const [backgroundColor, setBackgroundColor] = useState('#0E0E0C')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [logoDarkUrl, setLogoDarkUrl] = useState<string | null>(null)
   const [logoUploading, setLogoUploading] = useState(false)
   const [brandingSaving, setBrandingSaving] = useState(false)
 
@@ -96,6 +99,7 @@ const Settings = () => {
       if (branding?.primary_hover_color) setPrimaryHoverColor(branding.primary_hover_color as string)
       if (branding?.background_color) setBackgroundColor(branding.background_color as string)
       if (branding?.logo_url) setLogoUrl(branding.logo_url as string)
+      if (branding?.logo_dark_url) setLogoDarkUrl(branding.logo_dark_url as string)
     }
   }, [org])
 
@@ -213,6 +217,73 @@ const Settings = () => {
       setLogoUrl(null)
       await refetch()
       toast.success('Logo removed')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove logo')
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
+  const handleDarkLogoUpload = async (file: File) => {
+    if (!activeOrgId) return
+
+    if (!['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'].includes(file.type)) {
+      toast.error('Please upload a PNG, JPG, SVG or WebP file')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Logo must be under 2MB')
+      return
+    }
+
+    try {
+      setLogoUploading(true)
+
+      const ext = file.name.split('.').pop()
+      const path = `${activeOrgId}/logo-dark.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(path, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('logos')
+        .getPublicUrl(path)
+
+      const existing = (org?.branding_config as Record<string, unknown>) ?? {}
+      await organisationApi.updateOrganisation(activeOrgId, {
+        branding_config: {
+          ...existing,
+          logo_dark_url: publicUrl,
+        },
+      })
+
+      setLogoDarkUrl(publicUrl)
+      await refetch()
+      toast.success('Dark mode logo uploaded successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
+  const handleDarkLogoRemove = async () => {
+    if (!activeOrgId) return
+    try {
+      setLogoUploading(true)
+      const existing = (org?.branding_config as Record<string, unknown>) ?? {}
+      await organisationApi.updateOrganisation(activeOrgId, {
+        branding_config: {
+          ...existing,
+          logo_dark_url: null,
+        },
+      })
+      setLogoDarkUrl(null)
+      await refetch()
+      toast.success('Dark mode logo removed')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove logo')
     } finally {
@@ -481,6 +552,52 @@ const Settings = () => {
               )}
             </div>
 
+            {/* Dark mode logo */}
+            <div>
+              <p className="text-xs uppercase tracking-wider
+                text-[hsl(var(--text-secondary))] mb-3 font-medium">
+                Dark mode logo <span className="normal-case text-[hsl(var(--text-tertiary))] ml-1">(optional)</span>
+              </p>
+              <p className="text-xs text-[hsl(var(--text-tertiary))] mb-3">
+                Used when dark mode is active. Falls back to main logo if not set.
+              </p>
+              {logoDarkUrl ? (
+                <div className="flex items-center gap-4 mb-3">
+                  <img src={logoDarkUrl} alt="Dark mode logo"
+                    className="h-10 max-w-[160px] object-contain rounded border border-border bg-[#0E0E0C] p-1" />
+                  <button onClick={() => void handleDarkLogoRemove()}
+                    disabled={logoUploading}
+                    className="text-xs text-destructive hover:text-destructive/80 transition-colors disabled:opacity-40">
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-3">
+                  <label className={cn(
+                    "flex items-center justify-center w-full h-24 rounded-lg border-2 border-dashed border-border cursor-pointer transition-colors duration-150",
+                    logoUploading ? "opacity-50 cursor-not-allowed" : "hover:border-primary hover:bg-primary/5"
+                  )}>
+                    <div className="text-center">
+                      {logoUploading ? (
+                        <p className="text-xs text-[hsl(var(--text-secondary))]">Uploading…</p>
+                      ) : (
+                        <>
+                          <p className="text-xs text-[hsl(var(--text-secondary))]">Click to upload dark logo</p>
+                          <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">PNG, JPG, SVG, WebP · max 2MB</p>
+                        </>
+                      )}
+                    </div>
+                    <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                      className="hidden" disabled={logoUploading}
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) void handleDarkLogoUpload(file)
+                      }} />
+                  </label>
+                </div>
+              )}
+            </div>
+
             <Button
               onClick={() => void handleSaveBranding()}
               disabled={brandingSaving}
@@ -488,6 +605,49 @@ const Settings = () => {
             >
               {brandingSaving ? 'Saving…' : 'Save brand colours'}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── APPEARANCE TAB ── */}
+      {activeTab === 'Appearance' && (
+        <div className="max-w-xl space-y-6">
+          <div className="rounded-lg border border-border bg-surface p-6 space-y-5">
+            <h3 className="text-xs uppercase tracking-wider
+              text-[hsl(var(--text-secondary))] font-medium">
+              Theme
+            </h3>
+            <p className="text-xs text-[hsl(var(--text-tertiary))] -mt-2">
+              Choose how the dashboard looks. Your preference is saved automatically.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setTheme('light')}
+                className={cn(
+                  "flex-1 flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-colors duration-150",
+                  theme === 'light'
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                )}
+              >
+                <Sun className="h-6 w-6 text-[hsl(var(--text-secondary))]" strokeWidth={1.5} />
+                <span className="text-sm font-medium text-foreground">Light</span>
+                <span className="text-xs text-[hsl(var(--text-tertiary))]">Clean and bright</span>
+              </button>
+              <button
+                onClick={() => setTheme('dark')}
+                className={cn(
+                  "flex-1 flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-colors duration-150",
+                  theme === 'dark'
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                )}
+              >
+                <Moon className="h-6 w-6 text-[hsl(var(--text-secondary))]" strokeWidth={1.5} />
+                <span className="text-sm font-medium text-foreground">Dark</span>
+                <span className="text-xs text-[hsl(var(--text-tertiary))]">Easy on the eyes</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

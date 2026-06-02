@@ -14,9 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
+import { useThemeStore } from "@/store";
 import { supabase } from "@/lib/supabase";
 import type { OrganisationWithDetails } from "@/types/api.types";
 
@@ -48,6 +51,7 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
   const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user, role, isAdmin, clear } = useAuthStore();
+  const { theme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const email = user?.email ?? "";
   const roleLabel = isAdmin ? "Admin" : (role ?? "");
@@ -160,7 +164,11 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
           {!collapsed && (
             variant === "dashboard" && org?.branding_config.logo_url ? (
               <img
-                src={org.branding_config.logo_url}
+                src={
+                  theme === 'dark' && (org.branding_config as Record<string, unknown>).logo_dark_url
+                    ? (org.branding_config as Record<string, unknown>).logo_dark_url as string
+                    : org.branding_config.logo_url!
+                }
                 alt={org.name}
                 className="h-7 max-w-[120px] object-contain"
               />
@@ -239,6 +247,22 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
             </div>
           </div>
         )}
+        <button
+          onClick={toggleTheme}
+          className={cn(
+            "w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface transition-colors duration-150 ease-nz",
+            collapsed && "justify-center"
+          )}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark'
+            ? <Sun className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+            : <Moon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+          }
+          {!collapsed && (
+            <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          )}
+        </button>
         <button
           onClick={handleLogout}
           className={cn(
