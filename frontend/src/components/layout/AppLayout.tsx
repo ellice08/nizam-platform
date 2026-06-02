@@ -1,5 +1,6 @@
 import { Outlet, useNavigate } from "react-router-dom"
 import { useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { AppSidebar } from "./AppSidebar"
 import { useAuthStore } from "@/store"
 import { useOrganisation } from "@/hooks"
@@ -11,6 +12,7 @@ type AppLayoutProps = {
 export function AppLayout({ variant }: AppLayoutProps) {
   const { organisationId, tenantOrgId, tenantOrgName, clearTenantOrg } = useAuthStore()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const activeOrgId = variant === "dashboard"
     ? (tenantOrgId ?? organisationId ?? '')
@@ -45,6 +47,11 @@ export function AppLayout({ variant }: AppLayoutProps) {
       root.style.removeProperty('--rose')
     }
   }, [org, variant])
+
+  useEffect(() => {
+    if (variant !== 'dashboard') return
+    void queryClient.invalidateQueries()
+  }, [tenantOrgId])
 
   const handleExitTenantMode = () => {
     clearTenantOrg()
