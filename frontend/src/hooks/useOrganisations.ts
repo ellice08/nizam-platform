@@ -24,8 +24,9 @@ export const useOrganisation = (id: string) => {
 }
 
 export const useOrganisationStats = (id: string) => {
+  const { tenantOrgId } = useAuthStore()
   return useQuery({
-    queryKey: ['organisations', id, 'stats'],
+    queryKey: ['organisations', id, 'stats', tenantOrgId],
     queryFn: () => organisationApi.getOrganisationStats(id),
     enabled: !!id,
     refetchInterval: 60000,
@@ -33,8 +34,9 @@ export const useOrganisationStats = (id: string) => {
 }
 
 export const useBranches = (orgId: string) => {
+  const { tenantOrgId } = useAuthStore()
   return useQuery({
-    queryKey: ['organisations', orgId, 'branches'],
+    queryKey: ['organisations', orgId, 'branches', tenantOrgId],
     queryFn: () => organisationApi.getBranches(orgId),
     enabled: !!orgId,
   })

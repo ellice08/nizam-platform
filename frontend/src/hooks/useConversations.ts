@@ -1,18 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { conversationApi } from '@/api'
+import { useAuthStore } from '@/store'
 import type { ConversationFilters, ConversationNote } from '@/types/api.types'
 
 export const useConversations = (filters?: ConversationFilters) => {
+  const { tenantOrgId } = useAuthStore()
   return useQuery({
-    queryKey: ['conversations', filters],
+    queryKey: ['conversations', tenantOrgId, filters],
     queryFn: () => conversationApi.getConversations(filters),
     staleTime: 15000,
   })
 }
 
 export const useConversation = (id: string) => {
+  const { tenantOrgId } = useAuthStore()
   return useQuery({
-    queryKey: ['conversations', id],
+    queryKey: ['conversations', tenantOrgId, id],
     queryFn: () => conversationApi.getConversationById(id),
     enabled: !!id,
   })
