@@ -35,8 +35,9 @@ const topics = [
 ];
 
 const Analytics = () => {
-  const { organisationId } = useAuthStore()
-  const { data: stats, isLoading: statsLoading } = useOrganisationStats(organisationId ?? '')
+  const { organisationId, tenantOrgId } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const { data: stats, isLoading: statsLoading } = useOrganisationStats(activeOrgId)
   const { data: conversations } = useConversations({ limit: 100 })
 
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d')

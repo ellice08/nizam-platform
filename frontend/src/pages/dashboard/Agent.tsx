@@ -13,13 +13,14 @@ const tones = ["professional", "friendly", "formal"] as const;
 type Tone = typeof tones[number];
 
 const Agent = () => {
-  const { organisationId, branchId: storeBranchId } = useAuthStore()
-  const { data: agents, isLoading } = useAgentsByOrg(organisationId ?? '')
+  const { organisationId, tenantOrgId, branchId: storeBranchId } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const { data: agents, isLoading } = useAgentsByOrg(activeOrgId)
   const { mutate: updateAgent, isPending: saving } = useUpdateAgent()
 
   // Resolve branch_id for org-level users
   const { data: branches } = useBranches(
-    storeBranchId ? '' : (organisationId ?? '')
+    storeBranchId ? '' : activeOrgId
   )
   const resolvedBranchId = storeBranchId ?? branches?.[0]?.id ?? null
 

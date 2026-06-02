@@ -57,8 +57,9 @@ const ColourInput = ({
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState<Tab>('General')
-  const { organisationId, user } = useAuthStore()
-  const { data: org, refetch } = useOrganisation(organisationId ?? '')
+  const { organisationId, tenantOrgId, user } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const { data: org, refetch } = useOrganisation(activeOrgId)
 
   // General tab state
   const [orgName, setOrgName] = useState('')

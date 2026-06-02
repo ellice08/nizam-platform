@@ -9,11 +9,12 @@ import { useBranches, useKnowledgeSources, useDeleteKnowledgeSource } from '@/ho
 import { organisationApi } from '@/api'
 
 const Knowledge = () => {
-  const { organisationId, branchId: storeBranchId } = useAuthStore()
+  const { organisationId, tenantOrgId, branchId: storeBranchId } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
 
   // Org-level users have null branchId — fetch branches and use the first
   const { data: branches } = useBranches(
-    storeBranchId ? '' : (organisationId ?? '')
+    storeBranchId ? '' : activeOrgId
   )
   const resolvedBranchId = storeBranchId ?? branches?.[0]?.id ?? null
 

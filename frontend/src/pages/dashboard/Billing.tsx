@@ -17,8 +17,9 @@ const planFeatures: Record<PlanVariant, string[]> = {
 }
 
 const Billing = () => {
-  const { organisationId } = useAuthStore()
-  const { data: org, isLoading } = useOrganisation(organisationId ?? '')
+  const { organisationId, tenantOrgId } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const { data: org, isLoading } = useOrganisation(activeOrgId)
 
   const plan: PlanVariant = org?.plan ?? 'trial'
   const features = planFeatures[plan]
