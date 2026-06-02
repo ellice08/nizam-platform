@@ -67,6 +67,16 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
   ];
 
   const ROLE_NAV: Record<string, string[]> = {
+    super_admin: [
+      "/dashboard",
+      "/dashboard/conversations",
+      "/dashboard/knowledge",
+      "/dashboard/agent",
+      "/dashboard/analytics",
+      "/dashboard/billing",
+      "/dashboard/users",
+      "/dashboard/settings",
+    ],
     org_admin: [
       "/dashboard",
       "/dashboard/conversations",

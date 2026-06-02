@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAllOrganisations } from "@/hooks";
+import { useAuthStore } from "@/store";
 import type { Organisation } from "@/types/api.types";
 
 const planStyle: Record<string, React.CSSProperties> = {
@@ -39,6 +40,7 @@ const industryLabel: Record<string, string> = {
 
 const AdminOverview = () => {
   const navigate = useNavigate();
+  const { setTenantOrg } = useAuthStore();
   const { data: organisations, isLoading, isError } = useAllOrganisations();
 
   const total = organisations?.length ?? 0;
@@ -154,6 +156,18 @@ const AdminOverview = () => {
                       onClick={() => navigate(`/admin/clients/${org.id}`)}
                     >
                       View
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setTenantOrg(org.id, org.name)
+                        navigate('/dashboard')
+                      }}
+                      className="ml-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                    >
+                      Act as
                     </Button>
                   </td>
                 </tr>

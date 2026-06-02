@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom"
+import { Outlet, useNavigate } from "react-router-dom"
 import { useEffect } from "react"
 import { AppSidebar } from "./AppSidebar"
 import { useAuthStore } from "@/store"
@@ -9,10 +9,14 @@ type AppLayoutProps = {
 }
 
 export function AppLayout({ variant }: AppLayoutProps) {
-  const { organisationId } = useAuthStore()
-  const { data: org } = useOrganisation(
-    variant === "dashboard" ? (organisationId ?? '') : ''
-  )
+  const { organisationId, tenantOrgId, tenantOrgName, clearTenantOrg } = useAuthStore()
+  const navigate = useNavigate()
+
+  const activeOrgId = variant === "dashboard"
+    ? (tenantOrgId ?? organisationId ?? '')
+    : ''
+
+  const { data: org } = useOrganisation(activeOrgId)
 
   useEffect(() => {
     if (variant !== "dashboard") return
@@ -42,10 +46,28 @@ export function AppLayout({ variant }: AppLayoutProps) {
     }
   }, [org, variant])
 
+  const handleExitTenantMode = () => {
+    clearTenantOrg()
+    navigate('/admin')
+  }
+
   return (
     <div className="min-h-screen w-full flex bg-background text-foreground">
       <AppSidebar variant={variant} org={org} />
       <div className="flex-1 flex flex-col min-w-0">
+        {variant === "dashboard" && tenantOrgId && (
+          <div className="w-full bg-[#7A2535] px-6 py-2.5 flex items-center justify-between shrink-0">
+            <p className="text-xs text-white font-medium tracking-wide">
+              Viewing as: <span className="font-bold">{tenantOrgName}</span>
+            </p>
+            <button
+              onClick={handleExitTenantMode}
+              className="text-xs text-white/80 hover:text-white underline underline-offset-2 transition-colors"
+            >
+              Exit client view
+            </button>
+          </div>
+        )}
         <main className="flex-1 px-6 md:px-10 py-8">
           <Outlet />
         </main>

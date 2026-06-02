@@ -9,10 +9,14 @@ interface AuthState {
   isAdmin: boolean;
   isLoading: boolean;
   firstLogin: boolean;
+  tenantOrgId: string | null;
+  tenantOrgName: string | null;
   setUser: (user: User | null) => void;
   setOrganisation: (organisationId: string, branchId: string | null, role: string) => void;
   setLoading: (loading: boolean) => void;
   setFirstLogin: (firstLogin: boolean) => void;
+  setTenantOrg: (id: string, name: string) => void;
+  clearTenantOrg: () => void;
   clear: () => void;
 }
 
@@ -24,6 +28,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAdmin: false,
   isLoading: true,
   firstLogin: false,
+  tenantOrgId: null,
+  tenantOrgName: null,
 
   setUser: (user) => set({ user }),
 
@@ -34,6 +40,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setFirstLogin: (firstLogin) => set({ firstLogin }),
 
+  setTenantOrg: (id, name) => set({ tenantOrgId: id, tenantOrgName: name }),
+
+  clearTenantOrg: () => set({ tenantOrgId: null, tenantOrgName: null }),
+
   clear: () =>
-    set({ user: null, organisationId: null, branchId: null, role: null, isAdmin: false, isLoading: false, firstLogin: false }),
+    set({ user: null, organisationId: null, branchId: null, role: null, isAdmin: false, isLoading: false, firstLogin: false, tenantOrgId: null, tenantOrgName: null }),
 }));
