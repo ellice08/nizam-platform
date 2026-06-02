@@ -69,6 +69,8 @@ const Settings = () => {
   // Branding tab state
   const [primaryColor, setPrimaryColor] = useState('#7A2535')
   const [secondaryColor, setSecondaryColor] = useState('#C4909A')
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
   const [brandingSaving, setBrandingSaving] = useState(false)
 
   // Profile tab state
@@ -87,6 +89,7 @@ const Settings = () => {
       const branding = org.branding_config as Record<string, unknown>
       if (branding?.primary_color) setPrimaryColor(branding.primary_color as string)
       if (branding?.secondary_color) setSecondaryColor(branding.secondary_color as string)
+      if (branding?.logo_url) setLogoUrl(branding.logo_url as string)
     }
   }, [org])
 
@@ -138,6 +141,73 @@ const Settings = () => {
       toast.error(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setBrandingSaving(false)
+    }
+  }
+
+  const handleLogoUpload = async (file: File) => {
+    if (!activeOrgId) return
+
+    if (!['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'].includes(file.type)) {
+      toast.error('Please upload a PNG, JPG, SVG or WebP file')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Logo must be under 2MB')
+      return
+    }
+
+    try {
+      setLogoUploading(true)
+
+      const ext = file.name.split('.').pop()
+      const path = `${activeOrgId}/logo.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(path, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('logos')
+        .getPublicUrl(path)
+
+      const existing = (org?.branding_config as Record<string, unknown>) ?? {}
+      await organisationApi.updateOrganisation(activeOrgId, {
+        branding_config: {
+          ...existing,
+          logo_url: publicUrl,
+        },
+      })
+
+      setLogoUrl(publicUrl)
+      await refetch()
+      toast.success('Logo uploaded successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
+  const handleLogoRemove = async () => {
+    if (!activeOrgId) return
+    try {
+      setLogoUploading(true)
+      const existing = (org?.branding_config as Record<string, unknown>) ?? {}
+      await organisationApi.updateOrganisation(activeOrgId, {
+        branding_config: {
+          ...existing,
+          logo_url: null,
+        },
+      })
+      setLogoUrl(null)
+      await refetch()
+      toast.success('Logo removed')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove logo')
+    } finally {
+      setLogoUploading(false)
     }
   }
 
@@ -316,18 +386,77 @@ const Settings = () => {
               </div>
             </div>
 
-            <div className="pt-1">
-              <p className="text-xs text-[hsl(var(--text-tertiary))] mb-4">
-                Logo upload coming soon.
+            {/* Logo upload */}
+            <div>
+              <p className="text-xs uppercase tracking-wider
+                text-[hsl(var(--text-secondary))] mb-3 font-medium">
+                Logo
               </p>
-              <Button
-                onClick={() => void handleSaveBranding()}
-                disabled={brandingSaving}
-                className="bg-primary hover:bg-primary-hover text-primary-foreground"
-              >
-                {brandingSaving ? 'Saving…' : 'Save brand colours'}
-              </Button>
+              <p className="text-xs text-[hsl(var(--text-tertiary))] mb-3">
+                Shown in the sidebar. PNG, JPG, SVG or WebP, max 2MB.
+              </p>
+
+              {logoUrl ? (
+                <div className="flex items-center gap-4 mb-3">
+                  <img
+                    src={logoUrl}
+                    alt="Organisation logo"
+                    className="h-10 max-w-[160px] object-contain rounded border border-border bg-elevated p-1"
+                  />
+                  <button
+                    onClick={() => void handleLogoRemove()}
+                    disabled={logoUploading}
+                    className="text-xs text-destructive hover:text-destructive/80 transition-colors disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-3">
+                  <label
+                    className={cn(
+                      "flex items-center justify-center w-full h-24 rounded-lg border-2 border-dashed border-border cursor-pointer transition-colors duration-150",
+                      logoUploading
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:border-primary hover:bg-primary/5"
+                    )}
+                  >
+                    <div className="text-center">
+                      {logoUploading ? (
+                        <p className="text-xs text-[hsl(var(--text-secondary))]">Uploading…</p>
+                      ) : (
+                        <>
+                          <p className="text-xs text-[hsl(var(--text-secondary))]">
+                            Click to upload logo
+                          </p>
+                          <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">
+                            PNG, JPG, SVG, WebP · max 2MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                      className="hidden"
+                      disabled={logoUploading}
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) void handleLogoUpload(file)
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
+
+            <Button
+              onClick={() => void handleSaveBranding()}
+              disabled={brandingSaving}
+              className="bg-primary hover:bg-primary-hover text-primary-foreground"
+            >
+              {brandingSaving ? 'Saving…' : 'Save brand colours'}
+            </Button>
           </div>
         </div>
       )}
