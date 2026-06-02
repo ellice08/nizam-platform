@@ -231,7 +231,7 @@ const Knowledge = () => {
             onChange={e => setCrawlUrl(e.target.value)}
             placeholder="https://yourwebsite.com"
             disabled={crawling}
-            className="flex-1 bg-[#0A0A08] border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] outline-none focus:border-primary transition-colors duration-150 disabled:opacity-50"
+            className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] outline-none focus:border-primary transition-colors duration-150 disabled:opacity-50"
           />
           <button
             onClick={() => void handleCrawl()}

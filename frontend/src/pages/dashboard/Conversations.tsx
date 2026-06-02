@@ -153,7 +153,7 @@ const Conversations = () => {
                           "border-t border-border cursor-pointer transition-colors duration-150",
                           isSelected
                             ? "bg-elevated border-l-2 border-l-primary"
-                            : `${i % 2 ? "bg-[#0F0F0C]" : "bg-background"} hover:bg-elevated`,
+                            : "bg-background hover:bg-elevated",
                         )}
                       >
                         <td className="px-6 py-4 capitalize text-[hsl(var(--text-secondary))]">

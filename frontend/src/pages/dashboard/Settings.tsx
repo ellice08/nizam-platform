@@ -564,7 +564,7 @@ const Settings = () => {
               {logoDarkUrl ? (
                 <div className="flex items-center gap-4 mb-3">
                   <img src={logoDarkUrl} alt="Dark mode logo"
-                    className="h-10 max-w-[160px] object-contain rounded border border-border bg-[#0E0E0C] p-1" />
+                    className="h-10 max-w-[160px] object-contain rounded border border-border bg-elevated p-1" />
                   <button onClick={() => void handleDarkLogoRemove()}
                     disabled={logoUploading}
                     className="text-xs text-destructive hover:text-destructive/80 transition-colors disabled:opacity-40">

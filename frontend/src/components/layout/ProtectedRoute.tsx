@@ -23,7 +23,7 @@ export const ProtectedRoute = ({
           alignItems: 'center',
           justifyContent: 'center',
           height: '100vh',
-          background: '#0E0E0C',
+          background: 'hsl(var(--background))',
           color: '#FAFAFA',
           fontSize: '13px',
           fontFamily: 'Arial, sans-serif',

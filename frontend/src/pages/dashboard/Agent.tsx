@@ -344,7 +344,7 @@ const Agent = () => {
           </div>
 
           {/* Messages area */}
-          <div className="h-80 overflow-y-auto p-4 space-y-4 bg-[#0A0A08]">
+          <div className="h-80 overflow-y-auto p-4 space-y-4 bg-background">
             {testMessages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <Bot size={28} strokeWidth={1.5} className="text-[hsl(var(--text-tertiary))] mb-3" />
@@ -422,7 +422,7 @@ const Agent = () => {
               }}
               placeholder="Type a message to test your agent…"
               rows={1}
-              className="flex-1 bg-[#0A0A08] border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] resize-none outline-none focus:border-primary transition-colors duration-150 max-h-32 overflow-y-auto"
+              className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] resize-none outline-none focus:border-primary transition-colors duration-150 max-h-32 overflow-y-auto"
               style={{ fieldSizing: 'content' } as React.CSSProperties}
               disabled={testLoading || !resolvedBranchId}
             />

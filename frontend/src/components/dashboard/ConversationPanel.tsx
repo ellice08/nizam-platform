@@ -325,7 +325,7 @@ const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) 
                   onChange={e => setNewNote(e.target.value)}
                   placeholder="Add a note about this conversation…"
                   rows={3}
-                  className="w-full bg-[#0A0A08] border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] resize-none outline-none focus:border-primary transition-colors duration-150"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] resize-none outline-none focus:border-primary transition-colors duration-150"
                   autoFocus
                 />
                 <div className="flex gap-2 mt-2">
