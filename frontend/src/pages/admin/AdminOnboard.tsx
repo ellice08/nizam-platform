@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { organisationApi } from "@/api";
 import { apiClient } from "@/lib/axios";
+import { supabase } from '@/lib/supabase';
 import { useOnboardingDraft } from "@/hooks/useOnboardingDraft";
 import {
   initialState,
@@ -308,11 +309,43 @@ const AdminOnboard = () => {
     // 3b. Save branding config
     mark("branding", "running");
     try {
+      // Upload logos to Supabase Storage if provided
+      let logoUrl: string | null = null
+      let logoDarkUrl: string | null = null
+
+      if (state.logoFile) {
+        const ext = state.logoFile.name.split('.').pop()
+        const path = `${orgId}/logo.${ext}`
+        const { error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(path, state.logoFile, { upsert: true })
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
+          logoUrl = publicUrl
+        }
+      }
+
+      if (state.logoDarkFile) {
+        const ext = state.logoDarkFile.name.split('.').pop()
+        const path = `${orgId}/logo-dark.${ext}`
+        const { error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(path, state.logoDarkFile, { upsert: true })
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
+          logoDarkUrl = publicUrl
+        }
+      }
+
       await organisationApi.updateOrganisation(orgId!, {
         branding_config: {
-          logo_url: null,
+          logo_url: logoUrl,
+          logo_dark_url: logoDarkUrl,
           primary_color: state.primaryColor ?? '#7A2535',
+          primary_hover_color: state.primaryHoverColor ?? '#8F2D3F',
           secondary_color: state.secondaryColor ?? '#C4909A',
+          accent_color: state.accentColor ?? '#7A2535',
+          background_color: state.backgroundColor ?? '#0E0E0C',
           font: 'Arial',
         },
       });

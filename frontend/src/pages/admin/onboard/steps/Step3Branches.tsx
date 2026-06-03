@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Phone, Star, Smartphone, Hash, Plus, Trash2, Info } from "lucide-react";
 import { Field, OptionCard, SectionTitle, StepHeader } from "./shared";
 import { BranchTabs } from "./BranchTabs";
-import type { AgentRole, Branch, BranchUser, TelephonyMode, WhatsappMode, WizardState } from "../types";
+import type { Branch, BranchUser, TelephonyMode, WhatsappMode, WizardState } from "../types";
 
 type Props = { state: WizardState; setBranch: (i: number, patch: Partial<Branch>) => void; renameBranch: (i: number, name: string) => void; };
 
@@ -90,35 +90,45 @@ export const Step3Branches = ({ state, setBranch, renameBranch }: Props) => {
         </section>
 
         <section>
-          <SectionTitle>Users</SectionTitle>
+          <SectionTitle>Branch admin</SectionTitle>
           <p className="text-xs text-[hsl(var(--text-secondary))] -mt-2 mb-4">
-            Add users for this branch. 2 users included. Additional users billed separately.
+            Each branch requires one admin. They will receive login credentials by email.
           </p>
-          <div className="space-y-2">
-            {branch.users.map((u) => (
-              <div key={u.id} className="grid grid-cols-[1fr_1fr_180px_auto] gap-2 items-center">
-                <input className="nz-input h-9" placeholder="Name" value={u.name}
-                  onChange={(e) => setUsers(branch.users.map((x) => x.id === u.id ? { ...x, name: e.target.value } : x))} />
-                <input className="nz-input h-9" placeholder="Email" value={u.email}
-                  onChange={(e) => setUsers(branch.users.map((x) => x.id === u.id ? { ...x, email: e.target.value } : x))} />
-                <select className="nz-input h-9" value={u.role}
-                  onChange={(e) => setUsers(branch.users.map((x) => x.id === u.id ? { ...x, role: e.target.value as AgentRole } : x))}>
-                  <option value="org_admin">Org Admin</option>
-                  <option value="branch_admin">Branch Admin</option>
-                  <option value="branch_staff">Branch Staff</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-                <button type="button" onClick={() => setUsers(branch.users.filter((x) => x.id !== u.id))}
-                  className="h-9 w-9 rounded-md border border-border text-[hsl(var(--text-secondary))] hover:text-primary-subtle hover:border-primary transition-colors duration-150 ease-nz flex items-center justify-center">
-                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button type="button" onClick={() => setUsers([...branch.users, { id: `u${Date.now()}`, name: "", email: "", role: "branch_staff" }])}
-            className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-transparent hover:bg-elevated text-foreground px-3 py-2 text-sm transition-colors duration-150 ease-nz">
-            <Plus className="h-4 w-4" strokeWidth={1.5} /> Add user
-          </button>
+          {branch.users.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setUsers([{ id: `u${Date.now()}`, name: "", email: "", role: "branch_admin" }])}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-transparent hover:bg-elevated text-foreground px-3 py-2 text-sm transition-colors duration-150 ease-nz"
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.5} /> Add branch admin
+            </button>
+          ) : (
+            <div className="space-y-2">
+              {branch.users.map((u) => (
+                <div key={u.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <input
+                    className="nz-input h-9"
+                    placeholder="Full name"
+                    value={u.name}
+                    onChange={(e) => setUsers(branch.users.map((x) => x.id === u.id ? { ...x, name: e.target.value } : x))}
+                  />
+                  <input
+                    className="nz-input h-9"
+                    placeholder="Email address"
+                    value={u.email}
+                    onChange={(e) => setUsers(branch.users.map((x) => x.id === u.id ? { ...x, email: e.target.value } : x))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setUsers(branch.users.filter((x) => x.id !== u.id))}
+                    className="h-9 w-9 rounded-md border border-border text-[hsl(var(--text-secondary))] hover:text-destructive hover:border-destructive transition-colors duration-150 ease-nz flex items-center justify-center"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </>

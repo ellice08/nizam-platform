@@ -8,7 +8,7 @@ export type TelephonyMode =
 
 export type WhatsappMode = "dedicated" | "migrate";
 
-export type AgentRole = "org_admin" | "branch_admin" | "branch_staff" | "viewer";
+export type AgentRole = "branch_admin";
 
 export type BranchUser = {
   id: string;
@@ -54,9 +54,15 @@ export type WizardState = {
   feePaid: boolean;
 
   // Step 2
+  logoFile: File | null;
   logoName: string | null;
+  logoDarkFile: File | null;
+  logoDarkName: string | null;
   primaryColor: string;
+  primaryHoverColor: string;
   secondaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
 
   // Step 3-5 per branch
   branches: Branch[];
@@ -103,9 +109,15 @@ export const initialState: WizardState = {
   industry: "real_estate",
   branchCount: 1,
   feePaid: false,
+  logoFile: null,
   logoName: null,
+  logoDarkFile: null,
+  logoDarkName: null,
   primaryColor: "#7A2535",
+  primaryHoverColor: "#8F2D3F",
   secondaryColor: "#C4909A",
+  accentColor: "#7A2535",
+  backgroundColor: "#0E0E0C",
   branches: [newBranch(0, "real_estate")],
   clientEmail: "",
 };
