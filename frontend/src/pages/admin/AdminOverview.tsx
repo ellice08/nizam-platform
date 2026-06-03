@@ -42,8 +42,9 @@ const industryLabel: Record<string, string> = {
 const AdminOverview = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { setTenantOrg } = useAuthStore();
-  const { data: organisations, isLoading, isError } = useAllOrganisations();
+  const { setTenantOrg, organisationId } = useAuthStore();
+  const { data: allOrgs, isLoading, isError } = useAllOrganisations();
+  const organisations = (allOrgs ?? []).filter(o => o.id !== organisationId);
 
   const total = organisations?.length ?? 0;
   const trial = organisations?.filter((o) => o.plan === "trial").length ?? 0;

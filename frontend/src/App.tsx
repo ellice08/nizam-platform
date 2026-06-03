@@ -15,6 +15,9 @@ import FirstLogin from "./pages/auth/FirstLogin";
 import AdminOverview from "./pages/admin/AdminOverview";
 import AdminClientDetail from "./pages/admin/AdminClientDetail";
 import AdminOnboard from "./pages/admin/AdminOnboard";
+import AdminClients from "./pages/admin/AdminClients";
+import AdminTenantMode from "./pages/admin/AdminTenantMode";
+import AdminDrafts from "./pages/admin/AdminDrafts";
 import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import Conversations from "./pages/dashboard/Conversations";
 import Knowledge from "./pages/dashboard/Knowledge";
@@ -50,6 +53,9 @@ const App = () => (
           <Route path="/admin" element={<AdminOverview />} />
           <Route path="/admin/onboard" element={<AdminOnboard />} />
           <Route path="/admin/clients/:id" element={<AdminClientDetail />} />
+          <Route path="/admin/clients" element={<AdminClients />} />
+          <Route path="/admin/tenant-mode" element={<AdminTenantMode />} />
+          <Route path="/admin/drafts" element={<AdminDrafts />} />
         </Route>
 
         {/* Dashboard — requires authenticated user */}
