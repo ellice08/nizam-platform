@@ -51,6 +51,12 @@ const adminSections: NavSection[] = [
       { to: "/admin/drafts", label: "Drafts", icon: FileText },
     ],
   },
+  {
+    label: "Account",
+    items: [
+      { to: "/admin/settings", label: "Settings", icon: Settings },
+    ],
+  },
 ];
 
 type AppSidebarProps = {

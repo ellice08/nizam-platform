@@ -1,10 +1,10 @@
-import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabase"
-import { useAuthStore } from "@/store"
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/store";
 
 const ROLE_PRIORITY: Record<string, number> = {
   super_admin: 5,
@@ -12,87 +12,109 @@ const ROLE_PRIORITY: Record<string, number> = {
   branch_admin: 3,
   branch_staff: 2,
   viewer: 1,
-}
+};
 
 const Login = () => {
-  const navigate = useNavigate()
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (loading) return
+    e.preventDefault();
+    if (loading) return;
 
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      })
+      const { data, error: authError } = await supabase.auth.signInWithPassword(
+        {
+          email: email.trim(),
+          password,
+        },
+      );
 
       if (authError) {
-        setError(authError.message)
-        return
+        setError(authError.message);
+        return;
       }
 
-      const user = data.user
+      const user = data.user;
       if (!user) {
-        setError("Login failed — please try again.")
-        return
+        setError("Login failed — please try again.");
+        return;
       }
 
       // Set the user immediately — we have it right here, no need to
       // wait for the SIGNED_IN event which is unreliable when a stale
       // session already exists in the browser.
-      useAuthStore.getState().setUser(user)
+      useAuthStore.getState().setUser(user);
 
-      const appRole = user.app_metadata?.role as string | undefined
+      const appRole = user.app_metadata?.role as string | undefined;
 
-      if (appRole === 'super_admin') {
-        useAuthStore.getState().setOrganisation('', null, 'super_admin')
-        useAuthStore.getState().setFirstLogin(false)
+      if (appRole === "super_admin") {
+        // Fetch the super admin's own org (Ellice Systems) so we can
+        // exclude it from client lists
+        const { data: ownTenant } = await supabase
+          .from("tenant_users")
+          .select("organisation_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        useAuthStore
+          .getState()
+          .setOrganisation(
+            (ownTenant?.organisation_id as string) ?? "",
+            null,
+            "super_admin",
+          );
+        useAuthStore.getState().setFirstLogin(false);
       } else {
         const { data: tenantRows } = await supabase
-          .from('tenant_users')
-          .select('organisation_id, branch_id, role, first_login')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: true })
+          .from("tenant_users")
+          .select("organisation_id, branch_id, role, first_login")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true });
 
         if (tenantRows && tenantRows.length > 0) {
           const best = tenantRows.reduce((prev, curr) => {
-            const pp = ROLE_PRIORITY[prev.role as string] ?? 0
-            const cp = ROLE_PRIORITY[curr.role as string] ?? 0
-            return cp > pp ? curr : prev
-          })
-          useAuthStore.getState().setOrganisation(
-            best.organisation_id as string,
-            best.branch_id as string | null,
-            best.role as string
-          )
-          useAuthStore.getState().setFirstLogin((best.first_login as boolean | null) ?? false)
+            const pp = ROLE_PRIORITY[prev.role as string] ?? 0;
+            const cp = ROLE_PRIORITY[curr.role as string] ?? 0;
+            return cp > pp ? curr : prev;
+          });
+          useAuthStore
+            .getState()
+            .setOrganisation(
+              best.organisation_id as string,
+              best.branch_id as string | null,
+              best.role as string,
+            );
+          useAuthStore
+            .getState()
+            .setFirstLogin((best.first_login as boolean | null) ?? false);
         } else {
           // No tenant record — user exists in Auth but not yet provisioned.
           // Let Redirect.tsx send them back to /login with a clear state.
-          setError("Your account is not yet linked to an organisation. Please contact your administrator.")
-          useAuthStore.getState().clear()
-          return
+          setError(
+            "Your account is not yet linked to an organisation. Please contact your administrator.",
+          );
+          useAuthStore.getState().clear();
+          return;
         }
       }
 
       // Store is fully populated — release the loading gate and route.
-      useAuthStore.getState().setLoading(false)
-      navigate('/redirect', { replace: true })
-
+      useAuthStore.getState().setLoading(false);
+      navigate("/redirect", { replace: true });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
+      setError(
+        err instanceof Error ? err.message : "An unexpected error occurred.",
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <section className="container max-w-md py-20">
@@ -127,14 +149,8 @@ const Login = () => {
             autoComplete="current-password"
           />
         </div>
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={loading}
-        >
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Signing in..." : "Sign in"}
         </Button>
       </form>
@@ -148,7 +164,7 @@ const Login = () => {
         </Link>
       </p>
     </section>
-  )
-}
+  );
+};
 
-export default Login
+export default Login;
