@@ -16,6 +16,9 @@ import {
   LogOut,
   Sun,
   Moon,
+  Building2,
+  Repeat,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
@@ -38,6 +41,14 @@ const adminSections: NavSection[] = [
     items: [
       { to: "/admin", label: "Overview", icon: ShieldCheck, end: true },
       { to: "/admin/onboard", label: "Onboard client", icon: UserPlus },
+    ],
+  },
+  {
+    label: "Clients",
+    items: [
+      { to: "/admin/clients", label: "All clients", icon: Building2 },
+      { to: "/admin/tenant-mode", label: "Tenant mode", icon: Repeat },
+      { to: "/admin/drafts", label: "Drafts", icon: FileText },
     ],
   },
 ];
