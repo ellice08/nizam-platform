@@ -17,6 +17,7 @@ const AdminSettings = () => {
 
   const [fullName, setFullName] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
@@ -48,18 +49,44 @@ const AdminSettings = () => {
   }
 
   const handleChangePassword = async () => {
+    if (!currentPassword) {
+      toast.error('Please enter your current password')
+      return
+    }
     if (newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters')
+      toast.error('New password must be at least 8 characters')
       return
     }
     if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match')
+      toast.error('New passwords do not match')
+      return
+    }
+    if (currentPassword === newPassword) {
+      toast.error('New password must be different from current password')
       return
     }
     try {
       setPasswordSaving(true)
+
+      // Verify current password by re-authenticating
+      const email = user?.email
+      if (!email) {
+        toast.error('Could not verify account')
+        return
+      }
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email,
+        password: currentPassword,
+      })
+      if (verifyError) {
+        toast.error('Current password is incorrect')
+        return
+      }
+
+      // Now update to new password
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
+      setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
       toast.success('Password changed successfully')
@@ -137,6 +164,13 @@ const AdminSettings = () => {
             </h3>
             <div>
               <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
+                Current password
+              </label>
+              <input type="password" className="nz-input w-full" value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)} placeholder="Enter current password" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                 New password
               </label>
               <input type="password" className="nz-input w-full" value={newPassword}
@@ -150,7 +184,7 @@ const AdminSettings = () => {
                 onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" />
             </div>
             <Button onClick={() => void handleChangePassword()}
-              disabled={passwordSaving || !newPassword || !confirmPassword}
+              disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
               className="bg-primary hover:bg-primary-hover text-primary-foreground">
               {passwordSaving ? 'Changing…' : 'Change password'}
             </Button>
