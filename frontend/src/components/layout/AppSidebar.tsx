@@ -51,7 +51,7 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
   const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user, role, isAdmin, clear } = useAuthStore();
-  const { theme, toggleTheme } = useThemeStore();
+  const { theme, resolvedTheme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const email = user?.email ?? "";
   const roleLabel = isAdmin ? "Admin" : (role ?? "");
@@ -253,14 +253,14 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
             "w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface transition-colors duration-150 ease-nz",
             collapsed && "justify-center"
           )}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          {theme === 'dark'
+          {resolvedTheme === 'dark'
             ? <Sun className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
             : <Moon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
           }
           {!collapsed && (
-            <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            <span>{resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
           )}
         </button>
         <button

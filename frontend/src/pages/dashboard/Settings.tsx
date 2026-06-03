@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon, Monitor } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -621,6 +621,19 @@ const Settings = () => {
               Choose how the dashboard looks. Your preference is saved automatically.
             </p>
             <div className="flex gap-3">
+              <button
+                onClick={() => setTheme('auto')}
+                className={cn(
+                  "flex-1 flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-colors duration-150",
+                  theme === 'auto'
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                )}
+              >
+                <Monitor className="h-6 w-6 text-[hsl(var(--text-secondary))]" strokeWidth={1.5} />
+                <span className="text-sm font-medium text-foreground">Auto</span>
+                <span className="text-xs text-[hsl(var(--text-tertiary))]">Follows system</span>
+              </button>
               <button
                 onClick={() => setTheme('light')}
                 className={cn(

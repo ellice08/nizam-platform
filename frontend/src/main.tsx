@@ -8,17 +8,21 @@ import { applyTheme } from '@/store';
 import './index.css';
 
 // Apply persisted or system theme before first render
-const savedTheme = localStorage.getItem('nizam-theme')
-if (savedTheme) {
-  try {
+try {
+  const savedTheme = localStorage.getItem('nizam-theme')
+  if (savedTheme) {
     const parsed = JSON.parse(savedTheme) as { state?: { theme?: string } }
     const t = parsed?.state?.theme
-    if (t === 'light' || t === 'dark') applyTheme(t)
-  } catch {
-    applyTheme('light')
+    if (t === 'light' || t === 'dark' || t === 'auto') {
+      applyTheme(t as 'light' | 'dark' | 'auto')
+    } else {
+      applyTheme('auto')
+    }
+  } else {
+    applyTheme('auto')
   }
-} else {
-  applyTheme('light')
+} catch {
+  applyTheme('auto')
 }
 
 createRoot(document.getElementById('root')!).render(
