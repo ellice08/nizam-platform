@@ -12,7 +12,13 @@ const router = Router();
 const inviteSchema = z.object({
   email: z.string().email(),
   organisation_id: z.string().uuid(),
-  role: z.enum(['org_admin', 'branch_admin', 'branch_staff', 'viewer']).optional(),
+  role: z.enum([
+    'org_admin',
+    'branch_admin',
+    'branch_staff',
+    'org_viewer',
+    'branch_viewer',
+  ]).optional(),
 });
 
 // POST /api/auth/invite
