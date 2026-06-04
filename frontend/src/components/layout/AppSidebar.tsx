@@ -19,6 +19,7 @@ import {
   Building2,
   Repeat,
   FileText,
+  Inbox,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ const adminSections: NavSection[] = [
   {
     label: "Clients",
     items: [
+      { to: "/admin/leads", label: "Leads", icon: Inbox },
       { to: "/admin/clients", label: "All clients", icon: Building2 },
       { to: "/admin/tenant-mode", label: "Tenant mode", icon: Repeat },
       { to: "/admin/drafts", label: "Drafts", icon: FileText },

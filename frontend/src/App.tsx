@@ -19,6 +19,7 @@ import AdminClients from "./pages/admin/AdminClients";
 import AdminTenantMode from "./pages/admin/AdminTenantMode";
 import AdminDrafts from "./pages/admin/AdminDrafts";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminLeads from "./pages/admin/AdminLeads";
 import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import Conversations from "./pages/dashboard/Conversations";
 import Knowledge from "./pages/dashboard/Knowledge";
@@ -58,6 +59,7 @@ const App = () => (
           <Route path="/admin/tenant-mode" element={<AdminTenantMode />} />
           <Route path="/admin/drafts" element={<AdminDrafts />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/admin/leads" element={<AdminLeads />} />
         </Route>
 
         {/* Dashboard — requires authenticated user */}
