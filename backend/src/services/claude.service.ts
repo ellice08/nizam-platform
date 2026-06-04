@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import { supabase } from '../lib/supabase.js';
 import { ragService } from './rag.service.js';
 import { agentService } from './agent.service.js';
+import { notificationService } from './notification.service.js';
 import logger from '../utils/logger.js';
 
 const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -118,6 +119,97 @@ class ClaudeService {
     });
 
     return response.choices[0]?.message?.content ?? '';
+  }
+
+  private async sendEscalationNotification(params: {
+    branchId: string;
+    agentRecord: Record<string, unknown>;
+    conversation: Record<string, unknown>;
+    customerQuestion: string;
+    channel: string;
+  }): Promise<void> {
+    const { branchId, agentRecord, conversation, customerQuestion, channel } = params;
+    try {
+      // 1. Gather recipient emails
+      const recipients = new Set<string>();
+
+      // a. Configured escalation contacts on the agent
+      const contacts = agentRecord.escalation_contacts;
+      if (Array.isArray(contacts)) {
+        for (const c of contacts) {
+          if (c && typeof c === 'object' && typeof (c as Record<string, unknown>).email === 'string') {
+            const email = (c as Record<string, string>).email;
+            if (email.includes('@')) recipients.add(email.trim());
+          }
+        }
+      }
+
+      // b. Look up the branch -> organisation
+      const { data: branch } = await supabase
+        .from('branches')
+        .select('id, name, organisation_id')
+        .eq('id', branchId)
+        .maybeSingle();
+
+      const branchName = (branch as Record<string, unknown> | null)?.name as string ?? 'your branch';
+
+      const organisationId = (branch as Record<string, unknown> | null)?.organisation_id as string | undefined;
+
+      if (organisationId) {
+        // c. Fetch org_admin + branch_admin tenant_users for this org/branch
+        const { data: tenantUsers } = await supabase
+          .from('tenant_users')
+          .select('user_id, role, branch_id')
+          .eq('organisation_id', organisationId)
+          .in('role', ['org_admin', 'branch_admin']);
+
+        const relevantUserIds = ((tenantUsers ?? []) as Array<Record<string, unknown>>)
+          .filter(tu =>
+            tu.role === 'org_admin' ||
+            (tu.role === 'branch_admin' && tu.branch_id === branchId)
+          )
+          .map(tu => tu.user_id as string);
+
+        // d. Resolve their emails from auth.users via admin API
+        for (const userId of relevantUserIds) {
+          try {
+            const { data: userData } = await supabase.auth.admin.getUserById(userId);
+            const email = userData?.user?.email;
+            if (email) recipients.add(email);
+          } catch {
+            // skip unresolved users
+          }
+        }
+      }
+
+      const toEmails = Array.from(recipients);
+      if (toEmails.length === 0) {
+        logger.info(`Escalation: no recipients configured for branch ${branchId}`);
+        return;
+      }
+
+      // 2. Build a short transcript from the conversation messages
+      const msgs = Array.isArray(conversation.messages) ? conversation.messages as Message[] : [];
+      const transcript = msgs
+        .slice(-8)
+        .map(m => `${m.role === 'user' ? 'Customer' : 'AI'}: ${m.content}`)
+        .join('\n');
+
+      // 3. Send the alert
+      await notificationService.sendEscalationAlert({
+        toEmails,
+        customerName: (conversation.lead_name as string | null) ?? 'A customer',
+        channel,
+        transcript,
+        question: customerQuestion,
+        branchName,
+      });
+
+      logger.info(`Escalation alert sent for branch ${branchId} to ${toEmails.length} recipient(s)`);
+    } catch (err) {
+      // Never let notification failure break the chat flow
+      logger.error(`Escalation notification failed for branch ${branchId}`, { err });
+    }
   }
 
   async chat(params: ChatParams): Promise<ChatResult> {
@@ -300,6 +392,20 @@ class ClaudeService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversationId);
+
+    if (newEscalation && !alreadyEscalated) {
+      void this.sendEscalationNotification({
+        branchId,
+        agentRecord,
+        conversation: {
+          ...existingConversation,
+          messages: finalMessages,
+          lead_name: extractedName ?? leadName ?? existingConversation.lead_name,
+        },
+        customerQuestion: message,
+        channel,
+      });
+    }
 
     logger.info(
       `Chat complete: branch=${branchId} session=${sessionId} ` +
