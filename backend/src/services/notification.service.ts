@@ -228,6 +228,90 @@ class NotificationService {
       return { success: false };
     }
   }
+
+  async sendSessionInvite(params: {
+    to: string;
+    name: string;
+    message: string;
+    schedulingLink?: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { to, name, message, schedulingLink } = params;
+
+      const { error } = await this.resend.emails.send({
+        from: env.RESEND_FROM_EMAIL,
+        to,
+        subject: `Let's talk about your AI workspace — Nizam`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#0E0E0C;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0E0E0C;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="480" cellpadding="0" cellspacing="0"
+          style="background:#141410;border:1px solid #2A2A26;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="padding:32px 40px 24px;border-bottom:1px solid #2A2A26;">
+              <p style="margin:0;font-size:24px;font-weight:600;color:#FAFAFA;letter-spacing:-0.02em;">nizam</p>
+              <p style="margin:4px 0 0;font-size:12px;color:#555550;">by Ellice Systems</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 40px;">
+              <p style="margin:0 0 8px;font-size:11px;font-weight:600;color:#7A2535;text-transform:uppercase;letter-spacing:0.12em;">
+                Your request
+              </p>
+              <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;color:#FAFAFA;line-height:1.3;">
+                Hello ${name},
+              </h1>
+              <div style="margin:0 0 24px;font-size:14px;color:#888880;line-height:1.7;white-space:pre-wrap;">${message}</div>
+              ${schedulingLink ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <a href="${schedulingLink}"
+                      style="display:inline-block;padding:12px 32px;background:#7A2535;color:#FAFAFA;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">
+                      Schedule a conversation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px;border-top:1px solid #2A2A26;">
+              <p style="margin:0;font-size:11px;color:#555550;">
+                Nizam by Ellice Systems
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+        `,
+      });
+
+      if (error) {
+        logger.error(`Session invite email failed: ${to}`, { error });
+        return { success: false, error: (error as { message?: string }).message ?? String(error) };
+      }
+      logger.info(`Session invite sent: ${to}`);
+      return { success: true };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      logger.error(`sendSessionInvite exception: ${params.to}`, { err });
+      return { success: false, error: message };
+    }
+  }
 }
 
 export const notificationService = new NotificationService();
