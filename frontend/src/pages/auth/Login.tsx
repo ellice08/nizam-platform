@@ -160,7 +160,7 @@ const Login = () => {
           to="/signup"
           className="text-primary underline-offset-4 hover:underline"
         >
-          Create an account
+          Request access
         </Link>
       </p>
     </section>

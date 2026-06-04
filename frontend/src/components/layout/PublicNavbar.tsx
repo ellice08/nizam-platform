@@ -37,7 +37,7 @@ export function PublicNavbar() {
             <Link to="/login">Sign in</Link>
           </Button>
           <Button asChild size="sm" className="bg-primary hover:bg-primary-hover text-primary-foreground">
-            <Link to="/signup">Get started</Link>
+            <Link to="/signup">Request access</Link>
           </Button>
         </div>
       </div>
