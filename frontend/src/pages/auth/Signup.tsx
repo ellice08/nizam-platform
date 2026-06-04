@@ -58,11 +58,13 @@ const RequestAccess = () => {
   if (success) {
     return (
       <section className="container max-w-md py-20">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-gold mb-2">Thank you</p>
-        <h1 className="font-display text-4xl font-semibold mb-6">Request received</h1>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Thanks for your interest in Nizam. Our team will review your details and
-          reach out shortly to schedule a conversation.
+        <p className="text-[10px] uppercase tracking-[0.22em] text-primary mb-2 font-medium">Received</p>
+        <h1 className="font-display text-4xl md:text-5xl font-semibold mb-4 leading-[1.1]">
+          Thank you
+        </h1>
+        <p className="text-sm text-[hsl(var(--text-secondary))] leading-relaxed">
+          Your request is with our team. We'll review your details and reach out
+          personally to arrange the next step. We look forward to speaking with you.
         </p>
         <p className="mt-6 text-sm text-muted-foreground">
           <Link to="/" className="text-primary underline-offset-4 hover:underline">
@@ -75,30 +77,33 @@ const RequestAccess = () => {
 
   return (
     <section className="container max-w-md py-20">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-gold mb-2">Get started</p>
-      <h1 className="font-display text-4xl font-semibold mb-3">Request access</h1>
-      <p className="text-sm text-muted-foreground mb-8 leading-relaxed">
-        Tell us about your business and we'll be in touch to set up your AI workspace.
+      <p className="text-[10px] uppercase tracking-[0.22em] text-primary mb-2 font-medium">By invitation</p>
+      <h1 className="font-display text-4xl md:text-5xl font-semibold mb-4 leading-[1.1]">
+        Request access
+      </h1>
+      <p className="text-sm text-[hsl(var(--text-secondary))] mb-8 leading-relaxed">
+        Nizam is onboarded by our team, one organisation at a time. Share a few
+        details and we'll arrange a conversation to design your AI workspace.
       </p>
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <Label htmlFor="name">Full name</Label>
-          <Input id="name" placeholder="Jane Smith" value={name}
+          <Input id="name" placeholder="Your name" value={name}
             onChange={(e) => setName(e.target.value)} disabled={loading} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">Work email</Label>
-          <Input id="email" type="email" placeholder="you@company.com" value={email}
+          <Input id="email" type="email" placeholder="name@yourcompany.com" value={email}
             onChange={(e) => setEmail(e.target.value)} disabled={loading} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="company">Company</Label>
-          <Input id="company" placeholder="Acme, Inc." value={company}
+          <Label htmlFor="company">Organisation</Label>
+          <Input id="company" placeholder="Your company or firm" value={company}
             onChange={(e) => setCompany(e.target.value)} disabled={loading} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="phone">Phone (optional)</Label>
-          <Input id="phone" placeholder="+234 ..." value={phone}
+          <Input id="phone" placeholder="Best number to reach you" value={phone}
             onChange={(e) => setPhone(e.target.value)} disabled={loading} />
         </div>
         <div className="space-y-2">
@@ -116,11 +121,11 @@ const RequestAccess = () => {
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="message">What are you looking for? (optional)</Label>
+          <Label htmlFor="message">What would you like to achieve? (optional)</Label>
           <textarea
             id="message"
             className="nz-textarea h-24"
-            placeholder="Tell us a bit about your needs..."
+            placeholder="A note on your goals, current setup, or timeline — anything that helps us prepare."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             disabled={loading}
@@ -128,7 +133,7 @@ const RequestAccess = () => {
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Submitting..." : "Request access"}
+          {loading ? "Sending your request..." : "Request access"}
         </Button>
       </form>
       <p className="mt-6 text-sm text-muted-foreground">
