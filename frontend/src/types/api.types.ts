@@ -9,8 +9,12 @@ export interface Organisation {
   stripe_customer_id: string | null
   branding_config: {
     logo_url: string | null
+    logo_dark_url?: string | null
     primary_color: string
+    primary_hover_color?: string
     secondary_color: string
+    accent_color?: string
+    background_color?: string
     font: string
   }
   implementation_paid: boolean

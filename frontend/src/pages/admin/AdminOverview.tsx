@@ -108,7 +108,8 @@ const AdminOverview = () => {
         )}
 
         {!isLoading && !isError && organisations && (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-muted/30">
               <tr>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Name</th>
@@ -178,6 +179,7 @@ const AdminOverview = () => {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </>

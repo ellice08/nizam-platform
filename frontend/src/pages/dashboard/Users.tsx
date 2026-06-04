@@ -193,7 +193,8 @@ const Users = () => {
             No users yet. Invite your first team member.
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-border text-left">
                 <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Email</th>
@@ -272,6 +273,7 @@ const Users = () => {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

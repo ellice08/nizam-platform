@@ -20,6 +20,7 @@ import {
   Repeat,
   FileText,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { useThemeStore } from "@/store";
@@ -29,7 +30,7 @@ import type { OrganisationWithDetails } from "@/types/api.types";
 type NavItem = {
   to: string;
   label: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: LucideIcon;
   end?: boolean;
 };
 
@@ -171,13 +172,26 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
 
   return (
     <aside
+      onClick={() => {
+        if (collapsed) setCollapsed(false);
+      }}
       className={cn(
         "hidden md:flex shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-150 ease-nz",
-        collapsed ? "w-[72px]" : "w-64"
+        "sticky top-0 h-screen",
+        collapsed ? "w-[72px] cursor-pointer" : "w-64"
       )}
     >
-      <div className="h-16 flex items-center gap-2 px-6 border-b border-sidebar-border">
-        <Link to={variant === "admin" ? "/admin" : "/dashboard"} className="flex items-baseline gap-1.5">
+      <div
+        className={cn(
+          "h-16 flex items-center gap-2 border-b border-sidebar-border",
+          collapsed ? "justify-center px-2" : "justify-center px-6"
+        )}
+      >
+        <Link
+          to={variant === "admin" ? "/admin" : "/dashboard"}
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-baseline gap-1.5"
+        >
           {!collapsed && (
             variant === "dashboard" && org?.branding_config.logo_url ? (
               <img
@@ -204,7 +218,7 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-8">
+      <nav className="flex-1 overflow-hidden px-3 py-6 space-y-8">
         {sections.map((section) => (
           <div key={section.label}>
             {!collapsed && (
@@ -221,8 +235,10 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
                     <NavLink
                       to={item.to}
                       end={item.end}
+                      onClick={(e) => e.stopPropagation()}
                       className={cn(
                         "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150 ease-nz",
+                        collapsed && "justify-center",
                         active
                           ? "text-foreground border-l-2 border-l-primary pl-[10px]"
                           : "text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface"
@@ -242,7 +258,10 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
 
       <div className="border-t border-sidebar-border">
         <button
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setCollapsed((c) => !c);
+          }}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface transition-colors duration-150 ease-nz border-b border-sidebar-border"
         >
           {collapsed ? <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.5} /> : (
@@ -265,7 +284,10 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
           </div>
         )}
         <button
-          onClick={toggleTheme}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleTheme();
+          }}
           className={cn(
             "w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface transition-colors duration-150 ease-nz",
             collapsed && "justify-center"
@@ -281,7 +303,10 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
           )}
         </button>
         <button
-          onClick={handleLogout}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleLogout();
+          }}
           className={cn(
             "w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[hsl(var(--text-secondary))] hover:text-foreground hover:bg-surface transition-colors duration-150 ease-nz",
             collapsed && "justify-center"

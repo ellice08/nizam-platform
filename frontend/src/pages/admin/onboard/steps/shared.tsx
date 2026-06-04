@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const StepHeader = ({ step, title, description }: { step: number; title: string; description?: string }) => (
@@ -46,7 +47,7 @@ export const OptionCard = ({
   selected,
   onClick,
 }: {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: LucideIcon;
   title: string;
   description: string;
   tag?: string;

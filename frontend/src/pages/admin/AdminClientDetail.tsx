@@ -179,7 +179,8 @@ const AdminClientDetail = () => {
           ) : conversations?.length === 0 ? (
             <p className="px-6 py-8 text-sm text-muted-foreground">No conversations yet.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
               <thead className="bg-muted/30">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Channel</th>
@@ -218,6 +219,7 @@ const AdminClientDetail = () => {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 

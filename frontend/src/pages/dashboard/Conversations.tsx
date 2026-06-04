@@ -51,12 +51,12 @@ const Conversations = () => {
   });
 
   return (
-    <div className="flex gap-0 -mx-6 -mt-6 h-[calc(100vh-4rem)]">
+    <div className="flex gap-0 -mx-4 sm:-mx-6 -mt-6 h-[calc(100vh-4rem)]">
 
       {/* Left — conversation list */}
       <div className={cn(
-        "flex flex-col transition-all duration-200 overflow-hidden px-6 pt-6",
-        selected ? "w-[55%]" : "w-full"
+        "flex flex-col transition-all duration-200 overflow-hidden px-4 sm:px-6 pt-6",
+        selected ? "hidden md:flex md:w-[55%]" : "w-full"
       )}>
         <PageHeader
           eyebrow="Inbox"
@@ -131,7 +131,8 @@ const Conversations = () => {
               </div>
 
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
                 <thead className="bg-elevated text-[hsl(var(--text-secondary))]">
                   <tr className="text-left">
                     <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Channel</th>
@@ -175,6 +176,7 @@ const Conversations = () => {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
@@ -182,7 +184,7 @@ const Conversations = () => {
 
       {/* Right — detail panel */}
       {selected && (
-        <div className="w-[45%] border-l border-border flex flex-col overflow-hidden">
+        <div className="w-full md:w-[45%] md:border-l border-border flex flex-col overflow-hidden">
           <ConversationPanel
             conversationId={selected}
             onClose={() => setSelected(null)}
