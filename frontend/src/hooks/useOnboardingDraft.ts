@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 
-export const useOnboardingDraft = () => {
-  const draftIdRef = useRef<string | null>(null)
+export const useOnboardingDraft = (existingDraftId?: string | null) => {
+  const draftIdRef = useRef<string | null>(existingDraftId ?? null)
 
   const saveDraft = useCallback(async (
     stepCompleted: number,
@@ -38,6 +38,27 @@ export const useOnboardingDraft = () => {
     }
   }, [])
 
+  const loadDraft = useCallback(async (draftId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('onboarding_drafts')
+        .select('*')
+        .eq('id', draftId)
+        .maybeSingle()
+      if (error || !data) return null
+      draftIdRef.current = draftId
+      return data as {
+        id: string
+        step_completed: number
+        draft_data: Record<string, unknown>
+        status: string
+      }
+    } catch (err) {
+      console.error('Draft load error:', err)
+      return null
+    }
+  }, [])
+
   const completeDraft = useCallback(async (organisationId: string) => {
     if (!draftIdRef.current) return
     await supabase
@@ -49,5 +70,5 @@ export const useOnboardingDraft = () => {
       .eq('id', draftIdRef.current)
   }, [])
 
-  return { saveDraft, completeDraft, draftId: draftIdRef.current }
+  return { saveDraft, loadDraft, completeDraft, draftId: draftIdRef.current }
 }

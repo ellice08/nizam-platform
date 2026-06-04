@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Info, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,9 @@ const stepsMeta = [
 
 const AdminOnboard = () => {
   const nav = useNavigate();
-  const { saveDraft, completeDraft } = useOnboardingDraft();
+  const [searchParams] = useSearchParams()
+  const resumeDraftId = searchParams.get('draft')
+  const { saveDraft, loadDraft, completeDraft } = useOnboardingDraft(resumeDraftId);
 
   const [state, setState] = useState<WizardState>(initialState);
   const [step, setStep] = useState(1);
@@ -71,6 +73,28 @@ const AdminOnboard = () => {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
+
+  // Resume from a saved draft if ?draft=<id> is present
+  useEffect(() => {
+    if (!resumeDraftId) return
+    let cancelled = false
+    void (async () => {
+      const draft = await loadDraft(resumeDraftId)
+      if (cancelled || !draft) return
+      const fullState = (draft.draft_data?.fullState as WizardState | undefined)
+      if (fullState) {
+        // Merge over initialState to ensure any new fields have defaults
+        setState({ ...initialState, ...fullState })
+        // Mark all steps up to step_completed as done and jump there
+        const completedSteps = new Set<number>()
+        for (let i = 1; i <= draft.step_completed; i++) completedSteps.add(i)
+        setCompleted(completedSteps)
+        setStep(Math.min(draft.step_completed + 1, 7))
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeDraftId])
 
   const set = (patch: Partial<WizardState>) =>
     setState((s) => {
@@ -133,44 +157,28 @@ const AdminOnboard = () => {
     return { valid: true, error: null };
   };
 
-  const buildDraftData = (): Record<string, unknown> => ({
-    step1: {
-      name: state.companyName,
-      slug: state.slug,
-      industry: state.industry,
-      branchCount: state.branchCount,
-      implementationPaid: state.feePaid,
-    },
-    step2: {
-      logoUrl: state.logoName,
-      primaryColor: state.primaryColor,
-      secondaryColor: state.secondaryColor,
-    },
-    step3: {
-      branches: state.branches.slice(0, state.branchCount).map((b) => ({
-        name: b.name,
-        city: b.city,
-        timezone: b.timezone,
-        telephony: b.telephony,
-      })),
-    },
-    step4: {
-      agents: state.branches.slice(0, state.branchCount).map((b) => ({
-        name: b.agentName,
-        voice: b.voice,
-        tone: b.tone,
-        language: b.language,
-      })),
-    },
-    step5: {
-      knowledgeBase: state.branches.slice(0, state.branchCount).map((b) => ({
-        files: b.files,
-        crawlEnabled: b.crawlEnabled,
-        crawlUrl: b.crawlUrl,
-      })),
-    },
-    step6: { clientEmail: state.clientEmail },
-  });
+  const buildDraftData = (): Record<string, unknown> => {
+    // Save the full wizard state, stripping File objects (not serializable).
+    // Files must be re-uploaded on resume.
+    const serializableBranches = state.branches.map((b) => ({
+      ...b,
+      files: b.files.map((f) => ({ id: f.id, name: f.name, size: f.size })),
+    }))
+    return {
+      fullState: {
+        ...state,
+        logoFile: null,
+        logoDarkFile: null,
+        branches: serializableBranches,
+      },
+      // Keep a small summary for the drafts list display
+      step1: {
+        name: state.companyName,
+        slug: state.slug,
+        industry: state.industry,
+      },
+    }
+  };
 
   const goto = (n: number) => {
     if (n < step) { setStep(n); return; }
