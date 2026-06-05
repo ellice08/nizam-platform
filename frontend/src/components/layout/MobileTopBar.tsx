@@ -5,6 +5,8 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { supabase } from "@/lib/supabase";
+import type { OrganisationWithDetails } from "@/types/api.types";
+import { useThemeStore } from "@/store";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean };
 
@@ -28,14 +30,35 @@ const dashboardItems: NavItem[] = [
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
-type Props = { variant: "admin" | "dashboard" };
+type Props = { variant: "admin" | "dashboard"; org?: OrganisationWithDetails | null };
 
-export function MobileTopBar({ variant }: Props) {
+export function MobileTopBar({ variant, org }: Props) {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { clear } = useAuthStore();
+  const { theme } = useThemeStore();
   const items = variant === "admin" ? adminItems : dashboardItems;
+
+  const brandingLogo =
+    variant === "dashboard" && org?.branding_config.logo_url
+      ? (theme === "dark" && (org.branding_config as Record<string, unknown>).logo_dark_url
+          ? ((org.branding_config as Record<string, unknown>).logo_dark_url as string)
+          : org.branding_config.logo_url)
+      : null;
+
+  const BrandMark = () => (
+    brandingLogo ? (
+      <img src={brandingLogo} alt={org?.name ?? ""} className="h-7 max-w-[140px] object-contain" />
+    ) : (
+      <span className="flex items-baseline gap-1.5">
+        <span className="font-display text-xl tracking-tight text-foreground">
+          {variant === "dashboard" && org?.name ? org.name : "nizam"}
+        </span>
+        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+      </span>
+    )
+  );
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -46,9 +69,8 @@ export function MobileTopBar({ variant }: Props) {
   return (
     <>
       <div className="md:hidden sticky top-0 z-40 h-14 border-b border-border bg-background flex items-center justify-between px-4">
-        <Link to={variant === "admin" ? "/admin" : "/dashboard"} className="flex items-baseline gap-1.5">
-          <span className="font-display text-xl tracking-tight text-foreground">nizam</span>
-          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+        <Link to={variant === "admin" ? "/admin" : "/dashboard"} className="flex items-center">
+          <BrandMark />
         </Link>
         <button
           aria-label="Open menu"
@@ -71,10 +93,9 @@ export function MobileTopBar({ variant }: Props) {
               <Link
                 to={variant === "admin" ? "/admin" : "/dashboard"}
                 onClick={() => setOpen(false)}
-                className="flex items-baseline gap-1.5"
+                className="flex items-center"
               >
-                <span className="font-display text-xl tracking-tight text-foreground">nizam</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                <BrandMark />
               </Link>
               <button
                 onClick={() => setOpen(false)}

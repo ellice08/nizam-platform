@@ -147,9 +147,9 @@ const Agent = () => {
         description="Persona, voice, guardrails, and escalation."
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 w-full min-w-0">
         {/* Agent configuration form */}
-        <div className="lg:col-span-2 rounded-lg border border-border bg-surface p-6 space-y-6">
+        <div className="lg:col-span-2 rounded-lg border border-border bg-surface p-4 sm:p-6 space-y-6 min-w-0">
           <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium">
             Agent settings
           </h3>
@@ -163,13 +163,13 @@ const Agent = () => {
               <Skeleton className="h-10 w-full max-w-xs" />
             </div>
           ) : (
-            <div className="space-y-6 max-w-2xl">
+            <div className="space-y-6 max-w-2xl min-w-0">
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   Agent name
                 </label>
                 <input
-                  className="nz-input w-full max-w-sm"
+                  className="nz-input w-full sm:max-w-sm"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Aria"
@@ -180,7 +180,7 @@ const Agent = () => {
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                   Tone
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {tones.map((t) => (
                     <button
                       key={t}
@@ -326,10 +326,10 @@ const Agent = () => {
         </div>
 
         {/* Test your agent */}
-        <div className="lg:col-span-2 rounded-lg border border-border bg-surface overflow-hidden">
+        <div className="lg:col-span-2 rounded-lg border border-border bg-surface overflow-hidden min-w-0">
           {/* Panel header */}
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-            <div>
+          <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+            <div className="min-w-0">
               <p className="text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] font-medium">
                 Test your agent
               </p>
@@ -437,7 +437,7 @@ const Agent = () => {
         </div>
 
         {/* Embed code */}
-        <div className="lg:col-span-2 rounded-lg border border-border bg-surface p-6 space-y-3">
+        <div className="lg:col-span-2 rounded-lg border border-border bg-surface p-4 sm:p-6 space-y-3 min-w-0">
           <div className="flex items-center justify-between">
             <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium">
               Embed code
@@ -449,7 +449,7 @@ const Agent = () => {
               <Copy className="h-3 w-3" strokeWidth={1.5} /> Copy
             </button>
           </div>
-          <pre className="nz-mono text-xs bg-background border border-border rounded-md p-4 overflow-x-auto text-[hsl(var(--text-secondary))]">
+          <pre className="nz-mono text-xs bg-background border border-border rounded-md p-4 overflow-x-auto text-[hsl(var(--text-secondary))] whitespace-pre-wrap break-all sm:whitespace-pre sm:break-normal">
 {embedCode}
           </pre>
           <p className="text-xs text-[hsl(var(--text-tertiary))]">

@@ -108,7 +108,7 @@ export function AppLayout({ variant }: AppLayoutProps) {
     <div className="min-h-screen w-full flex bg-background text-foreground">
       <AppSidebar variant={variant} org={org} />
       <div className="flex-1 flex flex-col min-w-0">
-        <MobileTopBar variant={variant} />
+        <MobileTopBar variant={variant} org={org} />
         {variant === "dashboard" && tenantOrgId && (
           <div className="w-full bg-[#7A2535] px-6 py-2.5 flex items-center justify-between shrink-0">
             <p className="text-xs text-white font-medium tracking-wide">

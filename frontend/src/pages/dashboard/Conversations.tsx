@@ -51,7 +51,7 @@ const Conversations = () => {
   });
 
   return (
-    <div className="flex gap-0 -mx-4 sm:-mx-6 -mt-6 h-[calc(100vh-4rem)]">
+    <div className="flex gap-0 -mx-4 sm:-mx-6 -mt-6 h-[calc(100vh-4rem)] min-w-0">
 
       {/* Left — conversation list */}
       <div className={cn(
@@ -132,14 +132,14 @@ const Conversations = () => {
 
             ) : (
               <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[520px]">
+              <table className="w-full text-sm">
                 <thead className="bg-elevated text-[hsl(var(--text-secondary))]">
                   <tr className="text-left">
-                    <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Channel</th>
-                    <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Lead</th>
-                    {!selected && <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Contact</th>}
-                    <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Time</th>
-                    <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Status</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Channel</th>
+                    <th className="px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Lead</th>
+                    {!selected && <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Contact</th>}
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Time</th>
+                    <th className="px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -157,20 +157,28 @@ const Conversations = () => {
                             : "bg-background hover:bg-elevated",
                         )}
                       >
-                        <td className="px-6 py-4 capitalize text-[hsl(var(--text-secondary))]">
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-4 capitalize text-[hsl(var(--text-secondary))]">
                           <div className="flex items-center gap-2">
                             <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
                             {r.channel}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-foreground">{r.lead_name ?? 'Unknown caller'}</td>
+                        <td className="px-3 sm:px-6 py-4 text-foreground">
+                          <div className="flex items-center gap-2">
+                            <Icon className="sm:hidden h-3.5 w-3.5 shrink-0 text-[hsl(var(--text-secondary))]" strokeWidth={1.5} />
+                            <span className="truncate">{r.lead_name ?? 'Unknown caller'}</span>
+                          </div>
+                          <div className="sm:hidden mt-1 text-[10px] nz-mono text-[hsl(var(--text-tertiary))]">
+                            {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+                          </div>
+                        </td>
                         {!selected && (
-                          <td className="px-6 py-4 nz-mono text-[hsl(var(--text-secondary))]">{r.lead_phone ?? r.lead_email ?? '—'}</td>
+                          <td className="hidden md:table-cell px-3 sm:px-6 py-4 nz-mono text-[hsl(var(--text-secondary))]">{r.lead_phone ?? r.lead_email ?? '—'}</td>
                         )}
-                        <td className="px-6 py-4 nz-mono text-[hsl(var(--text-secondary))]">
+                        <td className="hidden sm:table-cell px-3 sm:px-6 py-4 nz-mono text-[hsl(var(--text-secondary))]">
                           {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
                         </td>
-                        <td className="px-6 py-4"><StatusBadge conv={r} /></td>
+                        <td className="px-3 sm:px-6 py-4"><StatusBadge conv={r} /></td>
                       </tr>
                     );
                   })}

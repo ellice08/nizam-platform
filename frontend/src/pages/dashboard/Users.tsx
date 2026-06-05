@@ -194,37 +194,43 @@ const Users = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[720px]">
+          <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left">
-                <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Email</th>
-                <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Name</th>
-                <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Role</th>
-                <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Status</th>
-                <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Joined</th>
-                <th className="px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Actions</th>
+                <th className="px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Email</th>
+                <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Name</th>
+                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Role</th>
+                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Status</th>
+                <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Joined</th>
+                <th className="px-3 sm:px-6 py-3 text-[10px] uppercase tracking-wider font-medium text-[hsl(var(--text-secondary))]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {users.map(user => (
                 <tr key={user.id} className="hover:bg-elevated transition-colors duration-150">
-                  <td className="px-6 py-4 text-foreground">{user.email}</td>
-                  <td className="px-6 py-4 text-[hsl(var(--text-secondary))]">
+                  <td className="px-3 sm:px-6 py-4 text-foreground">
+                    <div className="truncate max-w-[180px] sm:max-w-none">{user.email}</div>
+                    <div className="sm:hidden mt-1 flex items-center gap-2 text-[10px] text-[hsl(var(--text-secondary))]">
+                      <span className="px-1.5 py-0.5 rounded-full bg-elevated border border-border">{roleLabel(user.role)}</span>
+                      <StatusBadge user={user} />
+                    </div>
+                  </td>
+                  <td className="hidden md:table-cell px-3 sm:px-6 py-4 text-[hsl(var(--text-secondary))]">
                     {user.name || '—'}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-elevated border border-border text-[hsl(var(--text-secondary))]">
                       {roleLabel(user.role)}
                     </span>
                   </td>
-                  <td className="px-6 py-4"><StatusBadge user={user} /></td>
-                  <td className="px-6 py-4 text-[hsl(var(--text-tertiary))] nz-mono text-xs">
+                  <td className="hidden sm:table-cell px-3 sm:px-6 py-4"><StatusBadge user={user} /></td>
+                  <td className="hidden lg:table-cell px-3 sm:px-6 py-4 text-[hsl(var(--text-tertiary))] nz-mono text-xs">
                     {user.created_at
                       ? formatDistanceToNow(new Date(user.created_at), { addSuffix: true })
                       : '—'}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
+                  <td className="px-3 sm:px-6 py-4">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                       {/* Edit role */}
                       <button
                         onClick={() => { setEditUser(user); setEditRole(user.role) }}
