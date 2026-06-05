@@ -20,6 +20,7 @@ import {
   Repeat,
   FileText,
   Inbox,
+  LifeBuoy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -88,6 +89,7 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
 
   const ALL_ORG_ITEMS: NavItem[] = [
     { to: "/dashboard/settings", label: "Settings", icon: Settings },
+    { to: "/dashboard/support", label: "Support", icon: LifeBuoy },
   ];
 
   const ROLE_NAV: Record<string, string[]> = {
@@ -100,6 +102,7 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
       "/dashboard/billing",
       "/dashboard/users",
       "/dashboard/settings",
+      "/dashboard/support",
     ],
     org_admin: [
       "/dashboard",
@@ -110,6 +113,7 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
       "/dashboard/billing",
       "/dashboard/users",
       "/dashboard/settings",
+      "/dashboard/support",
     ],
     branch_admin: [
       "/dashboard",
@@ -119,24 +123,28 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
       "/dashboard/analytics",
       "/dashboard/billing",
       "/dashboard/settings",
+      "/dashboard/support",
     ],
     branch_staff: [
       "/dashboard",
       "/dashboard/conversations",
       "/dashboard/analytics",
       "/dashboard/settings",
+      "/dashboard/support",
     ],
     org_viewer: [
       "/dashboard",
       "/dashboard/conversations",
       "/dashboard/analytics",
       "/dashboard/settings",
+      "/dashboard/support",
     ],
     branch_viewer: [
       "/dashboard",
       "/dashboard/conversations",
       "/dashboard/analytics",
       "/dashboard/settings",
+      "/dashboard/support",
     ],
   };
 
