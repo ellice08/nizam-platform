@@ -50,6 +50,7 @@ const adminSections: NavSection[] = [
     label: "Clients",
     items: [
       { to: "/admin/leads", label: "Leads", icon: Inbox },
+      { to: "/admin/support", label: "Support", icon: LifeBuoy },
       { to: "/admin/clients", label: "All clients", icon: Building2 },
       { to: "/admin/tenant-mode", label: "Tenant mode", icon: Repeat },
       { to: "/admin/drafts", label: "Drafts", icon: FileText },
