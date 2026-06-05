@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 
 type Ticket = {
   id: string
+  ticket_number: number | null
   subject: string
   priority: string
   status: string
@@ -212,7 +213,12 @@ const Support = () => {
                     selectedId === t.id ? "border-primary" : "border-border hover:border-primary/50"
                   )}>
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-foreground text-sm truncate flex-1">{t.subject}</p>
+                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                      {t.ticket_number && (
+                        <span className="text-[10px] nz-mono text-primary shrink-0">#{t.ticket_number}</span>
+                      )}
+                      <p className="font-medium text-foreground text-sm truncate">{t.subject}</p>
+                    </div>
                     <StatusPill status={t.status} />
                   </div>
                   <p className="text-xs text-[hsl(var(--text-tertiary))] mt-1 nz-mono">
@@ -233,7 +239,12 @@ const Support = () => {
                 <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
               </button>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-foreground truncate">{selectedTicket?.subject}</p>
+                <div className="flex items-center gap-2">
+                  {selectedTicket?.ticket_number && (
+                    <span className="text-[11px] nz-mono text-primary shrink-0">#{selectedTicket.ticket_number}</span>
+                  )}
+                  <p className="font-medium text-foreground truncate">{selectedTicket?.subject}</p>
+                </div>
                 {selectedTicket && <div className="mt-1"><StatusPill status={selectedTicket.status} /></div>}
               </div>
             </div>
