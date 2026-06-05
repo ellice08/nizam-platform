@@ -104,7 +104,22 @@ router.get('/tickets', authenticate, async (req, res, next) => {
 
     const { data, error } = await query;
     if (error) throw new AppError(error.message, 500);
-    res.json(ApiResponse.success(data ?? []));
+
+    const tickets = data ?? [];
+    const orgIds = [...new Set(tickets.map(t => t.organisation_id as string))];
+    let orgMap: Record<string, string> = {};
+    if (orgIds.length > 0) {
+      const { data: orgs } = await supabase
+        .from('organisations')
+        .select('id, name')
+        .in('id', orgIds);
+      orgMap = Object.fromEntries((orgs ?? []).map(o => [o.id as string, o.name as string]));
+    }
+    const enriched = tickets.map(t => ({
+      ...t,
+      organisation_name: orgMap[t.organisation_id as string] ?? null,
+    }));
+    res.json(ApiResponse.success(enriched));
   } catch (err) { next(err); }
 });
 
@@ -127,7 +142,16 @@ router.get('/tickets/:id', authenticate, async (req, res, next) => {
       .order('created_at', { ascending: true });
     if (mErr) throw new AppError(mErr.message, 500);
 
-    res.json(ApiResponse.success({ ticket, messages: messages ?? [] }));
+    const { data: org } = await supabase
+      .from('organisations')
+      .select('name')
+      .eq('id', ticket.organisation_id)
+      .maybeSingle();
+
+    res.json(ApiResponse.success({
+      ticket: { ...ticket, organisation_name: (org?.name as string) ?? null },
+      messages: messages ?? [],
+    }));
   } catch (err) { next(err); }
 });
 
@@ -152,6 +176,7 @@ router.post('/tickets', authenticate, validate(createTicketSchema), async (req, 
         created_by: req.user.id,
         created_by_email: info.email,
         created_by_name: info.name,
+        created_by_role: req.tenant.role,
         subject,
         priority,
         status: 'open',
