@@ -11,11 +11,14 @@ import { cn } from "@/lib/utils"
 type Ticket = {
   id: string
   organisation_id: string
+  organisation_name: string | null
+  ticket_number: number | null
   subject: string
   priority: string
   status: string
   created_by_name: string | null
   created_by_email: string | null
+  created_by_role: string | null
   created_at: string
   updated_at: string
 }
@@ -46,6 +49,17 @@ const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-elevated text-[hsl(var(--text-tertiary))]",
 }
 const statusLabel = (s: string) => s.replace('_', ' ')
+
+const roleLabel = (r: string | null) => {
+  if (!r) return ''
+  return ({
+    org_admin: 'Org Admin',
+    branch_admin: 'Branch Admin',
+    branch_staff: 'Staff',
+    org_viewer: 'Org Viewer',
+    branch_viewer: 'Branch Viewer',
+  } as Record<string, string>)[r] ?? r
+}
 
 const StatusPill = ({ status }: { status: string }) => (
   <span className={cn("inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider whitespace-nowrap", STATUS_STYLES[status] ?? STATUS_STYLES.open)}>
@@ -200,7 +214,17 @@ const AdminSupport = () => {
                     selectedId === t.id ? "border-primary" : "border-border hover:border-primary/50"
                   )}>
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-foreground text-sm truncate flex-1">{t.subject}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {t.ticket_number && (
+                          <span className="text-[10px] nz-mono text-primary shrink-0">#{t.ticket_number}</span>
+                        )}
+                        <p className="font-medium text-foreground text-sm truncate">{t.subject}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {t.organisation_name ?? 'Unknown org'}
+                      </p>
+                    </div>
                     <StatusPill status={t.status} />
                   </div>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -209,6 +233,9 @@ const AdminSupport = () => {
                     </span>
                     <span className="text-xs text-muted-foreground truncate">
                       {t.created_by_name ?? t.created_by_email ?? 'Client'}
+                      {t.created_by_role && (
+                        <span className="text-[hsl(var(--text-tertiary))]"> · {roleLabel(t.created_by_role)}</span>
+                      )}
                     </span>
                     <span className="text-[10px] text-[hsl(var(--text-tertiary))] nz-mono ml-auto">
                       {formatDistanceToNow(new Date(t.updated_at), { addSuffix: true })}
@@ -229,9 +256,17 @@ const AdminSupport = () => {
                 <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
               </button>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-foreground truncate">{selectedTicket?.subject}</p>
+                <div className="flex items-center gap-2">
+                  {selectedTicket?.ticket_number && (
+                    <span className="text-[11px] nz-mono text-primary shrink-0">#{selectedTicket.ticket_number}</span>
+                  )}
+                  <p className="font-medium text-foreground truncate">{selectedTicket?.subject}</p>
+                </div>
                 <p className="text-xs text-muted-foreground truncate">
+                  {selectedTicket?.organisation_name ?? 'Unknown org'}
+                  {' · '}
                   {selectedTicket?.created_by_name ?? selectedTicket?.created_by_email}
+                  {selectedTicket?.created_by_role && ` (${roleLabel(selectedTicket.created_by_role)})`}
                 </p>
               </div>
               <button onClick={() => void openContactEditor()}
