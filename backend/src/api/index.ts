@@ -8,6 +8,7 @@ import chatRoutes from './chat.routes.js';
 import widgetRoutes from './widget.routes.js';
 import usersRoutes from './users.routes.js';
 import leadsRoutes from './leads.routes.js';
+import supportRoutes from './support.routes.js';
 
 export function registerRoutes(app: Express): void {
   app.use('/api/auth', authRoutes);
@@ -19,4 +20,5 @@ export function registerRoutes(app: Express): void {
   app.use('/api/widget', widgetRoutes);
   app.use('/api/users', usersRoutes);
   app.use('/api/leads', leadsRoutes);
+  app.use('/api/support', supportRoutes);
 }

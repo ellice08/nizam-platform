@@ -312,6 +312,78 @@ class NotificationService {
       return { success: false, error: message };
     }
   }
+
+  async sendSupportTicketAlert(params: {
+    to: string;
+    ticketSubject: string;
+    clientName: string;
+    organisationName: string;
+    priority: string;
+    message: string;
+  }): Promise<{ success: boolean }> {
+    try {
+      const { to, ticketSubject, clientName, organisationName, priority, message } = params;
+      await this.resend.emails.send({
+        from: env.RESEND_FROM_EMAIL,
+        to,
+        subject: `[${priority.toUpperCase()}] New support ticket — ${organisationName}`,
+        html: `
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0E0E0C;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0E0E0C;padding:40px 20px;"><tr><td align="center">
+<table width="480" cellpadding="0" cellspacing="0" style="background:#141410;border:1px solid #2A2A26;border-radius:8px;">
+<tr><td style="padding:24px 32px;border-bottom:1px solid #2A2A26;">
+<p style="margin:0;font-size:11px;color:#7A2535;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;">New support ticket</p>
+<h2 style="margin:8px 0 0;font-size:20px;color:#FAFAFA;">${ticketSubject}</h2></td></tr>
+<tr><td style="padding:24px 32px;">
+<p style="margin:0 0 16px;font-size:13px;color:#888880;">
+<strong style="color:#FAFAFA;">Organisation:</strong> ${organisationName}<br>
+<strong style="color:#FAFAFA;">Raised by:</strong> ${clientName}<br>
+<strong style="color:#FAFAFA;">Priority:</strong> ${priority}</p>
+<div style="background:#0E0E0C;border:1px solid #2A2A26;border-radius:6px;padding:16px;font-size:13px;color:#888880;line-height:1.6;white-space:pre-wrap;">${message}</div>
+</td></tr>
+<tr><td style="padding:16px 32px;border-top:1px solid #2A2A26;"><p style="margin:0;font-size:11px;color:#555550;">Nizam by Ellice Systems</p></td></tr>
+</table></td></tr></table></body></html>`,
+      });
+      return { success: true };
+    } catch (err) {
+      logger.error('sendSupportTicketAlert exception', { err });
+      return { success: false };
+    }
+  }
+
+  async sendSupportReply(params: {
+    to: string;
+    ticketSubject: string;
+    replyBody: string;
+  }): Promise<{ success: boolean }> {
+    try {
+      const { to, ticketSubject, replyBody } = params;
+      await this.resend.emails.send({
+        from: env.RESEND_FROM_EMAIL,
+        to,
+        subject: `Re: ${ticketSubject} — Nizam Support`,
+        html: `
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0E0E0C;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0E0E0C;padding:40px 20px;"><tr><td align="center">
+<table width="480" cellpadding="0" cellspacing="0" style="background:#141410;border:1px solid #2A2A26;border-radius:8px;">
+<tr><td style="padding:32px 40px 24px;border-bottom:1px solid #2A2A26;">
+<p style="margin:0;font-size:24px;font-weight:600;color:#FAFAFA;letter-spacing:-0.02em;">nizam</p>
+<p style="margin:4px 0 0;font-size:12px;color:#555550;">Support</p></td></tr>
+<tr><td style="padding:32px 40px;">
+<p style="margin:0 0 8px;font-size:11px;font-weight:600;color:#7A2535;text-transform:uppercase;letter-spacing:0.12em;">Reply to your ticket</p>
+<h1 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#FAFAFA;line-height:1.3;">${ticketSubject}</h1>
+<div style="margin:0 0 24px;font-size:14px;color:#888880;line-height:1.7;white-space:pre-wrap;">${replyBody}</div>
+<p style="margin:0;font-size:12px;color:#555550;line-height:1.6;">You can reply to this ticket from your Nizam dashboard.</p>
+</td></tr>
+<tr><td style="padding:20px 40px;border-top:1px solid #2A2A26;"><p style="margin:0;font-size:11px;color:#555550;">Nizam by Ellice Systems</p></td></tr>
+</table></td></tr></table></body></html>`,
+      });
+      return { success: true };
+    } catch (err) {
+      logger.error('sendSupportReply exception', { err });
+      return { success: false };
+    }
+  }
 }
 
 export const notificationService = new NotificationService();
