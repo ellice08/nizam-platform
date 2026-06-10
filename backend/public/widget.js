@@ -11,7 +11,7 @@
     return;
   }
 
-  const API_BASE = 'https://nizam-platform-production.up.railway.app';
+  const API_BASE = '__API_BASE__';
 
   // Session persistence
   const SESSION_KEY = `nizam_session_${ORG_ID}`;

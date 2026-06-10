@@ -6,11 +6,12 @@ import { supabase } from '../lib/supabase.js';
 import { notificationService } from '../services/notification.service.js';
 import { ApiResponse } from '../utils/response.js';
 import { AppError } from '../utils/errors.js';
+import { env } from '../config/env.js';
 
 const router = Router();
 
-const DEFAULT_SUPPORT_EMAIL = 'Alameenellice@gmail.com';
-const DEFAULT_SUPPORT_PHONE = '07033788353';
+const DEFAULT_SUPPORT_EMAIL = env.SUPPORT_DEFAULT_EMAIL;
+const DEFAULT_SUPPORT_PHONE = env.SUPPORT_DEFAULT_PHONE;
 
 const VIEWER_ROLES = ['org_viewer', 'branch_viewer'];
 
@@ -195,7 +196,7 @@ router.post('/tickets', authenticate, validate(createTicketSchema), async (req, 
     const { data: org } = await supabase
       .from('organisations').select('name').eq('id', orgId).maybeSingle();
     void notificationService.sendSupportTicketAlert({
-      to: 'Alameenellice@gmail.com',
+      to: env.SUPPORT_DEFAULT_EMAIL,
       ticketSubject: subject,
       clientName: info.name ?? info.email ?? 'A client',
       organisationName: (org?.name as string) ?? 'Unknown',

@@ -19,6 +19,10 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url(),
   RESEND_API_KEY: z.string().min(1),
   RESEND_FROM_EMAIL: z.string().email(),
+  SUPPORT_DEFAULT_EMAIL: z.string().email().default('Alameenellice@gmail.com'),
+  SUPPORT_DEFAULT_PHONE: z.string().default('07033788353'),
+  EMBEDDING_MODEL: z.string().default('text-embedding-ada-002'),
+  CORS_EXTRA_ORIGINS: z.string().default('http://localhost:8080'),
 });
 
 const parsed = envSchema.safeParse(process.env);

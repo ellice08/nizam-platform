@@ -64,7 +64,7 @@ class AuthService {
     await this.createTenantUserRecord(userId, organisationId, role);
 
     // Send welcome email (non-fatal if it fails)
-    const loginUrl = `${env.FRONTEND_URL ?? 'https://nizam-platform.vercel.app'}/login`;
+    const loginUrl = `${env.FRONTEND_URL}/login`;
     const emailResult = await notificationService.sendWelcomeEmail({
       email,
       otp,

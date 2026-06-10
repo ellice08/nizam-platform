@@ -2,7 +2,7 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { env } from "./config/env.js";
@@ -20,10 +20,8 @@ const app = express();
 app.use(helmet());
 
 const allowedOrigins = [
-  "https://nizam-platform.vercel.app",
-  "http://localhost:8080",
-  // "http://localhost:8081",
   env.FRONTEND_URL,
+  ...env.CORS_EXTRA_ORIGINS.split(',').map(o => o.trim()).filter(Boolean),
 ];
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -89,7 +87,8 @@ app.get("/health/db", async (_req: Request, res: Response) => {
 
 app.get("/widget.js", (_req: Request, res: Response) => {
   try {
-    const widgetPath = join(__dirname, "../public/widget.js");
+    const prodWidget = join(__dirname, "public/widget.js");
+    const widgetPath = existsSync(prodWidget) ? prodWidget : join(__dirname, "../public/widget.js");
     const widgetScript = readFileSync(widgetPath, "utf-8");
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "public, max-age=3600");

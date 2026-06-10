@@ -264,7 +264,7 @@ router.post('/:userId/reset-password', authenticate, requireOrgAdmin, async (req
       .eq('id', orgId)
       .single()
 
-    const loginUrl = `${env.FRONTEND_URL ?? 'https://nizam-platform.vercel.app'}/login`
+    const loginUrl = `${env.FRONTEND_URL}/login`
     await notificationService.sendWelcomeEmail({
       email: authUser.email,
       otp,

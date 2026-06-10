@@ -48,7 +48,7 @@ class RagService {
 
   private async embedText(text: string): Promise<number[]> {
     const response = await openai.embeddings.create({
-      model: 'text-embedding-ada-002',
+      model: env.EMBEDDING_MODEL,
       input: text.replace(/\n/g, ' '),
     });
     return response.data[0].embedding;
