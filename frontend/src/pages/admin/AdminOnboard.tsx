@@ -293,6 +293,7 @@ const AdminOnboard = () => {
             confirmation_hours: b0.confirmationHours ?? 2,
             callback_window_hours: b0.callbackHours ?? 1,
             after_hours_message: b0.afterHoursMessage || 'Our team is currently offline.',
+            business_hours: b0.businessHours,
           },
         });
       }

@@ -12,6 +12,12 @@ import type {
   ApiSuccess,
 } from '@/types/api.types'
 
+type BusinessHoursConfig = {
+  enabled: boolean
+  mode: "simple" | "custom"
+  days: Record<string, { open: string; close: string; closed: boolean }>
+}
+
 export type CreateAgentPayload = {
   branch_id: string
   name?: string
@@ -26,6 +32,7 @@ export type CreateAgentPayload = {
     confirmation_hours: number
     callback_window_hours: number
     after_hours_message: string
+    business_hours?: BusinessHoursConfig
   }
 }
 
@@ -41,6 +48,7 @@ export type UpdateAgentPayload = Partial<{
     confirmation_hours: number
     callback_window_hours: number
     after_hours_message: string
+    business_hours?: BusinessHoursConfig
   }
 }>
 

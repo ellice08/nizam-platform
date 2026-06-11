@@ -100,6 +100,11 @@ export interface Agent {
     confirmation_hours: number
     callback_window_hours: number
     after_hours_message: string
+    business_hours?: {
+      enabled: boolean
+      mode: "simple" | "custom"
+      days: Record<string, { open: string; close: string; closed: boolean }>
+    }
   }
   created_at: string
   updated_at: string

@@ -37,6 +37,12 @@ export type Branch = {
   escalationContacts: { id: string; name: string; phone: string; email: string }[];
   afterHoursEnabled: boolean;
   afterHoursMessage: string;
+  businessHours: {
+    enabled: boolean;
+    mode: "simple" | "custom";
+    days: Record<"mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun",
+      { open: string; close: string; closed: boolean }>;
+  };
   files: { id: string; name: string; size: string; file?: File }[];
   crawlEnabled: boolean;
   crawlUrl: string;
@@ -95,6 +101,19 @@ export const newBranch = (i: number, industry: Industry): Branch => ({
   afterHoursEnabled: false,
   afterHoursMessage:
     "Our team is currently offline. We have captured your enquiry and will follow up first thing tomorrow morning.",
+  businessHours: {
+    enabled: false,
+    mode: "simple",
+    days: {
+      mon: { open: "09:00", close: "17:00", closed: false },
+      tue: { open: "09:00", close: "17:00", closed: false },
+      wed: { open: "09:00", close: "17:00", closed: false },
+      thu: { open: "09:00", close: "17:00", closed: false },
+      fri: { open: "09:00", close: "17:00", closed: false },
+      sat: { open: "09:00", close: "17:00", closed: true },
+      sun: { open: "09:00", close: "17:00", closed: true },
+    },
+  },
   files: [],
   crawlEnabled: false,
   crawlUrl: "",
