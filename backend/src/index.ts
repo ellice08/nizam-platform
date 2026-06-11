@@ -2,9 +2,8 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
-import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { env } from "./config/env.js";
 import logger from "./utils/logger.js";
 import { AppError } from "./utils/errors.js";
@@ -25,8 +24,7 @@ const allowedOrigins = [
 ];
 
 app.use((req: Request, res: Response, next: NextFunction) => {
-  const isWidgetPath =
-    req.path.startsWith("/api/widget") || req.path === "/widget.js";
+  const isWidgetPath = req.path.startsWith("/api/widget");
 
   if (isWidgetPath) {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -82,20 +80,6 @@ app.get("/health/db", async (_req: Request, res: Response) => {
     res.json({ connected: true });
   } else {
     res.status(503).json({ connected: false, error: result.error });
-  }
-});
-
-app.get("/widget.js", (_req: Request, res: Response) => {
-  try {
-    const prodWidget = join(__dirname, "public/widget.js");
-    const widgetPath = existsSync(prodWidget) ? prodWidget : join(__dirname, "../public/widget.js");
-    const widgetScript = readFileSync(widgetPath, "utf-8");
-    res.setHeader("Content-Type", "application/javascript");
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.send(widgetScript);
-  } catch {
-    res.status(404).send("// Widget not found");
   }
 });
 
