@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { FileText, Upload, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { FileText, Globe, Upload, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store'
 import { useBranches, useKnowledgeSources, useDeleteKnowledgeSource } from '@/hooks'
@@ -138,6 +138,9 @@ const Knowledge = () => {
 
   const getFilenameFromUrl = (url: string) => url.replace('upload://', '')
 
+  const documentSources = (sources ?? []).filter(s => s.source_type === 'upload')
+  const websiteSources = (sources ?? []).filter(s => s.source_type === 'website_crawl')
+
   return (
     <>
       <PageHeader
@@ -215,62 +218,14 @@ const Knowledge = () => {
         </div>
       )}
 
-      {/* Website crawl */}
-      <div className="rounded-lg border border-border bg-surface p-6 mb-8">
-        <p className="text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] font-medium mb-1">
-          Website crawl
-        </p>
-        <p className="text-xs text-[hsl(var(--text-tertiary))] mb-4">
-          Index your website so the AI can answer questions about your content. Up to 10 pages crawled.
-          Works best with standard websites (WordPress, Webflow, static sites). For React or app-based sites, upload content as a document instead.
-        </p>
-        <div className="flex gap-2">
-          <input
-            type="url"
-            value={crawlUrl}
-            onChange={e => setCrawlUrl(e.target.value)}
-            placeholder="https://yourwebsite.com"
-            disabled={crawling}
-            className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] outline-none focus:border-primary transition-colors duration-150 disabled:opacity-50"
-          />
-          <button
-            onClick={() => void handleCrawl()}
-            disabled={crawling || !crawlUrl.trim() || !resolvedBranchId}
-            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
-          >
-            {crawling ? 'Crawling...' : 'Start crawl'}
-          </button>
-        </div>
-
-        {crawling && (
-          <p className="text-xs text-[hsl(var(--text-tertiary))] mt-3">
-            Crawling pages — this may take up to 30 seconds...
-          </p>
-        )}
-
-        {crawlResult && (
-          <div className="mt-3 p-3 rounded-lg bg-elevated border border-border text-xs space-y-1">
-            <p className="text-foreground">
-              {crawlResult.pagesIndexed} page(s) indexed,{' '}
-              {crawlResult.chunksCreated} chunks created
-            </p>
-            {crawlResult.errors.length > 0 && (
-              <p className="text-[hsl(var(--text-tertiary))]">
-                {crawlResult.errors.length} page(s) could not be crawled
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Indexed documents */}
-      <div className="rounded-lg border border-border bg-surface">
+      {/* Documents section */}
+      <div className="rounded-lg border border-border bg-surface mb-8">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <p className="text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] font-medium">
-            Indexed documents
+            Documents
           </p>
           <p className="text-xs text-[hsl(var(--text-tertiary))]">
-            {sources?.length ?? 0} source(s)
+            {documentSources.length} source(s)
           </p>
         </div>
 
@@ -278,7 +233,7 @@ const Knowledge = () => {
           <div className="p-4 space-y-3">
             {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
-        ) : !sources || sources.length === 0 ? (
+        ) : documentSources.length === 0 ? (
           <div className="p-10 text-center">
             <FileText
               size={32}
@@ -294,7 +249,7 @@ const Knowledge = () => {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {sources.map(source => (
+            {documentSources.map(source => (
               <div
                 key={source.source_url}
                 className="flex items-center gap-4 px-4 py-3 hover:bg-elevated transition-colors duration-150"
@@ -307,6 +262,116 @@ const Knowledge = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-foreground truncate">
                     {getFilenameFromUrl(source.source_url)}
+                  </p>
+                  <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                    {source.chunk_count} chunk(s) indexed
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDelete(source.source_url)}
+                  disabled={deleting}
+                  className="p-1.5 h-auto text-[hsl(var(--text-tertiary))] hover:text-destructive"
+                  title="Remove from knowledge base"
+                >
+                  <Trash2 size={14} strokeWidth={1.5} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Website section */}
+      <div className="rounded-lg border border-border bg-surface mb-8">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <p className="text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] font-medium">
+            Website
+          </p>
+          <p className="text-xs text-[hsl(var(--text-tertiary))]">
+            {websiteSources.length} page(s)
+          </p>
+        </div>
+
+        <div className="p-4 border-b border-border">
+          <p className="text-xs text-[hsl(var(--text-tertiary))] mb-4">
+            Your AI automatically learns pages from your website as visitors browse them
+            through the chat widget. Pages captured from your site appear below.
+            You can also add a specific page manually.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={crawlUrl}
+              onChange={e => setCrawlUrl(e.target.value)}
+              placeholder="https://yoursite.com/specific-page"
+              disabled={crawling}
+              className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] outline-none focus:border-primary transition-colors duration-150 disabled:opacity-50"
+            />
+            <button
+              onClick={() => void handleCrawl()}
+              disabled={crawling || !crawlUrl.trim() || !resolvedBranchId}
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
+            >
+              {crawling ? 'Adding...' : 'Add page'}
+            </button>
+          </div>
+
+          {crawling && (
+            <p className="text-xs text-[hsl(var(--text-tertiary))] mt-3">
+              Indexing page — this may take a few seconds...
+            </p>
+          )}
+
+          {crawlResult && (
+            <div className="mt-3 p-3 rounded-lg bg-elevated border border-border text-xs space-y-1">
+              <p className="text-foreground">
+                {crawlResult.pagesIndexed} page(s) indexed,{' '}
+                {crawlResult.chunksCreated} chunks created
+              </p>
+              {crawlResult.errors.length > 0 && (
+                <p className="text-[hsl(var(--text-tertiary))]">
+                  {crawlResult.errors.length} page(s) could not be indexed
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {sourcesLoading ? (
+          <div className="p-4 space-y-3">
+            {[1, 2].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : websiteSources.length === 0 ? (
+          <div className="p-8 text-center">
+            <Globe
+              size={28}
+              strokeWidth={1.5}
+              className="mx-auto mb-3 text-[hsl(var(--text-tertiary))]"
+            />
+            <p className="text-sm text-[hsl(var(--text-secondary))]">
+              No website pages captured yet
+            </p>
+            <p className="text-xs text-[hsl(var(--text-tertiary))] mt-1">
+              They'll appear here automatically once your chat widget is live on your site.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {websiteSources.map(source => (
+              <div
+                key={source.source_url}
+                className="flex items-center gap-4 px-4 py-3 hover:bg-elevated transition-colors duration-150"
+              >
+                <Globe
+                  size={16}
+                  strokeWidth={1.5}
+                  className="text-[hsl(var(--text-tertiary))] shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground truncate">
+                    {source.source_url.replace(/^https?:\/\//, '')}
                   </p>
                   <p className="text-xs text-[hsl(var(--text-tertiary))]">
                     {source.chunk_count} chunk(s) indexed
