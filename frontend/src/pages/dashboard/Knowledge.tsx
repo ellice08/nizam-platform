@@ -296,9 +296,11 @@ const Knowledge = () => {
 
         <div className="p-4 border-b border-border">
           <p className="text-xs text-[hsl(var(--text-tertiary))] mb-4">
-            Your AI automatically learns pages from your website as visitors browse them
-            through the chat widget. Pages captured from your site appear below.
-            You can also add a specific page manually.
+            Your AI learns your website automatically through the chat widget — as visitors
+            browse, pages are captured and indexed, including modern React and app-based sites.
+            To add a single standard (server-rendered) page manually, paste its URL below.
+            Note: for React/app-based sites, rely on the widget — manual add works best for
+            simple static pages.
           </p>
           <div className="flex gap-2">
             <input
