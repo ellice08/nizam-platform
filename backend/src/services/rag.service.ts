@@ -112,7 +112,104 @@ class RagService {
 
     logger.info(`Ingested ${inserted}/${chunks.length} chunks for branch ${branchId}`);
 
+    // Enrichment pass — generate Q&A + summary chunks for phrasing-robust retrieval.
+    // Additive: failures here never affect the raw chunks already inserted.
+    try {
+      const enrichmentPassages = await this.enrichContent(text);
+      for (let j = 0; j < enrichmentPassages.length; j++) {
+        const passage = enrichmentPassages[j];
+        try {
+          const embedding = await this.embedText(passage);
+          const { error } = await supabase
+            .from('document_chunks')
+            .insert({
+              branch_id: branchId,
+              content: passage,
+              metadata: {
+                ...metadata,
+                enriched: true,
+                enrichment_index: j,
+                source_url: sourceUrl ?? null,
+              },
+              source_type: sourceType,
+              source_url: sourceUrl ?? null,
+              embedding,
+            });
+          if (error) {
+            logger.error(`Failed to insert enrichment chunk ${j}: ${error.message}`);
+          } else {
+            inserted++;
+          }
+        } catch (err) {
+          logger.error(`Failed to embed enrichment chunk ${j}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (enrichmentPassages.length > 0) {
+        logger.info(`Enrichment added ${enrichmentPassages.length} passages for branch ${branchId}`);
+      }
+    } catch (err) {
+      logger.error(`Enrichment pass error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     return { chunksCreated: inserted };
+  }
+
+  private async enrichContent(text: string): Promise<string[]> {
+    try {
+      const trimmed = text.replace(/\s+/g, ' ').trim();
+      if (trimmed.length < 300) return [];
+
+      const input = trimmed.slice(0, 12000);
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        max_tokens: 900,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You turn business content into retrieval-friendly Q&A. ' +
+              'From the provided text, produce a JSON object with two fields: ' +
+              '"summary" (2-3 sentence plain-language summary of the key facts) and ' +
+              '"qa" (an array of up to 10 objects, each {"q": question, "a": answer}). ' +
+              'Generate the natural questions a real customer would ask, and answer ' +
+              'ONLY using facts present in the text — never invent prices, sizes, names, ' +
+              'or details. Cover concrete facts: names, prices, sizes, locations, ' +
+              'features, availability, contact info. Keep answers concise and factual. ' +
+              'Respond with ONLY the JSON object, no markdown, no preamble.',
+          },
+          { role: 'user', content: input },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      const raw = completion.choices[0]?.message?.content ?? '';
+      if (!raw) return [];
+
+      let parsed: { summary?: string; qa?: Array<{ q?: string; a?: string }> };
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return [];
+      }
+
+      const passages: string[] = [];
+      if (parsed.summary && parsed.summary.trim().length > 20) {
+        passages.push(`Summary: ${parsed.summary.trim()}`);
+      }
+      if (Array.isArray(parsed.qa)) {
+        for (const pair of parsed.qa.slice(0, 10)) {
+          if (pair?.q && pair?.a) {
+            passages.push(`Q: ${String(pair.q).trim()}\nA: ${String(pair.a).trim()}`);
+          }
+        }
+      }
+      return passages;
+    } catch (err) {
+      logger.error(`Enrichment failed: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    }
   }
 
   async capturePage(params: {
