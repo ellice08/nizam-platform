@@ -11,7 +11,21 @@
     return;
   }
 
-  const API_BASE = 'https://nizam-platform-production.up.railway.app';
+  // Resolve API base from the embed script tag's data-api attribute.
+  // Falls back to deriving from the script's own origin only if absent.
+  var API_BASE = (function () {
+    try {
+      var tag = document.currentScript ||
+        document.querySelector('script[data-org-id]');
+      var fromAttr = tag && tag.getAttribute('data-api');
+      if (fromAttr) return fromAttr.replace(/\/$/, '');
+    } catch (e) {}
+    return ''; // no API base available — calls will no-op safely
+  })();
+
+  if (!API_BASE) {
+    console.warn('[Nizam Widget] Missing data-api attribute — API calls disabled');
+  }
 
   // Session persistence
   const SESSION_KEY = `nizam_session_${ORG_ID}`;
@@ -553,6 +567,249 @@
     }
   }
 
+  // ─── Page capture (knowledge base sync) ──────────────────────
+  function extractPageText() {
+    // Clone body so we don't mutate the live page
+    const clone = document.body.cloneNode(true);
+    // Remove non-content / noise elements from the clone
+    clone.querySelectorAll(
+      'script, style, noscript, svg, iframe, nav, footer, header, ' +
+      '[role="navigation"], [role="banner"], [role="complementary"], ' +
+      '#nizam-widget-btn, #nizam-widget-panel'
+    ).forEach(function (el) { el.remove(); });
+
+    const raw = (clone.innerText || clone.textContent || '');
+    return raw.replace(/\s+/g, ' ').trim();
+  }
+
+  function capturePage() {
+    try {
+      // Only capture top-level navigations of the host site itself,
+      // never inside iframes
+      if (window.self !== window.top) return;
+
+      const text = extractPageText();
+      if (!text || text.length < 200) return; // too thin, skip
+
+      // Throttle: don't re-submit the same URL more than once per 6 hours
+      // from the same browser (server also dedupes by content hash)
+      const url = window.location.origin + window.location.pathname;
+      const throttleKey = 'nizam_captured_' + ORG_ID + '_' + url;
+      try {
+        const last = localStorage.getItem(throttleKey);
+        if (last && (Date.now() - parseInt(last, 10)) < 6 * 60 * 60 * 1000) {
+          return; // captured recently from this browser
+        }
+      } catch (e) { /* localStorage may be unavailable; proceed */ }
+
+      const title = document.title || '';
+
+      // Fire-and-forget; never block or surface errors to the visitor
+      fetch(API_BASE + '/api/widget/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: ORG_ID,
+          url: url,
+          title: title,
+          text: text.slice(0, 50000), // cap payload size
+        }),
+        keepalive: true,
+      }).then(function () {
+        try { localStorage.setItem(throttleKey, String(Date.now())); } catch (e) {}
+      }).catch(function () { /* silent */ });
+    } catch (e) {
+      /* never let capture break the host page */
+    }
+  }
+
+  // ─── Site sweep (full-site knowledge seeding) ────────────────
+  var SWEEP_MAX_PAGES = 30;
+  var SWEEP_IFRAME_TIMEOUT = 8000;     // max ms to wait for one page to render
+  var SWEEP_DELAY_BETWEEN = 600;       // ms pause between pages (be gentle)
+  var SWEEP_TODAY_KEY = 'nizam_swept_' + ORG_ID;
+
+  function sweepAlreadyRanToday() {
+    try {
+      var last = localStorage.getItem(SWEEP_TODAY_KEY);
+      if (!last) return false;
+      return (Date.now() - parseInt(last, 10)) < 24 * 60 * 60 * 1000;
+    } catch (e) { return false; }
+  }
+
+  function markSweepRan() {
+    try { localStorage.setItem(SWEEP_TODAY_KEY, String(Date.now())); } catch (e) {}
+  }
+
+  // Normalise a URL to origin+pathname, same-origin only; returns null if off-site/invalid
+  function normaliseSameOrigin(href) {
+    try {
+      var u = new URL(href, window.location.href);
+      if (u.origin !== window.location.origin) return null;
+      if (!/^https?:$/.test(u.protocol)) return null;
+      u.hash = '';
+      u.search = '';
+      var clean = u.origin + u.pathname;
+      return clean.replace(/\/$/, '') || clean;
+    } catch (e) { return null; }
+  }
+
+  // Try to read URLs from the site's sitemap(s). Returns array of same-origin URLs.
+  async function discoverFromSitemap() {
+    var urls = [];
+    var candidates = ['/sitemap.xml', '/sitemap_index.xml'];
+    for (var c = 0; c < candidates.length; c++) {
+      try {
+        var res = await fetch(window.location.origin + candidates[c], { credentials: 'omit' });
+        if (!res.ok) continue;
+        var xml = await res.text();
+        var doc = new DOMParser().parseFromString(xml, 'application/xml');
+
+        // sitemap index -> nested sitemaps
+        var nested = doc.querySelectorAll('sitemap > loc');
+        if (nested.length > 0) {
+          for (var n = 0; n < nested.length && urls.length < SWEEP_MAX_PAGES * 3; n++) {
+            try {
+              var sm = await fetch(nested[n].textContent.trim(), { credentials: 'omit' });
+              if (!sm.ok) continue;
+              var smXml = await sm.text();
+              var smDoc = new DOMParser().parseFromString(smXml, 'application/xml');
+              var locs2 = smDoc.querySelectorAll('url > loc');
+              for (var k = 0; k < locs2.length; k++) {
+                var nu = normaliseSameOrigin(locs2[k].textContent.trim());
+                if (nu) urls.push(nu);
+              }
+            } catch (e) { /* skip this nested sitemap */ }
+          }
+        } else {
+          var locs = doc.querySelectorAll('url > loc');
+          for (var i = 0; i < locs.length; i++) {
+            var u = normaliseSameOrigin(locs[i].textContent.trim());
+            if (u) urls.push(u);
+          }
+        }
+        if (urls.length > 0) break; // got something, stop trying candidates
+      } catch (e) { /* try next candidate */ }
+    }
+    return urls;
+  }
+
+  // Fallback: collect same-origin links from the current rendered page
+  function discoverFromCurrentDom() {
+    var urls = [];
+    try {
+      var anchors = document.querySelectorAll('a[href]');
+      for (var i = 0; i < anchors.length; i++) {
+        var u = normaliseSameOrigin(anchors[i].getAttribute('href'));
+        if (u) urls.push(u);
+      }
+    } catch (e) {}
+    return urls;
+  }
+
+  // Load one URL in a hidden iframe, let it render, extract text from its document.
+  function renderAndExtract(url) {
+    return new Promise(function (resolve) {
+      var iframe = document.createElement('iframe');
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.style.cssText =
+        'position:absolute;width:1024px;height:768px;left:-99999px;top:-99999px;' +
+        'border:0;visibility:hidden;pointer-events:none;';
+      var done = false;
+      var timer = null;
+
+      function finish(text) {
+        if (done) return;
+        done = true;
+        if (timer) clearTimeout(timer);
+        try { iframe.remove(); } catch (e) {}
+        resolve(text || '');
+      }
+
+      iframe.onload = function () {
+        // Give SPA JS a moment to render after load fires
+        setTimeout(function () {
+          try {
+            var idoc = iframe.contentDocument;
+            if (!idoc || !idoc.body) { finish(''); return; }
+            var clone = idoc.body.cloneNode(true);
+            clone.querySelectorAll(
+              'script, style, noscript, svg, iframe, nav, footer, header, ' +
+              '[role="navigation"], [role="banner"], [role="complementary"]'
+            ).forEach(function (el) { el.remove(); });
+            var raw = (clone.innerText || clone.textContent || '');
+            finish(raw.replace(/\s+/g, ' ').trim());
+          } catch (e) {
+            // Cross-origin or blocked — give up on this page
+            finish('');
+          }
+        }, 1200);
+      };
+
+      iframe.onerror = function () { finish(''); };
+      timer = setTimeout(function () { finish(''); }, SWEEP_IFRAME_TIMEOUT);
+
+      try {
+        document.body.appendChild(iframe);
+        iframe.src = url;
+      } catch (e) {
+        finish('');
+      }
+    });
+  }
+
+  async function submitPage(url, text) {
+    if (!text || text.length < 200) return;
+    try {
+      await fetch(API_BASE + '/api/widget/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: ORG_ID,
+          url: url,
+          title: '',
+          text: text.slice(0, 50000),
+        }),
+      });
+    } catch (e) { /* silent */ }
+  }
+
+  async function runSiteSweep() {
+    try {
+      if (window.self !== window.top) return;     // never inside an iframe
+      if (sweepAlreadyRanToday()) return;
+      markSweepRan(); // mark immediately so concurrent tabs don't double-run
+
+      // Discover URLs: sitemap first, then DOM fallback
+      var discovered = await discoverFromSitemap();
+      if (!discovered || discovered.length === 0) {
+        discovered = discoverFromCurrentDom();
+      }
+      if (!discovered || discovered.length === 0) return;
+
+      // Dedupe + cap, and skip the current page (already captured separately)
+      var currentUrl = window.location.origin + window.location.pathname;
+      currentUrl = currentUrl.replace(/\/$/, '') || currentUrl;
+      var seen = {};
+      seen[currentUrl] = true;
+      var queue = [];
+      for (var i = 0; i < discovered.length; i++) {
+        var u = discovered[i];
+        if (!seen[u]) { seen[u] = true; queue.push(u); }
+        if (queue.length >= SWEEP_MAX_PAGES) break;
+      }
+
+      // Process sequentially with a gentle delay
+      for (var j = 0; j < queue.length; j++) {
+        var text = await renderAndExtract(queue[j]);
+        await submitPage(queue[j], text);
+        await new Promise(function (r) { setTimeout(r, SWEEP_DELAY_BETWEEN); });
+      }
+    } catch (e) {
+      /* never let the sweep break the host page */
+    }
+  }
+
   // ─── Init ────────────────────────────────────────────────────
   async function init() {
     try {
@@ -568,6 +825,20 @@
     }
 
     buildWidget();
+
+    // Defer page capture so it never competes with page load or widget render
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(function () { capturePage(); }, { timeout: 4000 });
+    } else {
+      setTimeout(capturePage, 2500);
+    }
+
+    // After current-page capture, run the full-site sweep once per day, well deferred
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(function () { runSiteSweep(); }, { timeout: 8000 });
+    } else {
+      setTimeout(runSiteSweep, 6000);
+    }
   }
 
   if (document.readyState === 'loading') {

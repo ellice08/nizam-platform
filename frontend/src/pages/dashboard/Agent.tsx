@@ -128,7 +128,9 @@ const Agent = () => {
   }
 
   // Embed code
-  const embedCode = `<script src="${import.meta.env.VITE_WIDGET_URL ?? 'https://nizam-platform.vercel.app'}/widget.js"\n  data-org-id="${organisationId ?? ''}"></script>`
+  const widgetHost = import.meta.env.VITE_WIDGET_URL ?? window.location.origin
+  const apiBase = import.meta.env.VITE_API_URL ?? 'https://nizam-platform-production.up.railway.app'
+  const embedCode = `<script src="${widgetHost}/widget.js"\n  data-org-id="${organisationId ?? ''}"\n  data-api="${apiBase}"></script>`
 
   const handleCopy = async () => {
     try {
