@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from '@/store'
 import { useAgentsByOrg, useUpdateAgent, useBranches } from '@/hooks'
 import { organisationApi } from '@/api'
+import { BusinessHoursEditor, type BusinessHours } from '@/components/BusinessHoursEditor'
 
 const tones = ["professional", "friendly", "formal"] as const;
 type Tone = typeof tones[number];
@@ -26,6 +27,20 @@ const Agent = () => {
 
   const agent = agents?.[0]
 
+  const defaultBusinessHours: BusinessHours = {
+    enabled: false,
+    mode: "simple",
+    days: {
+      mon: { open: "09:00", close: "17:00", closed: false },
+      tue: { open: "09:00", close: "17:00", closed: false },
+      wed: { open: "09:00", close: "17:00", closed: false },
+      thu: { open: "09:00", close: "17:00", closed: false },
+      fri: { open: "09:00", close: "17:00", closed: false },
+      sat: { open: "09:00", close: "17:00", closed: true },
+      sun: { open: "09:00", close: "17:00", closed: true },
+    },
+  }
+
   // Agent config form state
   const [name, setName] = useState('')
   const [tone, setTone] = useState<Tone>('professional')
@@ -33,6 +48,8 @@ const Agent = () => {
   const [afterHoursMessage, setAfterHoursMessage] = useState('')
   const [confirmationHours, setConfirmationHours] = useState(2)
   const [escalationContacts, setEscalationContacts] = useState<Array<{ name: string; phone: string; email: string }>>([])
+  const [afterHoursEnabled, setAfterHoursEnabled] = useState(false)
+  const [businessHours, setBusinessHours] = useState<BusinessHours>(defaultBusinessHours)
 
   useEffect(() => {
     if (agent) {
@@ -46,7 +63,11 @@ const Agent = () => {
           name: string; phone: string; email: string
         }>) ?? []
       )
+      const storedBH = agent.response_time_config?.business_hours as BusinessHours | undefined
+      setBusinessHours(storedBH ?? defaultBusinessHours)
+      setAfterHoursEnabled(storedBH?.enabled ?? false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent])
 
   const handleSave = () => {
@@ -62,6 +83,7 @@ const Agent = () => {
           confirmation_hours: confirmationHours,
           callback_window_hours: agent.response_time_config?.callback_window_hours ?? 1,
           after_hours_message: afterHoursMessage,
+          business_hours: { ...businessHours, enabled: afterHoursEnabled },
         },
       },
     }, {
@@ -226,6 +248,12 @@ const Agent = () => {
                   onChange={(e) => setAfterHoursMessage(e.target.value)}
                   placeholder="Our team is currently offline…"
                 />
+                <div className="mt-4">
+                  <BusinessHoursEditor
+                    value={{ ...businessHours, enabled: afterHoursEnabled }}
+                    onChange={(bh) => { setBusinessHours(bh); setAfterHoursEnabled(bh.enabled); }}
+                  />
+                </div>
               </div>
 
               <div>
