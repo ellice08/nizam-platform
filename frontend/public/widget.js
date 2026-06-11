@@ -27,9 +27,38 @@
     console.warn('[Nizam Widget] Missing data-api attribute — API calls disabled');
   }
 
-  // Session persistence
+  // Session persistence — 30-minute idle expiry
   const SESSION_KEY = `nizam_session_${ORG_ID}`;
-  let sessionId = sessionStorage.getItem(SESSION_KEY) || null;
+  const SESSION_TS_KEY = `nizam_session_ts_${ORG_ID}`;
+  const SESSION_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+
+  function loadSession() {
+    try {
+      const id = localStorage.getItem(SESSION_KEY);
+      const ts = parseInt(localStorage.getItem(SESSION_TS_KEY) || '0', 10);
+      if (id && ts && (Date.now() - ts) < SESSION_IDLE_MS) {
+        return id;
+      }
+    } catch (e) {}
+    return null; // expired or none — backend will mint a new sessionId
+  }
+
+  function touchSession(id) {
+    try {
+      if (id) localStorage.setItem(SESSION_KEY, id);
+      localStorage.setItem(SESSION_TS_KEY, String(Date.now()));
+    } catch (e) {}
+  }
+
+  function resetSession() {
+    try {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_TS_KEY);
+    } catch (e) {}
+    sessionId = null;
+  }
+
+  let sessionId = loadSession();
 
   // State
   let isOpen = false;
@@ -167,6 +196,30 @@
       color: #FAFAFA;
     }
     #nizam-widget-close svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      fill: none;
+    }
+    #nizam-widget-newchat {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: #888880;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: background 0.15s ease;
+      margin-right: 4px;
+    }
+    #nizam-widget-newchat:hover {
+      background: #2A2A26;
+      color: #FAFAFA;
+    }
+    #nizam-widget-newchat svg {
       width: 16px;
       height: 16px;
       stroke: currentColor;
@@ -370,9 +423,14 @@
             <div id="nizam-widget-status">Online</div>
           </div>
         </div>
-        <button id="nizam-widget-close" aria-label="Close chat">
-          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <button id="nizam-widget-newchat" aria-label="Start new chat" title="Start new chat">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button id="nizam-widget-close" aria-label="Close chat">
+            <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
       <div id="nizam-widget-messages"></div>
       <div id="nizam-widget-input-area">
@@ -423,6 +481,9 @@
     btn?.addEventListener('click', togglePanel);
     closeBtn?.addEventListener('click', togglePanel);
 
+    const newChatBtn = document.getElementById('nizam-widget-newchat');
+    newChatBtn?.addEventListener('click', startNewChat);
+
     input?.addEventListener('input', function () {
       const el = this;
       el.style.height = 'auto';
@@ -472,6 +533,19 @@
         </svg>
       `;
     }
+  }
+
+  function startNewChat() {
+    resetSession();
+    const messages = document.getElementById('nizam-widget-messages');
+    if (messages) messages.innerHTML = '';
+    // Re-show the welcome message
+    addMessage(
+      'assistant',
+      `Hi there! I'm ${config.agentName} from ${config.orgName}. How can I help you today?`
+    );
+    const input = document.getElementById('nizam-widget-input');
+    if (input) input.focus();
   }
 
   // ─── Messaging ───────────────────────────────────────────────
@@ -546,11 +620,10 @@
         throw new Error(data.error?.message ?? 'Something went wrong');
       }
 
-      // Persist session ID
       if (data.data?.sessionId) {
         sessionId = data.data.sessionId;
-        sessionStorage.setItem(SESSION_KEY, sessionId);
       }
+      touchSession(sessionId);
 
       hideTyping();
       addMessage('assistant', data.data.reply, data.data.newEscalation === true);
