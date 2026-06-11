@@ -232,6 +232,14 @@ class ClaudeService {
     const model = (agentRecord.llm_model as string) ??
       (provider === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514');
 
+    // 1b. Fetch branch timezone for after-hours evaluation
+    const { data: branchRow } = await supabase
+      .from('branches')
+      .select('timezone')
+      .eq('id', branchId)
+      .maybeSingle();
+    const branchTimezone = (branchRow as { timezone?: string } | null)?.timezone ?? 'Africa/Lagos';
+
     // 2. Get RAG context from pgvector
     const context = await ragService.getContext({
       query: message,
@@ -274,9 +282,27 @@ class ClaudeService {
       ? '\n\nIMPORTANT: You have already collected this customer\'s contact details earlier in this conversation. If you cannot answer something, do NOT ask for their details again — just acknowledge naturally that you\'ll pass it to the team — varying your wording each time, never repeating the same phrase. Keep it warm and brief.'
       : ''
 
+    const responseTimeConfig = agentRecord.response_time_config as {
+      business_hours?: unknown;
+      after_hours_message?: string;
+    } | null | undefined;
+
+    const afterHours = this.isAfterHours(
+      responseTimeConfig?.business_hours,
+      branchTimezone
+    );
+
+    const afterHoursMessage =
+      responseTimeConfig?.after_hours_message ||
+      'Our team is currently offline. We have captured your enquiry and will follow up the next working day.';
+
+    const afterHoursContext = afterHours
+      ? `\n\nIMPORTANT — OUTSIDE BUSINESS HOURS: The business is currently closed. When you cannot fully answer from the knowledge base, or when handing off to the team, you MUST convey this message to the customer (rephrase warmly but keep its meaning): "${afterHoursMessage}". Always still collect their name and a phone number or email if you do not already have them, so the team can follow up when they reopen.`
+      : '';
+
     const systemPrompt = context
-      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}`
-      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}`;
+      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}`
+      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}${afterHoursContext}`;
 
     // 5. Add user message to history
     const updatedMessages: Message[] = [
@@ -375,7 +401,9 @@ class ClaudeService {
       reply.toLowerCase().includes(phrase.toLowerCase())
     )
 
-    const requiresHuman = alreadyEscalated || newEscalation
+    // After-hours conversations always require human follow-up — the team must
+    // call back when the business reopens, even if no escalation phrase fired.
+    const requiresHuman = alreadyEscalated || newEscalation || afterHours
 
     // 8. Save updated conversation
     const finalMessages: Message[] = [
@@ -402,7 +430,7 @@ class ClaudeService {
       })
       .eq('id', conversationId);
 
-    if (newEscalation && !alreadyEscalated) {
+    if ((newEscalation || afterHours) && !alreadyEscalated) {
       void this.sendEscalationNotification({
         branchId,
         agentRecord,
@@ -422,6 +450,57 @@ class ClaudeService {
     );
 
     return { reply, sessionId, conversationId, requiresHuman, newEscalation };
+  }
+
+  private isAfterHours(
+    businessHours: unknown,
+    timezone: string
+  ): boolean {
+    try {
+      const bh = businessHours as {
+        enabled?: boolean;
+        days?: Record<string, { open: string; close: string; closed: boolean }>;
+      } | null | undefined;
+
+      if (!bh || !bh.enabled || !bh.days) return false;
+
+      const tz = timezone || 'Africa/Lagos';
+
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date());
+
+      const weekdayRaw = parts.find(p => p.type === 'weekday')?.value ?? '';
+      let hourStr = parts.find(p => p.type === 'hour')?.value ?? '0';
+      const minStr = parts.find(p => p.type === 'minute')?.value ?? '0';
+      // Intl can return '24' at midnight in some environments — normalise
+      if (hourStr === '24') hourStr = '0';
+
+      const dayMap: Record<string, string> = {
+        Mon: 'mon', Tue: 'tue', Wed: 'wed', Thu: 'thu',
+        Fri: 'fri', Sat: 'sat', Sun: 'sun',
+      };
+      const dayKey = dayMap[weekdayRaw];
+      if (!dayKey) return false;
+
+      const today = bh.days[dayKey];
+      if (!today) return false;
+      if (today.closed) return true;
+
+      const nowMinutes = parseInt(hourStr, 10) * 60 + parseInt(minStr, 10);
+      const [oH, oM] = (today.open || '00:00').split(':').map(Number);
+      const [cH, cM] = (today.close || '23:59').split(':').map(Number);
+      const openMinutes = oH * 60 + (oM || 0);
+      const closeMinutes = cH * 60 + (cM || 0);
+
+      return nowMinutes < openMinutes || nowMinutes >= closeMinutes;
+    } catch {
+      return false; // never let this break the chat
+    }
   }
 
   private async getOrCreateConversation(params: {
