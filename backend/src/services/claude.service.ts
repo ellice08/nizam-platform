@@ -36,9 +36,18 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   a phone number or email address?" Then wait.
 - If something is not in the knowledge base AND you
   have ALREADY collected contact details earlier in
-  this conversation, do NOT ask again. Instead say:
-  "I'll add that to the list for our team — they'll
-  cover everything when they reach out to you."
+  this conversation, do NOT ask again. Instead let
+  them know warmly that you'll pass this to the team
+  to cover when they reach out. IMPORTANT: phrase this
+  naturally and differently each time — never repeat
+  the same wording twice in a conversation. Vary your
+  acknowledgement so it feels like a real person, not
+  a script. Examples of the kind of variation (do not
+  use these verbatim, generate your own each time):
+  "I'll make sure the team covers that when they reach
+  out", "I'll flag that for the team to go over with
+  you", "Good question — I'll add it to what the team
+  follows up on."
   Then continue the conversation normally.
 - Once they provide contact details for the first time,
   confirm warmly: "Perfect, someone will be in touch
@@ -262,7 +271,7 @@ class ClaudeService {
     )
 
     const contactContext = hasContact
-      ? '\n\nIMPORTANT: You have already collected this customer\'s contact details earlier in this conversation. If you cannot answer something, do NOT ask for their details again — just say "I\'ll add that to the list for our team — they\'ll cover everything when they reach out."'
+      ? '\n\nIMPORTANT: You have already collected this customer\'s contact details earlier in this conversation. If you cannot answer something, do NOT ask for their details again — just acknowledge naturally that you\'ll pass it to the team — varying your wording each time, never repeating the same phrase. Keep it warm and brief.'
       : ''
 
     const systemPrompt = context
