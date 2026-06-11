@@ -227,8 +227,8 @@ class ClaudeService {
     const context = await ragService.getContext({
       query: message,
       branchId,
-      matchCount: 5,
-      matchThreshold: 0.75,
+      matchCount: 8,
+      matchThreshold: 0.7,
     });
 
     // 3. Build base prompt (systemPrompt finalised after step 4)

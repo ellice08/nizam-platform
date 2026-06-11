@@ -321,7 +321,7 @@ class RagService {
     matchCount?: number;
     matchThreshold?: number;
   }): Promise<string> {
-    const { query, branchId, matchCount = 5, matchThreshold = 0.78 } = params;
+    const { query, branchId, matchCount = 8, matchThreshold = 0.7 } = params;
 
     try {
       const embedding = await this.embedText(query);
