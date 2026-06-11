@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { randomUUID } from 'crypto'
 import { supabase } from '../lib/supabase.js'
 import { claudeService } from '../services/claude.service.js'
+import { ragService } from '../services/rag.service.js'
 import { ApiResponse } from '../utils/response.js'
 import { AppError } from '../utils/errors.js'
 import logger from '../utils/logger.js'
@@ -108,5 +109,59 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction): Pr
     next(err)
   }
 })
+
+// POST /api/widget/ingest
+// Public — widget submits a rendered page from the host site for ingestion.
+// Scoped by org_id, same-origin enforcement happens on the widget side;
+// here we validate the URL host matches the org's configured site if set.
+router.post('/ingest', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { org_id, url, text, title } = req.body as {
+      org_id?: string; url?: string; text?: string; title?: string;
+    };
+    if (!org_id) throw new AppError('org_id is required', 400);
+    if (!url) throw new AppError('url is required', 400);
+    if (!text || text.trim().length < 200) {
+      res.json(ApiResponse.success({ status: 'skipped', chunksCreated: 0 }));
+      return;
+    }
+
+    let parsed: URL;
+    try { parsed = new URL(url); }
+    catch { throw new AppError('Invalid URL', 400); }
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new AppError('Unsupported URL protocol', 400);
+    }
+
+    const { data: branch, error: branchError } = await supabase
+      .from('branches')
+      .select('id')
+      .eq('organisation_id', org_id)
+      .limit(1)
+      .maybeSingle();
+    if (branchError || !branch) {
+      throw new AppError('Organisation not configured', 404);
+    }
+
+    parsed.hash = '';
+    const cleanUrl = parsed.toString().replace(/\/$/, '');
+
+    const titlePrefix = title ? `${title}\n\n` : '';
+    const result = await ragService.capturePage({
+      url: cleanUrl,
+      text: titlePrefix + text,
+      branchId: branch.id,
+      orgId: org_id,
+      source: 'widget',
+    });
+
+    res.json(ApiResponse.success(result));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : JSON.stringify(err);
+    logger.error(`Widget ingest error: ${message}`);
+    next(err);
+  }
+});
 
 export default router

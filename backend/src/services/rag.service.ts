@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { createHash } from 'crypto';
 import { supabase } from '../lib/supabase.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
@@ -112,6 +113,68 @@ class RagService {
     logger.info(`Ingested ${inserted}/${chunks.length} chunks for branch ${branchId}`);
 
     return { chunksCreated: inserted };
+  }
+
+  async capturePage(params: {
+    url: string;
+    text: string;
+    branchId: string;
+    orgId: string;
+    source?: string;
+  }): Promise<{ status: 'skipped' | 'created' | 'updated'; chunksCreated: number }> {
+    const { url, text, branchId, orgId, source = 'widget' } = params;
+
+    const cleanText = (text ?? '').replace(/\s+/g, ' ').trim();
+    if (cleanText.length < 200) {
+      return { status: 'skipped', chunksCreated: 0 };
+    }
+
+    const contentHash = createHash('sha256').update(cleanText).digest('hex');
+
+    const { data: existing } = await supabase
+      .from('captured_pages')
+      .select('id, content_hash')
+      .eq('branch_id', branchId)
+      .eq('url', url)
+      .maybeSingle();
+
+    if (existing && existing.content_hash === contentHash) {
+      await supabase
+        .from('captured_pages')
+        .update({ captured_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      return { status: 'skipped', chunksCreated: 0 };
+    }
+
+    if (existing) {
+      await supabase
+        .from('document_chunks')
+        .delete()
+        .eq('branch_id', branchId)
+        .eq('source_url', url);
+    }
+
+    const { chunksCreated } = await this.ingestText({
+      text: cleanText,
+      branchId,
+      sourceType: 'website_crawl',
+      sourceUrl: url,
+      metadata: { captured_at: new Date().toISOString(), capture_source: source },
+    });
+
+    await supabase
+      .from('captured_pages')
+      .upsert({
+        branch_id: branchId,
+        org_id: orgId,
+        url,
+        content_hash: contentHash,
+        char_count: cleanText.length,
+        captured_at: new Date().toISOString(),
+        source,
+      }, { onConflict: 'branch_id,url' });
+
+    return { status: existing ? 'updated' : 'created', chunksCreated };
   }
 
   async crawlAndIngest(params: {
