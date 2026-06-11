@@ -553,6 +553,62 @@
     }
   }
 
+  // ─── Page capture (knowledge base sync) ──────────────────────
+  function extractPageText() {
+    // Clone body so we don't mutate the live page
+    const clone = document.body.cloneNode(true);
+    // Remove non-content / noise elements from the clone
+    clone.querySelectorAll(
+      'script, style, noscript, svg, iframe, nav, footer, header, ' +
+      '[role="navigation"], [role="banner"], [role="complementary"], ' +
+      '#nizam-widget-btn, #nizam-widget-panel'
+    ).forEach(function (el) { el.remove(); });
+
+    const raw = (clone.innerText || clone.textContent || '');
+    return raw.replace(/\s+/g, ' ').trim();
+  }
+
+  function capturePage() {
+    try {
+      // Only capture top-level navigations of the host site itself,
+      // never inside iframes
+      if (window.self !== window.top) return;
+
+      const text = extractPageText();
+      if (!text || text.length < 200) return; // too thin, skip
+
+      // Throttle: don't re-submit the same URL more than once per 6 hours
+      // from the same browser (server also dedupes by content hash)
+      const url = window.location.origin + window.location.pathname;
+      const throttleKey = 'nizam_captured_' + ORG_ID + '_' + url;
+      try {
+        const last = localStorage.getItem(throttleKey);
+        if (last && (Date.now() - parseInt(last, 10)) < 6 * 60 * 60 * 1000) {
+          return; // captured recently from this browser
+        }
+      } catch (e) { /* localStorage may be unavailable; proceed */ }
+
+      const title = document.title || '';
+
+      // Fire-and-forget; never block or surface errors to the visitor
+      fetch(API_BASE + '/api/widget/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: ORG_ID,
+          url: url,
+          title: title,
+          text: text.slice(0, 50000), // cap payload size
+        }),
+        keepalive: true,
+      }).then(function () {
+        try { localStorage.setItem(throttleKey, String(Date.now())); } catch (e) {}
+      }).catch(function () { /* silent */ });
+    } catch (e) {
+      /* never let capture break the host page */
+    }
+  }
+
   // ─── Init ────────────────────────────────────────────────────
   async function init() {
     try {
@@ -568,6 +624,13 @@
     }
 
     buildWidget();
+
+    // Defer page capture so it never competes with page load or widget render
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(function () { capturePage(); }, { timeout: 4000 });
+    } else {
+      setTimeout(capturePage, 2500);
+    }
   }
 
   if (document.readyState === 'loading') {
