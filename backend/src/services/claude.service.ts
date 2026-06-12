@@ -300,9 +300,15 @@ class ClaudeService {
       ? `\n\nIMPORTANT — OUTSIDE BUSINESS HOURS: The business is currently closed. When you cannot fully answer from the knowledge base, or when handing off to the team, you MUST convey this message to the customer (rephrase warmly but keep its meaning): "${afterHoursMessage}". Always still collect their name and a phone number or email if you do not already have them, so the team can follow up when they reopen.`
       : '';
 
+    const confirmationHours = (responseTimeConfig as { confirmation_hours?: number } | null | undefined)?.confirmation_hours ?? 2;
+
+    const confirmationContext = !afterHours
+      ? `\n\nWhen you confirm to a customer that the team will follow up (after taking their contact details), give them a concrete timeframe: the team will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}. Keep the phrase "be in touch" in your confirmation so it reads naturally, e.g. "Perfect — someone will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}."`
+      : '';
+
     const systemPrompt = context
-      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}`
-      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}${afterHoursContext}`;
+      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}${confirmationContext}`
+      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}${afterHoursContext}${confirmationContext}`;
 
     // 5. Add user message to history
     const updatedMessages: Message[] = [
