@@ -50,9 +50,12 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   follows up on."
   Then continue the conversation normally.
 - Once they provide contact details for the first time,
-  confirm warmly: "Perfect, someone will be in touch
-  with you shortly. Is there anything else I can help
-  you with in the meantime?"
+  confirm warmly that their enquiry has been captured and the
+  team will follow up. Follow the CONFIRMATION TIMING instruction
+  below for HOW SOON to say they'll follow up — do not invent your
+  own timeframe and never say "shortly" unless that instruction
+  tells you to. Then ask: "Is there anything else I can help you
+  with in the meantime?"
 - If they have more questions, continue helping them
   normally. The team will follow up on the escalated
   topic separately — you do not need to end the
