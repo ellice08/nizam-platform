@@ -47,6 +47,7 @@ const Agent = () => {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [afterHoursMessage, setAfterHoursMessage] = useState('')
   const [confirmationHours, setConfirmationHours] = useState(2)
+  const [confirmationEnabled, setConfirmationEnabled] = useState(false)
   const [escalationContacts, setEscalationContacts] = useState<Array<{ name: string; phone: string; email: string }>>([])
   const [afterHoursEnabled, setAfterHoursEnabled] = useState(false)
   const [businessHours, setBusinessHours] = useState<BusinessHours>(defaultBusinessHours)
@@ -58,6 +59,9 @@ const Agent = () => {
       setSystemPrompt(agent.system_prompt ?? '')
       setAfterHoursMessage(agent.response_time_config?.after_hours_message ?? '')
       setConfirmationHours(agent.response_time_config?.confirmation_hours ?? 2)
+      setConfirmationEnabled(
+        (agent.response_time_config as { confirmation_enabled?: boolean })?.confirmation_enabled ?? false
+      )
       setEscalationContacts(
         (agent.escalation_contacts as Array<{
           name: string; phone: string; email: string
@@ -83,6 +87,7 @@ const Agent = () => {
           confirmation_hours: confirmationHours,
           callback_window_hours: agent.response_time_config?.callback_window_hours ?? 1,
           after_hours_message: afterHoursMessage,
+          confirmation_enabled: confirmationEnabled,
           business_hours: { ...businessHours, enabled: afterHoursEnabled },
         },
       },
@@ -257,16 +262,36 @@ const Agent = () => {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
+                <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-3">
                   Confirmation response time
                 </label>
-                <div className="flex items-center gap-2">
+                <label className="flex items-center gap-3 cursor-pointer select-none mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmationEnabled(v => !v)}
+                    className={cn(
+                      "relative h-6 w-10 rounded-full border transition-colors duration-150",
+                      confirmationEnabled ? "bg-primary border-primary" : "bg-background border-border"
+                    )}
+                  >
+                    <span className={cn(
+                      "absolute top-0.5 h-4 w-4 rounded-full bg-foreground transition-all duration-150",
+                      confirmationEnabled ? "left-[1.125rem]" : "left-0.5"
+                    )} />
+                  </button>
+                  <span className="text-sm text-foreground">Promise customers a specific response time</span>
+                </label>
+                <p className="text-xs text-[hsl(var(--text-tertiary))] mb-3">
+                  When off, the assistant says it will follow up without committing to a timeframe.
+                </p>
+                <div className={cn("flex items-center gap-2", !confirmationEnabled && "opacity-40 pointer-events-none")}>
                   <input
                     type="number"
                     min={0}
                     className="nz-input nz-mono w-24"
                     value={confirmationHours}
                     onChange={(e) => setConfirmationHours(Number(e.target.value))}
+                    disabled={!confirmationEnabled}
                   />
                   <span className="text-sm text-[hsl(var(--text-secondary))]">hours</span>
                 </div>

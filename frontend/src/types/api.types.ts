@@ -100,6 +100,7 @@ export interface Agent {
     confirmation_hours: number
     callback_window_hours: number
     after_hours_message: string
+    confirmation_enabled?: boolean
     business_hours?: {
       enabled: boolean
       mode: "simple" | "custom"

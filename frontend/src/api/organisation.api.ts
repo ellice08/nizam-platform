@@ -32,6 +32,7 @@ export type CreateAgentPayload = {
     confirmation_hours: number
     callback_window_hours: number
     after_hours_message: string
+    confirmation_enabled?: boolean
     business_hours?: BusinessHoursConfig
   }
 }
@@ -48,6 +49,7 @@ export type UpdateAgentPayload = Partial<{
     confirmation_hours: number
     callback_window_hours: number
     after_hours_message: string
+    confirmation_enabled?: boolean
     business_hours?: BusinessHoursConfig
   }
 }>

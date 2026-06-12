@@ -67,10 +67,25 @@ export const Step4Agent = ({ state, setBranch }: Props) => {
 
         <section>
           <SectionTitle>Response times</SectionTitle>
-          <div className="grid md:grid-cols-2 gap-5 max-w-xl">
+          <div className="space-y-5 max-w-xl">
             <Field label="Confirmation response time">
-              <div className="flex items-center gap-2">
-                <input type="number" min={0} className="nz-input nz-mono w-24" value={b.confirmationHours} onChange={(e) => setBranch(active, { confirmationHours: +e.target.value })} />
+              <Toggle
+                checked={b.confirmationEnabled}
+                onChange={(v) => setBranch(active, { confirmationEnabled: v })}
+                label="Promise a specific response time"
+              />
+              <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                When off, the assistant says it will follow up without committing to a timeframe.
+              </p>
+              <div className={cn("flex items-center gap-2", !b.confirmationEnabled && "opacity-40 pointer-events-none")}>
+                <input
+                  type="number"
+                  min={0}
+                  disabled={!b.confirmationEnabled}
+                  className="nz-input nz-mono w-24"
+                  value={b.confirmationHours}
+                  onChange={(e) => setBranch(active, { confirmationHours: +e.target.value })}
+                />
                 <span className="text-sm text-[hsl(var(--text-secondary))]">hours</span>
               </div>
             </Field>

@@ -33,6 +33,7 @@ export type Branch = {
   tone: "professional" | "friendly" | "formal";
   language: string;
   confirmationHours: number;
+  confirmationEnabled: boolean;
   callbackHours: number;
   escalationContacts: { id: string; name: string; phone: string; email: string }[];
   afterHoursEnabled: boolean;
@@ -96,6 +97,7 @@ export const newBranch = (i: number, industry: Industry): Branch => ({
   tone: "professional",
   language: "English",
   confirmationHours: 2,
+  confirmationEnabled: false,
   callbackHours: 1,
   escalationContacts: [],
   afterHoursEnabled: false,
