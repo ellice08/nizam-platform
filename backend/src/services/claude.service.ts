@@ -302,18 +302,27 @@ class ClaudeService {
 
     const afterHoursMessage =
       responseTimeConfig?.after_hours_message ||
-      'Our team is currently offline. We have captured your enquiry and will follow up the next working day.';
+      'Our team is currently offline.';
+
+    const nextOpen = afterHours
+      ? this.nextOpenDescription(responseTimeConfig?.business_hours, branchTimezone)
+      : '';
 
     const afterHoursContext = afterHours
-      ? `\n\nIMPORTANT — OUTSIDE BUSINESS HOURS: The business is currently closed. When you cannot fully answer from the knowledge base, or when handing off to the team, you MUST convey this message to the customer (rephrase warmly but keep its meaning): "${afterHoursMessage}". Always still collect their name and a phone number or email if you do not already have them, so the team can follow up when they reopen.`
+      ? `\n\nNOTE — OUTSIDE BUSINESS HOURS: The business is currently closed (the team will next be available ${nextOpen}). Do NOT change how you ASK for contact details — ask cleanly and normally. The closed-hours timing belongs ONLY in your CONFIRMATION after the customer has given their details (see the confirmation rule). Never stack the offline notice onto the contact request.`
       : '';
 
     const confirmationHours = (responseTimeConfig as { confirmation_hours?: number } | null | undefined)?.confirmation_hours ?? 2;
     const confirmationEnabled = (responseTimeConfig as { confirmation_enabled?: boolean } | null | undefined)?.confirmation_enabled ?? false;
 
-    const confirmationContext = (!afterHours && confirmationEnabled)
-      ? `\n\nWhen you confirm to a customer that the team will follow up (after taking their contact details), give them a concrete timeframe: the team will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}. Keep the phrase "be in touch" in your confirmation so it reads naturally, e.g. "Perfect — someone will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}."`
-      : '';
+    let confirmationContext = '';
+    if (afterHours) {
+      confirmationContext = `\n\nCONFIRMATION TIMING: When the customer provides their contact details, confirm warmly and tell them the team is currently offline but will follow up ${nextOpen}. Phrase it naturally and warmly, e.g. "Thank you — our team is offline right now, but they'll follow up ${nextOpen}." Do NOT promise a specific number of hours while closed.`;
+    } else if (confirmationEnabled) {
+      confirmationContext = `\n\nCONFIRMATION TIMING: When the customer provides their contact details, confirm warmly that someone will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}. Keep the phrase "be in touch" in your confirmation.`;
+    } else {
+      confirmationContext = `\n\nCONFIRMATION TIMING: When the customer provides their contact details, confirm warmly that someone will be in touch, without committing to a specific timeframe. Keep the phrase "be in touch" in your confirmation.`;
+    }
 
     const systemPrompt = context
       ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}${confirmationContext}`
@@ -522,6 +531,60 @@ class ClaudeService {
       return nowMinutes < openMinutes || nowMinutes >= closeMinutes;
     } catch {
       return false; // never let this break the chat
+    }
+  }
+
+  private nextOpenDescription(businessHours: unknown, timezone: string): string {
+    try {
+      const bh = businessHours as {
+        enabled?: boolean;
+        days?: Record<string, { open: string; close: string; closed: boolean }>;
+      } | null | undefined;
+      if (!bh || !bh.days) return 'when we reopen';
+
+      const tz = timezone || 'Africa/Lagos';
+      const order = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const labels: Record<string, string> = {
+        sun: 'Sunday', mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday',
+        thu: 'Thursday', fri: 'Friday', sat: 'Saturday',
+      };
+
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+      }).formatToParts(new Date());
+      const wdShort = parts.find(p => p.type === 'weekday')?.value ?? '';
+      let hourStr = parts.find(p => p.type === 'hour')?.value ?? '0';
+      if (hourStr === '24') hourStr = '0';
+      const minStr = parts.find(p => p.type === 'minute')?.value ?? '0';
+      const shortToKey: Record<string, string> = {
+        Sun: 'sun', Mon: 'mon', Tue: 'tue', Wed: 'wed', Thu: 'thu', Fri: 'fri', Sat: 'sat',
+      };
+      const todayKey = shortToKey[wdShort];
+      if (!todayKey) return 'when we reopen';
+      const todayIdx = order.indexOf(todayKey);
+      const nowMinutes = parseInt(hourStr, 10) * 60 + parseInt(minStr, 10);
+
+      const opensLaterToday = (() => {
+        const d = bh.days[todayKey];
+        if (!d || d.closed) return false;
+        const [oH, oM] = (d.open || '00:00').split(':').map(Number);
+        return nowMinutes < (oH * 60 + (oM || 0));
+      })();
+
+      if (opensLaterToday) return 'later today';
+
+      for (let offset = 1; offset <= 7; offset++) {
+        const idx = (todayIdx + offset) % 7;
+        const key = order[idx];
+        const d = bh.days[key];
+        if (d && !d.closed) {
+          if (offset === 1) return 'tomorrow';
+          return `on ${labels[key]}`;
+        }
+      }
+      return 'when we reopen';
+    } catch {
+      return 'when we reopen';
     }
   }
 
