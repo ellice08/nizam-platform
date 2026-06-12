@@ -301,8 +301,9 @@ class ClaudeService {
       : '';
 
     const confirmationHours = (responseTimeConfig as { confirmation_hours?: number } | null | undefined)?.confirmation_hours ?? 2;
+    const confirmationEnabled = (responseTimeConfig as { confirmation_enabled?: boolean } | null | undefined)?.confirmation_enabled ?? false;
 
-    const confirmationContext = !afterHours
+    const confirmationContext = (!afterHours && confirmationEnabled)
       ? `\n\nWhen you confirm to a customer that the team will follow up (after taking their contact details), give them a concrete timeframe: the team will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}. Keep the phrase "be in touch" in your confirmation so it reads naturally, e.g. "Perfect — someone will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}."`
       : '';
 
