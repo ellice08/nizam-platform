@@ -387,25 +387,42 @@ class ClaudeService {
 
     if (assistantAskedForContact) {
       // Extract phone number pattern
-      const phoneMatch = message.match(
-        /(\+?[\d\s\-().]{7,15})/
-      )
+      const phoneMatch = message.match(/(\+?[\d\s\-().]{7,15})/)
       if (phoneMatch) {
         extractedPhone = phoneMatch[1].trim()
       }
-
       // Extract email pattern
-      const emailMatch = message.match(
-        /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/
-      )
+      const emailMatch = message.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/)
       if (emailMatch) {
         extractedEmail = emailMatch[0]
       }
 
-      // If no phone/email, treat the whole message as a name
-      // if it's short (likely just a name)
-      if (!extractedPhone && !extractedEmail && message.trim().split(' ').length <= 4) {
-        extractedName = message.trim()
+      // Extract the NAME by removing any email/phone we found, plus common
+      // filler words, then taking what remains if it looks like a name.
+      let nameCandidate = message
+      if (extractedEmail) nameCandidate = nameCandidate.replace(extractedEmail, ' ')
+      if (extractedPhone) nameCandidate = nameCandidate.replace(extractedPhone, ' ')
+
+      // Strip common filler/lead-in words and separators
+      nameCandidate = nameCandidate
+        .replace(/\b(my name is|my name's|name is|i am|i'm|it's|its|this is|the|email|e-mail|mail|phone|number|is|and|you can reach me at|reach me at|call me|contact me)\b/gi, ' ')
+        .replace(/[,;:|/\\]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+      // Accept as a name only if what remains is 1-4 words of plausible name
+      // characters (letters, spaces, hyphens, apostrophes, dots for initials).
+      if (
+        nameCandidate.length >= 2 &&
+        nameCandidate.length <= 60 &&
+        /^[A-Za-z][A-Za-z .'\-]*$/.test(nameCandidate) &&
+        nameCandidate.split(' ').filter(Boolean).length <= 4
+      ) {
+        extractedName = nameCandidate
+          .split(' ')
+          .filter(Boolean)
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ')
       }
     }
 
