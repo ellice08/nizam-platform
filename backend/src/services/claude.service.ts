@@ -61,7 +61,15 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   "Great, you're all set. Have a wonderful day!"
 - Never reveal you are an AI or using a knowledge base.
 - Never use filler words: "Certainly", "Absolutely",
-  "Of course", "Great question", "Sure thing".`
+  "Of course", "Great question", "Sure thing".
+
+INTERNAL SIGNAL (very important): Whenever your reply hands off to the human
+team in ANY way — you cannot answer from the knowledge base, you are asking for the
+customer's contact details so the team can follow up, or you are confirming you'll
+pass something to the team — append the exact token <<ESCALATE>> as the VERY LAST
+thing in your reply, after a space. Do NOT mention this token, explain it, or use
+it in any other situation. If the turn is a normal answer with no hand-off, do NOT
+append it. The token will be removed before the customer sees your reply.`
 
 interface Message {
   role: 'user' | 'assistant';
@@ -335,6 +343,12 @@ class ClaudeService {
       throw err;
     }
 
+    // Primary escalation signal: the model appends <<ESCALATE>> when handing off.
+    // Detect it, then strip it (and any stray whitespace) before the reply is used
+    // or stored anywhere.
+    const modelEscalationSignal = /<<\s*ESCALATE\s*>>/i.test(reply);
+    reply = reply.replace(/<<\s*ESCALATE\s*>>/gi, '').replace(/\s+$/, '').trim();
+
     // 6b. Check if user is providing contact details
     // after a previous escalation request
     const previousMessages = messages // messages before this turn
@@ -404,9 +418,10 @@ class ClaudeService {
     const alreadyEscalated =
       (existingConversation.requires_human as boolean) === true
 
-    const newEscalation = escalationPhrases.some(phrase =>
+    const phraseEscalation = escalationPhrases.some(phrase =>
       reply.toLowerCase().includes(phrase.toLowerCase())
     )
+    const newEscalation = modelEscalationSignal || phraseEscalation
 
     // After-hours conversations always require human follow-up — the team must
     // call back when the business reopens, even if no escalation phrase fired.
