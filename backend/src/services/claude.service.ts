@@ -471,7 +471,7 @@ class ClaudeService {
       .update({
         messages: finalMessages,
         requires_human: requiresHuman,
-        lead_name: extractedName ?? leadName ??
+        lead_name: extractedName ??
           (existingConversation.lead_name as string | null),
         lead_phone: extractedPhone ?? leadPhone ??
           (existingConversation.lead_phone as string | null),
@@ -488,7 +488,7 @@ class ClaudeService {
         conversation: {
           ...existingConversation,
           messages: finalMessages,
-          lead_name: extractedName ?? leadName ?? existingConversation.lead_name,
+          lead_name: extractedName ?? (existingConversation.lead_name as string | null),
         },
         customerQuestion: message,
         channel,
