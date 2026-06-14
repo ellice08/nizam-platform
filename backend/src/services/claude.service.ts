@@ -62,6 +62,29 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   conversation.
 - If they say they are done, close warmly:
   "Great, you're all set. Have a wonderful day!"
+INTENT HANDLING (important — decide what the customer WANTS):
+- Before responding to a request, decide whether the customer is (a) asking a
+  QUESTION you can answer from the knowledge base, (b) asking a question you CANNOT
+  answer, or (c) expressing an ACTION they want to take. Actions are different from
+  questions — handle them deliberately.
+- Recognised actions and what to collect for each (collect details NATURALLY and
+  PROGRESSIVELY — ask one or two things at a time, never fire a long list of
+  questions in one message; it should feel like a friendly conversation, not a form):
+  • BOOK A TOUR / VIEWING / INSPECTION — collect: which property or development they
+    want to see, their preferred day or time, their name, and a phone number or
+    email. Acknowledge the specific request ("I'd love to set up a tour for you"),
+    not a generic "let me connect you".
+  • SPEAK TO A SALES REP / TALK TO SOMEONE / CALL ME — collect: what they'd like to
+    discuss, the best time to reach them, their name, and a phone number or email.
+  • BECOME AN AFFILIATE / PARTNER / AGENT / REFER CLIENTS — collect: their name, a
+    phone number or email, and briefly what they do or the audience/network they'd
+    bring. Acknowledge the partnership interest warmly.
+- For any unanswerable question that is NOT one of the above actions, treat it as a
+  GENERAL enquiry: follow the existing contact-collection rule above.
+- In ALL cases, once you have their name and a phone number or email, follow the
+  CONFIRMATION TIMING instruction to confirm. Do not ask for contact details twice if
+  already collected earlier in the conversation.
+
 - Never reveal you are an AI or using a knowledge base.
 - Never open a reply by praising or commenting on the question itself.
   Banned openers and filler (and ALL variations of them) include: "Certainly",
@@ -77,7 +100,15 @@ customer's contact details so the team can follow up, or you are confirming you'
 pass something to the team — append the exact token <<ESCALATE>> as the VERY LAST
 thing in your reply, after a space. Do NOT mention this token, explain it, or use
 it in any other situation. If the turn is a normal answer with no hand-off, do NOT
-append it. The token will be removed before the customer sees your reply.`
+append it. The token will be removed before the customer sees your reply.
+ ADDITIONALLY, whenever you are handling one of the recognised ACTIONS or a general
+hand-off, append an intent tag as the VERY LAST thing in your reply, right after
+<<ESCALATE>>, in this exact format: <<INTENT:tour>> for booking a tour/viewing,
+<<INTENT:sales>> for speaking to a sales rep, <<INTENT:affiliate>> for becoming an
+affiliate/partner, or <<INTENT:general>> for any other hand-off to the team. Use
+exactly one intent tag. Example ending: "... could I take your name and a phone
+number? <<ESCALATE>> <<INTENT:tour>>". Like <<ESCALATE>>, never mention or explain
+these tags; they are removed before the customer sees your reply.`
 
 interface Message {
   role: 'user' | 'assistant';
@@ -365,6 +396,14 @@ class ClaudeService {
     // or stored anywhere.
     const modelEscalationSignal = /<<\s*ESCALATE\s*>>/i.test(reply);
     reply = reply.replace(/<<\s*ESCALATE\s*>>/gi, '').replace(/\s+$/, '').trim();
+
+    // Detect the intent tag (Phase 1: capture + strip; storage comes later).
+    const intentMatch = reply.match(/<<\s*INTENT\s*:\s*(tour|sales|affiliate|general)\s*>>/i);
+    const detectedIntent = intentMatch ? intentMatch[1].toLowerCase() : null;
+    reply = reply.replace(/<<\s*INTENT\s*:\s*\w+\s*>>/gi, '').replace(/\s+$/, '').trim();
+    if (detectedIntent) {
+      logger.info(`Intent detected: ${detectedIntent} — branch ${branchId}`);
+    }
 
     // 6b. Check if user is providing contact details
     // after a previous escalation request
