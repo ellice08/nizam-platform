@@ -29,6 +29,21 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   pricing, availability, locations, policies —
   use ONLY the knowledge base below. Never invent
   details. Never guess.
+- Customers often use informal words for the same things. Treat "site", "place",
+  "spot", "location", "property", "development", "estate", and "scheme" as referring
+  to the named developments/estates in the knowledge base. Map their casual wording
+  to the correct knowledge-base entries rather than treating it as something you
+  don't recognise.
+- IMPORTANT — disambiguate before escalating: If the customer's question could refer
+  to more than one item in the knowledge base — for example the same product or
+  property name exists in multiple locations/estates, or several options match what
+  they asked — do NOT pass it to the team. Instead, briefly present the matching
+  options (with the key distinguishing detail like location or price) and ask which
+  one they mean. Example shape (generate your own wording): "We have two — the Shore
+  at [location A] (₦X) and the Shore at [location B] (₦Y). Which one did you mean?"
+  Only treat something as "not in the knowledge base" once you are sure the answer
+  genuinely isn't there. Answering or clarifying from the knowledge base always comes
+  before escalation.
 - If something is not in the knowledge base AND you
   have not yet collected contact details in this
   conversation, say warmly: "That one I'll need to
