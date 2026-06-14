@@ -108,7 +108,19 @@ hand-off, append an intent tag as the VERY LAST thing in your reply, right after
 affiliate/partner, or <<INTENT:general>> for any other hand-off to the team. Use
 exactly one intent tag. Example ending: "... could I take your name and a phone
 number? <<ESCALATE>> <<INTENT:tour>>". Like <<ESCALATE>>, never mention or explain
-these tags; they are removed before the customer sees your reply.`
+these tags; they are removed before the customer sees your reply.
+ LEAD DETAILS: Whenever the customer provides ANY of their contact or booking details
+in this turn (their name, a phone number, an email, or a preferred date/time for a
+tour or callback), append a lead block as the VERY LAST thing in your reply, after any
+<<ESCALATE>> and <<INTENT:...>> tags, in this EXACT format with double quotes:
+<<LEAD name="" phone="" email="" date="">>
+Fill ONLY the fields the customer actually gave this turn or earlier in the
+conversation; leave the others as empty strings. Put the person's name in name, digits
+in phone, the email address in email, and any preferred day/time (e.g. "Friday",
+"tomorrow 2pm") in date. Example: customer says "this friday, alameen alameen@gmail.com"
+-> <<LEAD name="Alameen" phone="" email="alameen@gmail.com" date="Friday">>. Never
+mention or explain this block; it is removed before the customer sees your reply. If
+the customer gave none of these details this turn, do NOT append a lead block.`
 
 interface Message {
   role: 'user' | 'assistant';
@@ -405,6 +417,47 @@ class ClaudeService {
       logger.info(`Intent detected: ${detectedIntent} — branch ${branchId}`);
     }
 
+    // Model-based lead extraction (primary). Parse the structured <<LEAD ...>> block
+    // the model appends, validate lightly, then strip it before the reply is used.
+    let modelLeadName: string | null = null;
+    let modelLeadPhone: string | null = null;
+    let modelLeadEmail: string | null = null;
+    let modelLeadDate: string | null = null;
+    const leadBlockMatch = reply.match(/<<\s*LEAD\b([^>]*)>>/i);
+    if (leadBlockMatch) {
+      const attrs = leadBlockMatch[1];
+      const getAttr = (key: string): string | null => {
+        const m = attrs.match(new RegExp(`${key}\\s*=\\s*"([^"]*)"`, 'i'));
+        const v = m ? m[1].trim() : '';
+        return v.length > 0 ? v : null;
+      };
+      const rawName = getAttr('name');
+      const rawPhone = getAttr('phone');
+      const rawEmail = getAttr('email');
+      const rawDate = getAttr('date');
+
+      if (rawName && /^[A-Za-z][A-Za-z .'\-]{1,59}$/.test(rawName) && rawName.split(' ').filter(Boolean).length <= 5) {
+        modelLeadName = rawName.split(' ').filter(Boolean)
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      }
+      if (rawPhone && /\d/.test(rawPhone)) {
+        modelLeadPhone = rawPhone.replace(/[^\d+\-()\s]/g, '').trim() || null;
+      }
+      if (rawEmail && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rawEmail)) {
+        modelLeadEmail = rawEmail;
+      }
+      if (rawDate) {
+        modelLeadDate = rawDate.slice(0, 60);
+      }
+    }
+    // Strip the LEAD block (bulletproof) before reply is used/stored anywhere.
+    reply = reply.replace(/<<\s*LEAD\b[^>]*>>/gi, '').replace(/\s+$/, '').trim();
+    // Final safety net: remove ANY leftover <<...>> sentinel that may have slipped.
+    reply = reply.replace(/<<[^>]*>>/g, '').replace(/\s+$/, '').trim();
+    if (modelLeadDate) {
+      logger.info(`Lead booking date captured (Phase 2 will store): "${modelLeadDate}" — branch ${branchId}`);
+    }
+
     // 6b. Check if user is providing contact details
     // after a previous escalation request
     const previousMessages = messages // messages before this turn
@@ -470,6 +523,13 @@ class ClaudeService {
       }
     }
 
+    // Prefer model-extracted lead fields; fall back to regex extraction.
+    // (Model parsing is independent of assistantAskedForContact, so intent flows
+    // where the gate was false still capture details.)
+    const finalName = modelLeadName ?? extractedName;
+    const finalPhone = modelLeadPhone ?? extractedPhone;
+    const finalEmail = modelLeadEmail ?? extractedEmail;
+
     // 7. Check if escalation was triggered
     const escalationPhrases = [
       'let me get someone from our team',
@@ -515,11 +575,11 @@ class ClaudeService {
       .update({
         messages: finalMessages,
         requires_human: requiresHuman,
-        lead_name: extractedName ??
+        lead_name: finalName ??
           (existingConversation.lead_name as string | null),
-        lead_phone: extractedPhone ?? leadPhone ??
+        lead_phone: finalPhone ?? leadPhone ??
           (existingConversation.lead_phone as string | null),
-        lead_email: extractedEmail ??
+        lead_email: finalEmail ??
           (existingConversation.lead_email as string | null),
         updated_at: new Date().toISOString(),
       })
@@ -532,7 +592,7 @@ class ClaudeService {
         conversation: {
           ...existingConversation,
           messages: finalMessages,
-          lead_name: extractedName ?? (existingConversation.lead_name as string | null),
+          lead_name: finalName ?? (existingConversation.lead_name as string | null),
         },
         customerQuestion: message,
         channel,
