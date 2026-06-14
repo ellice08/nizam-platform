@@ -9,6 +9,8 @@ export const useConversations = (filters?: ConversationFilters) => {
     queryKey: ['conversations', tenantOrgId, filters],
     queryFn: () => conversationApi.getConversations(filters),
     staleTime: 15000,
+    refetchInterval: 25000,
+    refetchOnWindowFocus: true,
   })
 }
 

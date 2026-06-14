@@ -3,7 +3,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/nizam/Badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquare, MessageCircle, Phone, Search, Inbox } from "lucide-react";
+import { MessageSquare, MessageCircle, Phone, Search, Inbox, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConversations } from '@/hooks'
 import type { Conversation } from '@/types/api.types'
@@ -38,7 +38,7 @@ const Conversations = () => {
 
   const resolvedFilter = showResolved ? undefined : (false as boolean | undefined);
 
-  const { data: conversations, isLoading } = useConversations({
+  const { data: conversations, isLoading, isFetching, refetch, dataUpdatedAt } = useConversations({
     channel: channelFilter,
     resolved: resolvedFilter,
     limit: 50,
@@ -102,6 +102,24 @@ const Conversations = () => {
                 placeholder="Search by lead"
                 className="nz-input pl-9 h-9"
               />
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--text-secondary))] hover:text-foreground transition-colors disabled:opacity-50"
+                title="Refresh conversations"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+                Refresh
+              </button>
+              {dataUpdatedAt ? (
+                <span className="text-[11px] text-[hsl(var(--text-tertiary))]">
+                  Updated {formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true })}
+                </span>
+              ) : null}
             </div>
           </div>
 
