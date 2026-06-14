@@ -128,14 +128,19 @@ these tags; they are removed before the customer sees your reply.
 in this turn (their name, a phone number, an email, or a preferred date/time for a
 tour or callback), append a lead block as the VERY LAST thing in your reply, after any
 <<ESCALATE>> and <<INTENT:...>> tags, in this EXACT format with double quotes:
-<<LEAD name="" phone="" email="" date="">>
+<<LEAD name="" phone="" email="" date="" subject="">>
 Fill ONLY the fields the customer actually gave this turn or earlier in the
 conversation; leave the others as empty strings. Put the person's name in name, digits
-in phone, the email address in email, and any preferred day/time (e.g. "Friday",
-"tomorrow 2pm") in date. Example: customer says "this friday, alameen alameen@gmail.com"
--> <<LEAD name="Alameen" phone="" email="alameen@gmail.com" date="Friday">>. Never
-mention or explain this block; it is removed before the customer sees your reply. If
-the customer gave none of these details this turn, do NOT append a lead block.`
+in phone, the email address in email, any preferred day/time (e.g. "Friday",
+"tomorrow 2pm") in date, and in subject what the booking or enquiry is ABOUT — e.g.
+the property or development they want to tour ("Hutu Orchards"), or the topic they
+want to discuss with sales. Fill subject from anywhere in the conversation, not just
+this turn. Leave subject empty if there is no specific subject. Example: customer
+wants a tour of Hutu on Friday and gives "alameen, alameen@gmail.com" ->
+<<LEAD name="Alameen" phone="" email="alameen@gmail.com" date="Friday" subject="Hutu Orchards">>
+Never mention or explain this block; it is removed before the customer sees your
+reply. If the customer gave none of these details this turn, do NOT append a lead
+block.`
 
 interface Message {
   role: 'user' | 'assistant';
@@ -438,6 +443,7 @@ class ClaudeService {
     let modelLeadPhone: string | null = null;
     let modelLeadEmail: string | null = null;
     let modelLeadDate: string | null = null;
+    let modelLeadSubject: string | null = null;
     const leadBlockMatch = reply.match(/<<\s*LEAD\b([^>]*)>>/i);
     if (leadBlockMatch) {
       const attrs = leadBlockMatch[1];
@@ -450,6 +456,7 @@ class ClaudeService {
       const rawPhone = getAttr('phone');
       const rawEmail = getAttr('email');
       const rawDate = getAttr('date');
+      const rawSubject = getAttr('subject');
 
       if (rawName && /^[A-Za-z][A-Za-z .'\-]{1,59}$/.test(rawName) && rawName.split(' ').filter(Boolean).length <= 5) {
         modelLeadName = rawName.split(' ').filter(Boolean)
@@ -463,6 +470,9 @@ class ClaudeService {
       }
       if (rawDate) {
         modelLeadDate = rawDate.slice(0, 60);
+      }
+      if (rawSubject) {
+        modelLeadSubject = rawSubject.slice(0, 120);
       }
     }
     // Strip the LEAD block (bulletproof) before reply is used/stored anywhere.
@@ -545,6 +555,16 @@ class ClaudeService {
     const finalPhone = modelLeadPhone ?? extractedPhone;
     const finalEmail = modelLeadEmail ?? extractedEmail;
 
+    // Build booking_details from extracted fields (only include what we have).
+    const bookingDetails: Record<string, string> = {};
+    if (modelLeadDate) bookingDetails.date = modelLeadDate;
+    if (modelLeadSubject) bookingDetails.subject = modelLeadSubject;
+    const hasBookingDetails = Object.keys(bookingDetails).length > 0;
+
+    // Resolve intent to persist: prefer freshly detected, else keep stored value.
+    const persistedIntent =
+      detectedIntent ?? (existingConversation.intent as string | null) ?? null;
+
     // 7. Check if escalation was triggered
     const escalationPhrases = [
       'let me get someone from our team',
@@ -596,6 +616,10 @@ class ClaudeService {
           (existingConversation.lead_phone as string | null),
         lead_email: finalEmail ??
           (existingConversation.lead_email as string | null),
+        intent: persistedIntent,
+        booking_details: hasBookingDetails
+          ? { ...(existingConversation.booking_details as Record<string, unknown> ?? {}), ...bookingDetails }
+          : (existingConversation.booking_details as Record<string, unknown> ?? null),
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversationId);
@@ -608,6 +632,10 @@ class ClaudeService {
           ...existingConversation,
           messages: finalMessages,
           lead_name: finalName ?? (existingConversation.lead_name as string | null),
+          intent: persistedIntent,
+          booking_details: hasBookingDetails
+            ? bookingDetails
+            : (existingConversation.booking_details ?? null),
         },
         customerQuestion: message,
         channel,
