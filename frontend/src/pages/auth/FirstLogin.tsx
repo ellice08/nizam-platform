@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 
 const FirstLogin = () => {
   const navigate = useNavigate()
@@ -112,8 +113,7 @@ const FirstLogin = () => {
             }}>
               New password
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="Minimum 8 characters"
@@ -142,8 +142,7 @@ const FirstLogin = () => {
             }}>
               Confirm password
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={confirm}
               onChange={e => setConfirm(e.target.value)}
               placeholder="Repeat your password"

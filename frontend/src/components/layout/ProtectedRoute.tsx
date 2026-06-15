@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store'
+import LoadingScreen from '@/components/LoadingScreen'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -16,23 +17,7 @@ export const ProtectedRoute = ({
   // isLoading starts true and is set false by useAuth
   // after getSession resolves — so this is never a permanent block
   if (isLoading) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          background: 'hsl(var(--background))',
-          color: '#FAFAFA',
-          fontSize: '13px',
-          fontFamily: 'Arial, sans-serif',
-          letterSpacing: '0.08em',
-        }}
-      >
-        Loading...
-      </div>
-    )
+    return <LoadingScreen />
   }
 
   // Session restored — now make routing decisions

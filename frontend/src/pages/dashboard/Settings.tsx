@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Sun, Moon, Monitor } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useAuthStore, useThemeStore } from '@/store'
@@ -759,8 +760,7 @@ const Settings = () => {
                 text-[hsl(var(--text-secondary))] mb-2">
                 Current password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 className="nz-input w-full"
                 value={currentPassword}
                 onChange={e => setCurrentPassword(e.target.value)}
@@ -772,8 +772,7 @@ const Settings = () => {
                 text-[hsl(var(--text-secondary))] mb-2">
                 New password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 className="nz-input w-full"
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
@@ -785,8 +784,7 @@ const Settings = () => {
                 text-[hsl(var(--text-secondary))] mb-2">
                 Confirm new password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 className="nz-input w-full"
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}

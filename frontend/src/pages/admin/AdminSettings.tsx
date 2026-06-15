@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Sun, Moon, Monitor } from 'lucide-react'
@@ -166,21 +167,21 @@ const AdminSettings = () => {
               <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                 Current password
               </label>
-              <input type="password" className="nz-input w-full" value={currentPassword}
+              <PasswordInput className="nz-input w-full" value={currentPassword}
                 onChange={e => setCurrentPassword(e.target.value)} placeholder="Enter current password" />
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                 New password
               </label>
-              <input type="password" className="nz-input w-full" value={newPassword}
+              <PasswordInput className="nz-input w-full" value={newPassword}
                 onChange={e => setNewPassword(e.target.value)} placeholder="Minimum 8 characters" />
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
                 Confirm new password
               </label>
-              <input type="password" className="nz-input w-full" value={confirmPassword}
+              <PasswordInput className="nz-input w-full" value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" />
             </div>
             <Button onClick={() => void handleChangePassword()}
