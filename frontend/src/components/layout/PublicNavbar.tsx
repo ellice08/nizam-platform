@@ -1,5 +1,6 @@
 import { Link, NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ElliceLockup } from "@/components/ElliceLockup";
 
 const navItems = [
   { to: "/", label: "Home" },
@@ -10,8 +11,8 @@ export function PublicNavbar() {
   return (
     <header className="w-full border-b border-border bg-background sticky top-0 z-40">
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-baseline gap-1.5">
-          <span className="font-display text-2xl tracking-tight text-foreground">nizam</span>
+        <Link to="/" className="flex items-center gap-1.5">
+          <ElliceLockup className="h-7" />
           <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
         </Link>
 

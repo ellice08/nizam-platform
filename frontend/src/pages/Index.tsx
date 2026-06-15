@@ -1,15 +1,11 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { ElliceLockup } from "@/components/ElliceLockup";
 
 const Index = () => {
   return (
     <section className="container py-24 md:py-32">
       <div className="max-w-3xl">
-        <div className="mb-10">
-          <ElliceLockup className="h-8" />
-        </div>
         <p className="text-[10px] uppercase tracking-[0.24em] text-primary mb-6 font-medium">
           AI Voice & Chat Management
         </p>
