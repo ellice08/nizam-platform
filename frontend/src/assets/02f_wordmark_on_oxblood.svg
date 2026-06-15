@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="480" height="140" viewBox="0 0 480 140"
+  xmlns="http://www.w3.org/2000/svg"
+  xmlns:xlink="http://www.w3.org/1999/xlink">
+  
+  <rect width="480" height="140" fill="#7A2535"/>
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Pinyon+Script&amp;display=swap');
+      .wm { font-family: 'Pinyon Script', 'Palatino Linotype', 'Book Antiqua', Palatino, serif; }
+    </style>
+  </defs>
+  <text class="wm"
+    x="50%" y="72%"
+    font-size="86"
+    fill="#FAFAFA"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    letter-spacing="0.86"
+    font-style="normal"
+    font-weight="400">ellice</text>
+</svg>

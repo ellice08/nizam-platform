@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="620" height="120" viewBox="0 0 620 120" xmlns="http://www.w3.org/2000/svg">
+  <rect width="620" height="120" fill="#FAFAFA"/>
+  <g transform="translate(20, 20)">
+  <rect x="5.44"  y="5.44"  width="31.84" height="31.84" rx="5.44" fill="#7A2535"/>
+  <rect x="42.72"   y="5.44"  width="31.84" height="31.84" rx="5.44" fill="rgba(14,14,12,0.12)"/>
+  <rect x="5.44"  y="42.72"   width="31.84" height="31.84" rx="5.44" fill="rgba(14,14,12,0.12)"/>
+  <rect x="42.72"   y="42.72"   width="31.84" height="31.84" rx="5.44" fill="#C4923A"/></g>
+  
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Pinyon+Script&amp;display=swap');
+    .wml { font-family: 'Pinyon Script', Palatino, serif; }</style>
+  </defs>
+  <text class="wml" x="359" y="58%"
+    font-size="64" fill="#0E0E0C"
+    text-anchor="middle" dominant-baseline="middle">ellice</text>
+</svg>
