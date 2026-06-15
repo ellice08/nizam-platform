@@ -186,6 +186,11 @@ const Conversations = () => {
                             <Icon className="sm:hidden h-3.5 w-3.5 shrink-0 text-[hsl(var(--text-secondary))]" strokeWidth={1.5} />
                             <span className="truncate">{r.lead_name ?? 'Unknown caller'}</span>
                           </div>
+                          {r.intent && r.intent !== 'general' && (
+                            <span className="block text-[11px] text-[hsl(var(--text-tertiary))]">
+                              {r.intent === 'tour' ? 'Tour' : r.intent === 'sales' ? 'Sales' : r.intent === 'affiliate' ? 'Affiliate' : ''}
+                            </span>
+                          )}
                           <div className="sm:hidden mt-1 text-[10px] nz-mono text-[hsl(var(--text-tertiary))]">
                             {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
                           </div>

@@ -144,6 +144,8 @@ export interface Conversation {
   actioned_by: string | null
   actioned_at: string | null
   notes: ConversationNote[]
+  intent?: string | null
+  booking_details?: { date?: string; subject?: string } | null
   created_at: string
   updated_at: string
 }

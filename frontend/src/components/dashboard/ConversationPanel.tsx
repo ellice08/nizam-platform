@@ -11,6 +11,16 @@ import { formatDistanceToNow, format } from 'date-fns'
 import { useConversation, useUpdateConversation } from '@/hooks'
 import { useAuthStore } from '@/store'
 
+const intentLabel = (intent: string): string => {
+  const map: Record<string, string> = {
+    tour: 'Tour request',
+    sales: 'Speak to sales',
+    affiliate: 'Affiliate enquiry',
+    general: 'General enquiry',
+  };
+  return map[intent] ?? intent;
+};
+
 type Message = {
   role: 'user' | 'assistant'
   content: string
@@ -124,6 +134,11 @@ const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) 
                   Needs attention
                 </span>
               )}
+              {conversation.intent && conversation.intent !== 'general' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-elevated text-[hsl(var(--text-secondary))] border border-border">
+                  {intentLabel(conversation.intent)}
+                </span>
+              )}
             </>
           )}
         </div>
@@ -154,17 +169,20 @@ const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) 
               Lead details
             </p>
             {[
-              { label: 'Name',    value: conversation.lead_name },
-              { label: 'Phone',   value: conversation.lead_phone },
-              { label: 'Email',   value: conversation.lead_email },
-              { label: 'Channel', value: conversation.channel },
+              { label: 'Name',     value: conversation.lead_name },
+              { label: 'Phone',    value: conversation.lead_phone },
+              { label: 'Email',    value: conversation.lead_email },
+              { label: 'Channel',  value: conversation.channel },
               {
                 label: 'Time',
                 value: format(new Date(conversation.created_at), 'dd MMM yyyy, HH:mm'),
               },
+              { label: 'Interest', value: conversation.intent ? intentLabel(conversation.intent) : null },
+              { label: 'Date',     value: conversation.booking_details?.date ?? null },
+              { label: 'About',    value: conversation.booking_details?.subject ?? null },
             ].filter(r => r.value).map(row => (
               <div key={row.label} className="flex gap-3 text-sm">
-                <span className="text-[hsl(var(--text-tertiary))] w-14 shrink-0">{row.label}</span>
+                <span className="text-[hsl(var(--text-tertiary))] w-16 shrink-0">{row.label}</span>
                 <span className="text-foreground">{row.value}</span>
               </div>
             ))}
