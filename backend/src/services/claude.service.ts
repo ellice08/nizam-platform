@@ -624,7 +624,26 @@ class ClaudeService {
       })
       .eq('id', conversationId);
 
+    const leadNewlyCaptured =
+      (!!finalName  && !existingConversation.lead_name)  ||
+      (!!finalPhone && !existingConversation.lead_phone) ||
+      (!!finalEmail && !existingConversation.lead_email);
+    if (leadNewlyCaptured) {
+      void notificationService.createNotification({
+        branchId, type: 'lead', title: 'New lead captured',
+        body: [finalName, finalPhone, finalEmail].filter(Boolean).join(' · ') || 'New contact',
+        link: `/dashboard/conversations?c=${conversationId}`,
+        entityType: 'conversation', entityId: conversationId, minRole: null,
+      });
+    }
+
     if ((newEscalation || afterHours) && !alreadyEscalated) {
+      void notificationService.createNotification({
+        branchId, type: 'escalation', title: 'Conversation needs attention',
+        body: (finalName ?? (existingConversation.lead_name as string | null)) ?? 'A customer needs a human',
+        link: `/dashboard/conversations?c=${conversationId}`,
+        entityType: 'conversation', entityId: conversationId, minRole: null,
+      });
       void this.sendEscalationNotification({
         branchId,
         agentRecord,

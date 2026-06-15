@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { env } from '../config/env.js';
 import logger from '../utils/logger.js';
+import { supabase } from '../lib/supabase.js';
 
 class NotificationService {
   private resend = new Resend(env.RESEND_API_KEY);
@@ -382,6 +383,46 @@ class NotificationService {
     } catch (err) {
       logger.error('sendSupportReply exception', { err });
       return { success: false };
+    }
+  }
+
+  async createNotification(params: {
+    organisationId?: string | null;
+    branchId?: string | null;
+    type: string;
+    title: string;
+    body?: string | null;
+    link?: string | null;
+    entityType?: string | null;
+    entityId?: string | null;
+    minRole?: string | null;
+  }): Promise<void> {
+    try {
+      let orgId = params.organisationId ?? null;
+      if (!orgId && params.branchId) {
+        const { data: branch } = await supabase
+          .from('branches').select('organisation_id')
+          .eq('id', params.branchId).maybeSingle();
+        orgId = (branch?.organisation_id as string | undefined) ?? null;
+      }
+      if (!orgId) {
+        logger.error('createNotification: no organisation_id', { type: params.type, branchId: params.branchId });
+        return;
+      }
+      const { error } = await supabase.from('notifications').insert({
+        organisation_id: orgId,
+        branch_id: params.branchId ?? null,
+        type: params.type,
+        title: params.title,
+        body: params.body ?? null,
+        link: params.link ?? null,
+        entity_type: params.entityType ?? null,
+        entity_id: params.entityId ?? null,
+        min_role: params.minRole ?? null,
+      });
+      if (error) throw error;
+    } catch (err) {
+      logger.error('createNotification failed', { err, type: params.type });
     }
   }
 }

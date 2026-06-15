@@ -188,6 +188,12 @@ router.post('/', authenticate, requireOrgAdmin, async (req: Request, res: Respon
       name,
     })
 
+    void notificationService.createNotification({
+      organisationId: orgId || null,
+      branchId: req.tenant.branch_id ?? null,
+      type: 'system', title: 'New team member added', minRole: 'org_admin',
+    });
+
     res.status(201).json(ApiResponse.success(result, 'User invited successfully'))
   } catch (err) {
     next(err)

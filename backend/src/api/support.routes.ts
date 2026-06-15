@@ -203,6 +203,13 @@ router.post('/tickets', authenticate, validate(createTicketSchema), async (req, 
       priority,
       message,
     });
+    void notificationService.createNotification({
+      organisationId: orgId,
+      branchId: req.tenant.branch_id ?? null,
+      type: 'support_ticket', title: 'New support ticket',
+      body: subject, link: '/dashboard/support',
+      entityType: 'support_ticket', entityId: ticket.id as string, minRole: null,
+    });
 
     res.status(201).json(ApiResponse.success(ticket, 'Ticket created'));
   } catch (err) { next(err); }
@@ -250,6 +257,13 @@ router.post('/tickets/:id/messages', authenticate, validate(replySchema), async 
         replyBody: body,
       });
     }
+    void notificationService.createNotification({
+      organisationId: ticket.organisation_id as string,
+      branchId: null,
+      type: 'support_reply', title: 'New reply on a support ticket',
+      body: ticket.subject as string, link: '/dashboard/support',
+      entityType: 'support_ticket', entityId: ticketId, minRole: null,
+    });
 
     res.status(201).json(ApiResponse.success({ ok: true }, 'Reply added'));
   } catch (err) { next(err); }

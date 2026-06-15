@@ -9,6 +9,7 @@ import widgetRoutes from './widget.routes.js';
 import usersRoutes from './users.routes.js';
 import leadsRoutes from './leads.routes.js';
 import supportRoutes from './support.routes.js';
+import notificationRoutes from './notification.routes.js';
 
 export function registerRoutes(app: Express): void {
   app.use('/api/auth', authRoutes);
@@ -21,4 +22,5 @@ export function registerRoutes(app: Express): void {
   app.use('/api/users', usersRoutes);
   app.use('/api/leads', leadsRoutes);
   app.use('/api/support', supportRoutes);
+  app.use('/api/notifications', notificationRoutes);
 }
