@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { supabase } from "@/lib/supabase";
 import type { OrganisationWithDetails } from "@/types/api.types";
 import { useThemeStore } from "@/store";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean };
 
@@ -72,13 +73,16 @@ export function MobileTopBar({ variant, org }: Props) {
         <Link to={variant === "admin" ? "/admin" : "/dashboard"} className="flex items-center">
           <BrandMark />
         </Link>
-        <button
-          aria-label="Open menu"
-          onClick={() => setOpen(true)}
-          className="h-9 w-9 rounded-md border border-border text-foreground flex items-center justify-center hover:bg-elevated transition-colors duration-150"
-        >
-          <Menu className="h-4 w-4" strokeWidth={1.5} />
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell variant="topbar" />
+          <button
+            aria-label="Open menu"
+            onClick={() => setOpen(true)}
+            className="h-9 w-9 rounded-md border border-border text-foreground flex items-center justify-center hover:bg-elevated transition-colors duration-150"
+          >
+            <Menu className="h-4 w-4" strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
 
       {open && (

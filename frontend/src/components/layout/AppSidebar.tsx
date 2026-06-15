@@ -30,6 +30,7 @@ import { supabase } from "@/lib/supabase";
 import type { OrganisationWithDetails } from "@/types/api.types";
 import markLight from "@/assets/01b_mark_light_transparent.svg";
 import markDark from "@/assets/01a_mark_dark_transparent.svg";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type NavItem = {
   to: string;
@@ -238,6 +239,9 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
       </div>
 
       <nav className="flex-1 overflow-hidden px-3 py-6 space-y-8">
+        <div>
+          <NotificationBell variant="sidebar" collapsed={collapsed} />
+        </div>
         {sections.map((section) => (
           <div key={section.label}>
             {!collapsed && (

@@ -20,3 +20,8 @@ export {
   useConversation,
   useUpdateConversation,
 } from './useConversations'
+export {
+  useNotifications,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from './useNotifications'
