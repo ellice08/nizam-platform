@@ -6,6 +6,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const ROLE_PRIORITY: Record<string, number> = {
   super_admin: 5,
@@ -39,12 +40,14 @@ const Login = () => {
 
       if (authError) {
         setError(authError.message);
+        setLoading(false);
         return;
       }
 
       const user = data.user;
       if (!user) {
         setError("Login failed — please try again.");
+        setLoading(false);
         return;
       }
 
@@ -101,6 +104,7 @@ const Login = () => {
             "Your account is not yet linked to an organisation. Please contact your administrator.",
           );
           useAuthStore.getState().clear();
+          setLoading(false);
           return;
         }
       }
@@ -112,10 +116,13 @@ const Login = () => {
       setError(
         err instanceof Error ? err.message : "An unexpected error occurred.",
       );
-    } finally {
       setLoading(false);
     }
   };
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <section className="container max-w-md py-20">
