@@ -634,6 +634,7 @@ class ClaudeService {
         body: [finalName, finalPhone, finalEmail].filter(Boolean).join(' · ') || 'New contact',
         link: `/dashboard/conversations?c=${conversationId}`,
         entityType: 'conversation', entityId: conversationId, minRole: null,
+        audience: 'tenant',
       });
     }
 
@@ -643,6 +644,7 @@ class ClaudeService {
         body: (finalName ?? (existingConversation.lead_name as string | null)) ?? 'A customer needs a human',
         link: `/dashboard/conversations?c=${conversationId}`,
         entityType: 'conversation', entityId: conversationId, minRole: null,
+        audience: 'tenant',
       });
       void this.sendEscalationNotification({
         branchId,

@@ -396,6 +396,7 @@ class NotificationService {
     entityType?: string | null;
     entityId?: string | null;
     minRole?: string | null;
+    audience?: 'tenant' | 'operator';
   }): Promise<void> {
     try {
       let orgId = params.organisationId ?? null;
@@ -419,6 +420,7 @@ class NotificationService {
         entity_type: params.entityType ?? null,
         entity_id: params.entityId ?? null,
         min_role: params.minRole ?? null,
+        audience: params.audience ?? 'tenant',
       });
       if (error) throw error;
     } catch (err) {

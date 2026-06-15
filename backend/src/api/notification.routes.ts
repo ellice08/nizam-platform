@@ -1,3 +1,7 @@
+// NOTE: When billing is implemented, billing events (invoice generated, payment failed,
+// plan changed, etc.) should emit createNotification({ audience: 'operator', type: 'billing', ... })
+// so they surface in the operator bell. No billing code path exists yet.
+
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { supabase } from '../lib/supabase.js';
@@ -18,22 +22,33 @@ const ROLE_RANK: Record<string, number> = {
 type Tenant = { role: string; organisation_id: string; branch_id: string | null };
 
 // Single source of truth for "can this tenant see this notification".
+// Audience-aware: 'operator' rows are only visible to super_admin in normal mode;
+// 'tenant' rows are only visible to tenant users (or super_admin in tenant mode).
 function isVisibleTo(n: Record<string, unknown>, tenant: Tenant): boolean {
-  // super_admin sees everything across all orgs
-  if (tenant.role === 'super_admin') return true;
-  // must be same org
+  const audience = (n['audience'] as string) ?? 'tenant';
+
+  if (tenant.role === 'super_admin') {
+    const activeOrg = tenant.organisation_id;
+    if (activeOrg && activeOrg.length > 0) {
+      // Tenant mode (X-Tenant-Org-Id set): act as that tenant — only tenant-audience rows for that org.
+      return audience === 'tenant' && n['organisation_id'] === activeOrg;
+    }
+    // Normal operator mode: only operator-audience rows.
+    return audience === 'operator';
+  }
+
+  // Tenant users: only tenant-audience rows.
+  if (audience !== 'tenant') return false;
   if (n['organisation_id'] !== tenant.organisation_id) return false;
-  // branch scope: org-wide (null branch) always visible; branch-specific only to that branch.
-  // org-level admins (no branch_id on tenant) see all branches in the org.
+  // Branch scope: org-wide (null branch_id) is always visible.
+  // Org-level users (null tenant.branch_id) see all branches.
   if (n['branch_id'] != null && tenant.branch_id != null && n['branch_id'] !== tenant.branch_id) {
     return false;
   }
-  // role gate
+  // Role gate.
   const minRole = n['min_role'] as string | null;
   if (minRole) {
-    const need = ROLE_RANK[minRole] ?? 0;
-    const have = ROLE_RANK[tenant.role] ?? 0;
-    if (have < need) return false;
+    if ((ROLE_RANK[tenant.role] ?? 0) < (ROLE_RANK[minRole] ?? 0)) return false;
   }
   return true;
 }
@@ -43,12 +58,26 @@ function isUnreadFor(n: Record<string, unknown>, userId: string): boolean {
   return !readBy.includes(userId);
 }
 
-async function queryVisible(tenant: Tenant, limit: number): Promise<Record<string, unknown>[]> {
+// Shared DB query used by GET / and read-all so they can't drift.
+// Applies audience + org filters at the DB level; isVisibleTo() is the TS final authority.
+async function buildVisibleQuery(tenant: Tenant, limit: number): Promise<Record<string, unknown>[]> {
   const isSuper = tenant.role === 'super_admin';
+  const activeOrg = tenant.organisation_id;
+
   let q = supabase.from('notifications').select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (!isSuper) q = q.eq('organisation_id', tenant.organisation_id);
+
+  if (!isSuper) {
+    q = q.eq('audience', 'tenant').eq('organisation_id', activeOrg);
+  } else if (activeOrg && activeOrg.length > 0) {
+    // Tenant mode: same filter as a tenant user.
+    q = q.eq('audience', 'tenant').eq('organisation_id', activeOrg);
+  } else {
+    // Normal operator mode: only operator rows.
+    q = q.eq('audience', 'operator');
+  }
+
   const { data, error } = await q;
   if (error) throw error;
   return ((data ?? []) as Record<string, unknown>[]).filter(n => isVisibleTo(n, tenant));
@@ -60,7 +89,7 @@ router.get('/', authenticate, async (req, res, next) => {
     const rawLimit = parseInt((req.query['limit'] as string) ?? '30', 10);
     const limit = Math.min(Math.max(isNaN(rawLimit) ? 30 : rawLimit, 1), 100);
 
-    const visible = await queryVisible(req.tenant as Tenant, limit);
+    const visible = await buildVisibleQuery(req.tenant as Tenant, limit);
     const unread_count = visible.filter(n => isUnreadFor(n, req.user.id)).length;
 
     res.json(ApiResponse.success({ notifications: visible, unread_count }));
@@ -72,7 +101,7 @@ router.get('/', authenticate, async (req, res, next) => {
 // POST /api/notifications/read-all — must be before /:id/read to avoid route shadowing
 router.post('/read-all', authenticate, async (req, res, next) => {
   try {
-    const visible = await queryVisible(req.tenant as Tenant, 500);
+    const visible = await buildVisibleQuery(req.tenant as Tenant, 500);
     const userId = req.user.id;
     const unread = visible.filter(n => isUnreadFor(n, userId));
 

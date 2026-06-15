@@ -192,6 +192,7 @@ router.post('/', authenticate, requireOrgAdmin, async (req: Request, res: Respon
       organisationId: orgId || null,
       branchId: req.tenant.branch_id ?? null,
       type: 'system', title: 'New team member added', minRole: 'org_admin',
+      audience: 'tenant',
     });
 
     res.status(201).json(ApiResponse.success(result, 'User invited successfully'))

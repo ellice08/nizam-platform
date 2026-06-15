@@ -207,8 +207,10 @@ router.post('/tickets', authenticate, validate(createTicketSchema), async (req, 
       organisationId: orgId,
       branchId: req.tenant.branch_id ?? null,
       type: 'support_ticket', title: 'New support ticket',
-      body: subject, link: '/dashboard/support',
+      body: `${subject} — ${(org?.name as string) ?? 'Unknown'}`,
+      link: '/dashboard/support',
       entityType: 'support_ticket', entityId: ticket.id as string, minRole: null,
+      audience: 'operator',
     });
 
     res.status(201).json(ApiResponse.success(ticket, 'Ticket created'));
@@ -257,13 +259,27 @@ router.post('/tickets/:id/messages', authenticate, validate(replySchema), async 
         replyBody: body,
       });
     }
-    void notificationService.createNotification({
-      organisationId: ticket.organisation_id as string,
-      branchId: null,
-      type: 'support_reply', title: 'New reply on a support ticket',
-      body: ticket.subject as string, link: '/dashboard/support',
-      entityType: 'support_ticket', entityId: ticketId, minRole: null,
-    });
+    if (isSuperAdmin) {
+      // Ellice replied -> notify the tenant
+      void notificationService.createNotification({
+        organisationId: ticket.organisation_id as string,
+        branchId: null,
+        type: 'support_reply', title: 'New reply on your support ticket',
+        body: ticket.subject as string, link: '/dashboard/support',
+        entityType: 'support_ticket', entityId: ticketId, minRole: null,
+        audience: 'tenant',
+      });
+    } else {
+      // Tenant replied -> notify Ellice (operator)
+      void notificationService.createNotification({
+        organisationId: ticket.organisation_id as string,
+        branchId: null,
+        type: 'support_reply', title: 'New reply on a support ticket',
+        body: ticket.subject as string, link: '/dashboard/support',
+        entityType: 'support_ticket', entityId: ticketId, minRole: null,
+        audience: 'operator',
+      });
+    }
 
     res.status(201).json(ApiResponse.success({ ok: true }, 'Reply added'));
   } catch (err) { next(err); }

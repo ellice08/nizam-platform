@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { organisationService } from '../services/organisation.service.js';
 import { branchService } from '../services/branch.service.js';
+import { notificationService } from '../services/notification.service.js';
 import { ApiResponse } from '../utils/response.js';
 
 const router = express.Router();
@@ -49,6 +50,15 @@ router.post('/', authenticate, requireSuperAdmin, validate(createOrganisationSch
   const org = await organisationService.createOrganisation(
     req.body as { name: string; slug: string; industry?: string; plan?: string }
   );
+  const orgRecord = org as Record<string, unknown>;
+  void notificationService.createNotification({
+    organisationId: orgRecord['id'] as string,
+    audience: 'operator',
+    type: 'system', title: 'New client onboarded',
+    body: orgRecord['name'] as string,
+    link: '/admin/clients',
+    entityType: 'organisation', entityId: orgRecord['id'] as string, minRole: null,
+  });
   res.status(201).json(ApiResponse.success(org, 'Organisation created'));
 });
 
