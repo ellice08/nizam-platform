@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store";
+import { organisationApi } from "@/api";
 import LoadingScreen from "@/components/LoadingScreen";
 
 const ROLE_PRIORITY: Record<string, number> = {
@@ -18,6 +20,7 @@ const ROLE_PRIORITY: Record<string, number> = {
 
 const Login = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -107,6 +110,20 @@ const Login = () => {
           setLoading(false);
           return;
         }
+      }
+
+      // Warm the org/branding cache BEFORE navigating so the dashboard renders fully
+      // branded with no pop-in. Bounded by a timeout so a slow fetch never hangs login.
+      const resolvedOrgId = useAuthStore.getState().organisationId;
+      const isSuper = useAuthStore.getState().isAdmin;
+      if (resolvedOrgId && !isSuper) {
+        await Promise.race([
+          queryClient.prefetchQuery({
+            queryKey: ["organisations", resolvedOrgId],
+            queryFn: () => organisationApi.getOrganisationById(resolvedOrgId),
+          }),
+          new Promise((resolve) => setTimeout(resolve, 3500)),
+        ]);
       }
 
       // Store is fully populated — release the loading gate and route.
