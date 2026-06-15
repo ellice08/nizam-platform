@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store'
+import { organisationApi } from '@/api'
 
 const ROLE_PRIORITY: Record<string, number> = {
   super_admin: 5,
@@ -51,6 +53,7 @@ export const fetchAndSetOrganisation = async (userId: string, appRole?: string) 
 
 export const useAuth = () => {
   const { setUser, setLoading, clear } = useAuthStore()
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     let mounted = true
@@ -69,6 +72,22 @@ export const useAuth = () => {
             session.user.id,
             session.user.app_metadata?.role as string | undefined
           )
+
+          // Prefetch tenant branding into the same cache the sidebar reads,
+          // so the logo is warm before the dashboard renders. Skipped for
+          // super admins (no tenant org). A 3.5s timeout caps boot time if
+          // branding is slow — prefetchQuery never throws on fetch error.
+          const orgId = useAuthStore.getState().organisationId
+          const isSuperAdmin = useAuthStore.getState().isAdmin
+          if (orgId && !isSuperAdmin) {
+            await Promise.race([
+              queryClient.prefetchQuery({
+                queryKey: ['organisations', orgId],
+                queryFn: () => organisationApi.getOrganisationById(orgId),
+              }),
+              new Promise((resolve) => setTimeout(resolve, 3500)),
+            ])
+          }
         }
       } catch (err) {
         console.error('Auth init error:', err)
