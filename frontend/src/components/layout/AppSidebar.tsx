@@ -28,6 +28,8 @@ import { useAuthStore } from "@/store/auth.store";
 import { useThemeStore } from "@/store";
 import { supabase } from "@/lib/supabase";
 import type { OrganisationWithDetails } from "@/types/api.types";
+import markLight from "@/assets/01b_mark_light_transparent.svg";
+import markDark from "@/assets/01a_mark_dark_transparent.svg";
 
 type NavItem = {
   to: string;
@@ -214,9 +216,15 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
                 alt={org.name}
                 className="h-7 max-w-[120px] object-contain"
               />
+            ) : variant === "admin" ? (
+              <img
+                src={resolvedTheme === 'dark' ? markLight : markDark}
+                alt="Ellice"
+                className="h-7 w-7 object-contain"
+              />
             ) : (
               <span className="font-display text-2xl tracking-tight text-foreground">
-                {variant === "dashboard" && org?.name ? org.name : "nizam"}
+                {org?.name ?? "nizam"}
               </span>
             )
           )}
