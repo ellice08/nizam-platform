@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Info, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { organisationApi } from "@/api";
+import { organisationApi, intentApi } from "@/api";
 import { apiClient } from "@/lib/axios";
 import { supabase } from '@/lib/supabase';
 import { useOnboardingDraft } from "@/hooks/useOnboardingDraft";
@@ -297,18 +297,40 @@ const AdminOnboard = () => {
             business_hours: b0.businessHours,
           },
         });
+
+        // Create intents for main branch agent
+        await Promise.allSettled(
+          (b0.intents ?? [])
+            .filter(intent => intent.key?.trim() && intent.label?.trim())
+            .map((intent, idx) => {
+              const { key, label, description, fields, enabled } = intent
+              return intentApi.create(mainAgent.id, { key, label, description, fields: fields ?? [], position: idx, enabled })
+            })
+        );
       }
 
       const extraBranches = fetchedBranches.slice(1);
       for (let i = 0; i < extraBranches.length; i++) {
         const branch = extraBranches[i];
         const wb = state.branches[i + 1];
-        await organisationApi.createAgent({
+        const createdAgent = await organisationApi.createAgent({
           branch_id: branch.id,
           name: wb?.agentName || 'Aria',
           tone: wb?.tone || 'professional',
           niche: state.industry,
         });
+
+        // Create intents for this extra branch agent
+        if (createdAgent?.id) {
+          await Promise.allSettled(
+            (wb?.intents ?? [])
+              .filter(intent => intent.key?.trim() && intent.label?.trim())
+              .map((intent, idx) => {
+                const { key, label, description, fields, enabled } = intent
+                return intentApi.create(createdAgent.id as string, { key, label, description, fields: fields ?? [], position: idx, enabled })
+              })
+          );
+        }
       }
 
       mark("agents", "done");

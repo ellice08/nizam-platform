@@ -1,3 +1,5 @@
+import type { AgentIntent } from '@/api'
+
 export type Industry = "real_estate" | "hospitality" | "other";
 
 export type TelephonyMode =
@@ -44,6 +46,7 @@ export type Branch = {
     days: Record<"mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun",
       { open: string; close: string; closed: boolean }>;
   };
+  intents: AgentIntent[];
   files: { id: string; name: string; size: string; file?: File }[];
   crawlEnabled: boolean;
   crawlUrl: string;
@@ -116,6 +119,7 @@ export const newBranch = (i: number, industry: Industry): Branch => ({
       sun: { open: "09:00", close: "17:00", closed: true },
     },
   },
+  intents: [],
   files: [],
   crawlEnabled: false,
   crawlUrl: "",

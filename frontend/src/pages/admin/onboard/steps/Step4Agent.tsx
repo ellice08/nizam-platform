@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 import { Field, SectionTitle, StepHeader, Toggle } from "./shared";
 import { BranchTabs } from "./BranchTabs";
 import type { Branch, WizardState } from "../types";
-import { BusinessHoursEditor } from "@/components/BusinessHoursEditor";
+import { BusinessHoursEditor } from "@/components/BusinessHoursEditor"
+import { IntentsEditor } from "@/components/IntentsEditor";
 
 type Props = { state: WizardState; setBranch: (i: number, patch: Partial<Branch>) => void };
 
@@ -121,6 +122,14 @@ export const Step4Agent = ({ state, setBranch }: Props) => {
             className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-transparent hover:bg-elevated text-foreground px-3 py-2 text-sm transition-colors duration-150 ease-nz">
             <Plus className="h-4 w-4" strokeWidth={1.5} /> Add escalation contact
           </button>
+        </section>
+
+        <section>
+          <SectionTitle>Intents</SectionTitle>
+          <IntentsEditor
+            value={b.intents}
+            onChange={(next) => setBranch(active, { intents: next })}
+          />
         </section>
 
         <section>

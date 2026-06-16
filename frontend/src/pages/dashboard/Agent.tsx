@@ -7,8 +7,9 @@ import { toast } from 'sonner'
 import { cn } from "@/lib/utils";
 import { useAuthStore } from '@/store'
 import { useAgentsByOrg, useUpdateAgent, useBranches } from '@/hooks'
-import { organisationApi } from '@/api'
+import { organisationApi, intentApi, type AgentIntent } from '@/api'
 import { BusinessHoursEditor, type BusinessHours } from '@/components/BusinessHoursEditor'
+import { IntentsEditor } from '@/components/IntentsEditor'
 
 const tones = ["professional", "friendly", "formal"] as const;
 type Tone = typeof tones[number];
@@ -52,6 +53,10 @@ const Agent = () => {
   const [afterHoursEnabled, setAfterHoursEnabled] = useState(false)
   const [businessHours, setBusinessHours] = useState<BusinessHours>(defaultBusinessHours)
 
+  const [intents, setIntents] = useState<AgentIntent[]>([])
+  const [originalIntents, setOriginalIntents] = useState<AgentIntent[]>([])
+  const [savingIntents, setSavingIntents] = useState(false)
+
   useEffect(() => {
     if (agent) {
       setName(agent.name ?? 'Aria')
@@ -70,6 +75,13 @@ const Agent = () => {
       const storedBH = agent.response_time_config?.business_hours as BusinessHours | undefined
       setBusinessHours(storedBH ?? defaultBusinessHours)
       setAfterHoursEnabled(storedBH?.enabled ?? false)
+
+      if (agent.id) {
+        intentApi.list(agent.id).then(list => {
+          setIntents(list)
+          setOriginalIntents(list)
+        }).catch(() => toast.error('Failed to load intents'))
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent])
@@ -95,6 +107,55 @@ const Agent = () => {
       onSuccess: () => toast.success('Agent configuration saved'),
       onError: () => toast.error('Failed to save agent configuration'),
     })
+  }
+
+  const handleSaveIntents = async () => {
+    if (!agent?.id) return
+    const hasInvalid = intents.some(i => !i.key.trim() || !i.label.trim())
+    if (hasInvalid) { toast.error('Each intent needs a label and key'); return }
+
+    setSavingIntents(true)
+    try {
+      const agentId = agent.id
+      const withPositions = intents.map((i, idx) => ({ ...i, position: idx }))
+
+      // CREATE: no id
+      for (const intent of withPositions) {
+        if (!intent.id) {
+          const { key, label, description, fields, position, enabled } = intent
+          await intentApi.create(agentId, { key, label, description, fields: fields ?? [], position, enabled })
+        }
+      }
+
+      // UPDATE: has id, content changed
+      for (const intent of withPositions) {
+        if (!intent.id) continue
+        const orig = originalIntents.find(o => o.id === intent.id)
+        if (orig) {
+          const origWithPos = { ...orig, position: originalIntents.findIndex(o => o.id === orig.id) }
+          if (JSON.stringify(origWithPos) !== JSON.stringify(intent)) {
+            const { id, key, label, description, fields, position, enabled } = intent
+            await intentApi.update(id!, { key, label, description, fields: fields ?? [], position, enabled })
+          }
+        }
+      }
+
+      // DELETE: in original but absent from current list
+      for (const orig of originalIntents) {
+        if (orig.id && !intents.find(i => i.id === orig.id)) {
+          await intentApi.remove(orig.id)
+        }
+      }
+
+      const refreshed = await intentApi.list(agentId)
+      setIntents(refreshed)
+      setOriginalIntents(refreshed)
+      toast.success('Intents saved')
+    } catch {
+      toast.error('Failed to save intents')
+    } finally {
+      setSavingIntents(false)
+    }
   }
 
   // Test chat state
@@ -377,6 +438,30 @@ const Agent = () => {
                 {saving ? 'Saving…' : 'Save changes'}
               </Button>
             </div>
+          )}
+        </div>
+
+        {/* Intents */}
+        <div className="lg:col-span-2 rounded-lg border border-border bg-surface p-4 sm:p-6 space-y-4 min-w-0">
+          <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium">
+            Intents
+          </h3>
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-20 rounded-lg" />
+              <Skeleton className="h-20 rounded-lg" />
+            </div>
+          ) : (
+            <>
+              <IntentsEditor value={intents} onChange={setIntents} />
+              <Button
+                onClick={() => void handleSaveIntents()}
+                disabled={savingIntents || !agent}
+                className="bg-primary hover:bg-primary-hover text-primary-foreground mt-2"
+              >
+                {savingIntents ? 'Saving…' : 'Save intents'}
+              </Button>
+            </>
           )}
         </div>
 
