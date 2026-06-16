@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNow } from "date-fns"
@@ -5,8 +6,9 @@ import { PageHeader } from "@/components/PageHeader"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAllOrganisations } from "@/hooks"
+import { useAllOrganisations, useHighlightOnArrival } from "@/hooks"
 import { useAuthStore } from "@/store"
+import { cn } from "@/lib/utils"
 import type { Organisation } from "@/types/api.types"
 
 const planStyle: Record<string, React.CSSProperties> = {
@@ -30,6 +32,15 @@ const AdminClients = () => {
   const queryClient = useQueryClient()
   const { setTenantOrg, organisationId } = useAuthStore()
   const { data: allOrgs, isLoading, isError } = useAllOrganisations()
+  const { targetId, isFlashing } = useHighlightOnArrival('client')
+  const flashRowRef = useRef<HTMLTableRowElement | null>(null)
+
+  // Scroll the highlighted row into view once the list renders.
+  useEffect(() => {
+    if (targetId && flashRowRef.current) {
+      flashRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [targetId, allOrgs])
 
   // Exclude the super admin's own org (Ellice Systems)
   const organisations = (allOrgs ?? []).filter(o => o.id !== organisationId)
@@ -86,7 +97,11 @@ const AdminClients = () => {
               {organisations.map((org) => (
                 <tr
                   key={org.id}
-                  className="hover:bg-muted/20 cursor-pointer transition-colors"
+                  ref={org.id === targetId ? flashRowRef : null}
+                  className={cn(
+                    "hover:bg-muted/20 cursor-pointer transition-colors",
+                    isFlashing(org.id) && "nz-flash",
+                  )}
                   onClick={() => navigate(`/admin/clients/${org.id}`)}
                 >
                   <td className="px-6 py-4 font-medium">{org.name}</td>

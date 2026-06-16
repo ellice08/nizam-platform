@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, X, Phone, Mail, ArrowLeft, Send, LifeBuoy } from "lucide-react"
 import { apiClient } from "@/lib/axios"
+import { useHighlightOnArrival } from "@/hooks"
 import { useAuthStore } from "@/store"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -69,6 +70,16 @@ const Support = () => {
   const [priority, setPriority] = useState('normal')
   const [message, setMessage] = useState('')
   const [creating, setCreating] = useState(false)
+
+  const { targetId, isFlashing } = useHighlightOnArrival('t');
+
+  // Auto-open the deep-linked ticket when arriving from a notification.
+  useEffect(() => {
+    if (targetId && selectedId !== targetId) {
+      setSelectedId(targetId);
+      void openTicket(targetId);
+    }
+  }, [targetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchTickets = async () => {
     try {
@@ -210,7 +221,8 @@ const Support = () => {
                 <button key={t.id} onClick={() => void openTicket(t.id)}
                   className={cn(
                     "w-full text-left rounded-lg border bg-surface px-4 py-3 transition-colors",
-                    selectedId === t.id ? "border-primary" : "border-border hover:border-primary/50"
+                    selectedId === t.id ? "border-primary" : "border-border hover:border-primary/50",
+                    isFlashing(t.id) && "nz-flash",
                   )}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1 flex items-center gap-2">

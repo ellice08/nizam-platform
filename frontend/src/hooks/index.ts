@@ -25,3 +25,4 @@ export {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
 } from './useNotifications'
+export { useHighlightOnArrival } from './useHighlightOnArrival'

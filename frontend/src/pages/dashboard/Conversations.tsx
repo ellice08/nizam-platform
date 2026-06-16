@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatDistanceToNow } from 'date-fns'
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/nizam/Badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageSquare, MessageCircle, Phone, Search, Inbox, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useConversations } from '@/hooks'
+import { useConversations, useHighlightOnArrival } from '@/hooks'
 import type { Conversation } from '@/types/api.types'
 import ConversationPanel from '@/components/dashboard/ConversationPanel'
 
@@ -37,6 +37,13 @@ const Conversations = () => {
     : undefined;
 
   const resolvedFilter = showResolved ? undefined : (false as boolean | undefined);
+
+  const { targetId, isFlashing } = useHighlightOnArrival('c');
+
+  // Auto-open the deep-linked conversation when arriving from a notification.
+  useEffect(() => {
+    if (targetId && selected !== targetId) setSelected(targetId);
+  }, [targetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: conversations, isLoading, isFetching, refetch, dataUpdatedAt } = useConversations({
     channel: channelFilter,
@@ -173,6 +180,7 @@ const Conversations = () => {
                           isSelected
                             ? "bg-elevated border-l-2 border-l-primary"
                             : "bg-background hover:bg-elevated",
+                          isFlashing(r.id) && "nz-flash",
                         )}
                       >
                         <td className="hidden sm:table-cell px-3 sm:px-6 py-4 capitalize text-[hsl(var(--text-secondary))]">

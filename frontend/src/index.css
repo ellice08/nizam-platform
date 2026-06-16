@@ -142,3 +142,11 @@
   50% { opacity: 0.5; }
 }
 .nz-skeleton { background: hsl(var(--elevated)); animation: nz-pulse 1.6s ease-in-out infinite; border-radius: 6px; }
+
+/* Highlight-on-arrival: brief tint flash for deep-linked items */
+@keyframes nzFlash {
+  0%   { background-color: hsl(var(--primary) / 0.18); box-shadow: inset 2px 0 0 hsl(var(--primary)); }
+  70%  { background-color: hsl(var(--primary) / 0.10); }
+  100% { background-color: transparent; box-shadow: none; }
+}
+.nz-flash { animation: nzFlash 2s ease-out 1; }
