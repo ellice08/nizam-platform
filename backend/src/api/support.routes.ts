@@ -208,7 +208,7 @@ router.post('/tickets', authenticate, validate(createTicketSchema), async (req, 
       branchId: req.tenant.branch_id ?? null,
       type: 'support_ticket', title: 'New support ticket',
       body: `${subject} — ${(org?.name as string) ?? 'Unknown'}`,
-      link: '/dashboard/support',
+      link: `/admin/support?t=${ticket.id as string}`,
       entityType: 'support_ticket', entityId: ticket.id as string, minRole: null,
       audience: 'operator',
     });
@@ -265,7 +265,7 @@ router.post('/tickets/:id/messages', authenticate, validate(replySchema), async 
         organisationId: ticket.organisation_id as string,
         branchId: null,
         type: 'support_reply', title: 'New reply on your support ticket',
-        body: ticket.subject as string, link: '/dashboard/support',
+        body: ticket.subject as string, link: `/dashboard/support?t=${ticketId}`,
         entityType: 'support_ticket', entityId: ticketId, minRole: null,
         audience: 'tenant',
       });
@@ -275,7 +275,7 @@ router.post('/tickets/:id/messages', authenticate, validate(replySchema), async 
         organisationId: ticket.organisation_id as string,
         branchId: null,
         type: 'support_reply', title: 'New reply on a support ticket',
-        body: ticket.subject as string, link: '/dashboard/support',
+        body: ticket.subject as string, link: `/admin/support?t=${ticketId}`,
         entityType: 'support_ticket', entityId: ticketId, minRole: null,
         audience: 'operator',
       });
