@@ -10,6 +10,7 @@ import usersRoutes from './users.routes.js';
 import leadsRoutes from './leads.routes.js';
 import supportRoutes from './support.routes.js';
 import notificationRoutes from './notification.routes.js';
+import intentRoutes from './intent.routes.js';
 
 export function registerRoutes(app: Express): void {
   app.use('/api/auth', authRoutes);
@@ -23,4 +24,5 @@ export function registerRoutes(app: Express): void {
   app.use('/api/leads', leadsRoutes);
   app.use('/api/support', supportRoutes);
   app.use('/api/notifications', notificationRoutes);
+  app.use('/api', intentRoutes);
 }
