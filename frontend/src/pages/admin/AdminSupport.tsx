@@ -7,6 +7,7 @@ import { Send, ArrowLeft, Settings2, X } from "lucide-react"
 import { apiClient } from "@/lib/axios"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useHighlightOnArrival } from "@/hooks"
 
 type Ticket = {
   id: string
@@ -171,6 +172,16 @@ const AdminSupport = () => {
 
   const openCount = tickets.filter(t => t.status === 'open').length
 
+  const { targetId, isFlashing } = useHighlightOnArrival('t', !loading && tickets.length > 0)
+
+  // Auto-open the deep-linked ticket when arriving from a notification.
+  useEffect(() => {
+    if (targetId && targetId !== selectedId) {
+      setSelectedId(targetId)
+      void openTicket(targetId)
+    }
+  }, [targetId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       <PageHeader
@@ -211,7 +222,8 @@ const AdminSupport = () => {
                 <button key={t.id} onClick={() => void openTicket(t.id)}
                   className={cn(
                     "w-full text-left rounded-lg border bg-card px-4 py-3 transition-colors",
-                    selectedId === t.id ? "border-primary" : "border-border hover:border-primary/50"
+                    selectedId === t.id ? "border-primary" : "border-border hover:border-primary/50",
+                    isFlashing(t.id) && "nz-flash",
                   )}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">

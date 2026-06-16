@@ -1,20 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-// Returns the id to highlight (from ?<param>=) and whether the flash is currently active.
-export function useHighlightOnArrival(param: string, opts?: { durationMs?: number }) {
+export function useHighlightOnArrival(
+  param: string,
+  ready: boolean = true,
+  opts?: { durationMs?: number },
+) {
   const [searchParams] = useSearchParams()
   const targetId = searchParams.get(param)
   const [flashing, setFlashing] = useState(false)
+  const started = useRef(false)
 
   useEffect(() => {
-    if (!targetId) return
+    if (!targetId || !ready || started.current) return
+    started.current = true
     setFlashing(true)
-    const t = setTimeout(() => setFlashing(false), opts?.durationMs ?? 2000)
+    const t = setTimeout(() => setFlashing(false), opts?.durationMs ?? 3000)
     return () => clearTimeout(t)
-  }, [targetId, opts?.durationMs])
+  }, [targetId, ready, opts?.durationMs])
 
-  // isFlashing(id): true only for the matching row while the flash window is active
   const isFlashing = (id: string) => flashing && id === targetId
   return { targetId, isFlashing }
 }

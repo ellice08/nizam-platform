@@ -145,8 +145,8 @@
 
 /* Highlight-on-arrival: brief tint flash for deep-linked items */
 @keyframes nzFlash {
-  0%   { background-color: hsl(var(--primary) / 0.18); box-shadow: inset 2px 0 0 hsl(var(--primary)); }
-  70%  { background-color: hsl(var(--primary) / 0.10); }
-  100% { background-color: transparent; box-shadow: none; }
+  0%   { background-color: hsl(var(--primary) / 0.25) !important; box-shadow: inset 2px 0 0 hsl(var(--primary)) !important; }
+  60%  { background-color: hsl(var(--primary) / 0.12) !important; }
+  100% { background-color: transparent !important; box-shadow: none !important; }
 }
-.nz-flash { animation: nzFlash 2s ease-out 1; }
+.nz-flash { animation: nzFlash 3s ease-out 1; }

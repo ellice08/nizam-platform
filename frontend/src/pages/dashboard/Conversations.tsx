@@ -38,13 +38,6 @@ const Conversations = () => {
 
   const resolvedFilter = showResolved ? undefined : (false as boolean | undefined);
 
-  const { targetId, isFlashing } = useHighlightOnArrival('c');
-
-  // Auto-open the deep-linked conversation when arriving from a notification.
-  useEffect(() => {
-    if (targetId && selected !== targetId) setSelected(targetId);
-  }, [targetId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const { data: conversations, isLoading, isFetching, refetch, dataUpdatedAt } = useConversations({
     channel: channelFilter,
     resolved: resolvedFilter,
@@ -56,6 +49,13 @@ const Conversations = () => {
     const haystack = `${r.lead_name ?? ''} ${r.lead_phone ?? ''}`.toLowerCase();
     return haystack.includes(query.toLowerCase());
   });
+
+  const { targetId, isFlashing } = useHighlightOnArrival('c', !isLoading && rows.length > 0);
+
+  // Auto-open the deep-linked conversation when arriving from a notification.
+  useEffect(() => {
+    if (targetId && selected !== targetId) setSelected(targetId);
+  }, [targetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex gap-0 -mx-4 sm:-mx-6 -mt-6 h-[calc(100vh-4rem)] min-w-0">

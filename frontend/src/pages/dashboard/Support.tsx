@@ -71,7 +71,7 @@ const Support = () => {
   const [message, setMessage] = useState('')
   const [creating, setCreating] = useState(false)
 
-  const { targetId, isFlashing } = useHighlightOnArrival('t');
+  const { targetId, isFlashing } = useHighlightOnArrival('t', !loading && tickets.length > 0);
 
   // Auto-open the deep-linked ticket when arriving from a notification.
   useEffect(() => {
