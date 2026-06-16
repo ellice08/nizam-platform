@@ -5,12 +5,13 @@ import { supabase } from '../lib/supabase.js';
 import { ragService } from './rag.service.js';
 import { agentService } from './agent.service.js';
 import { notificationService } from './notification.service.js';
+import { intentService } from './intent.service.js';
 import logger from '../utils/logger.js';
 
 const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 const openaiClient = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
-const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
+const RAG_BEFORE = `CONVERSATION STYLE:
 - You are a calm, warm professional having a real
   conversation. Not a search engine. Not a brochure.
 - Keep every response SHORT. One to three sentences
@@ -77,23 +78,56 @@ const RAG_BOUNDARY_RULE = `CONVERSATION STYLE:
   conversation.
 - If they say they are done, close warmly:
   "Great, you're all set. Have a wonderful day!"
-INTENT HANDLING (important — decide what the customer WANTS):
+`;
+
+const RAG_AFTER = ` LEAD DETAILS: Whenever the customer provides ANY of their contact or booking details
+in this turn (their name, a phone number, an email, or a preferred date/time for a
+tour or callback), append a lead block as the VERY LAST thing in your reply, after any
+<<ESCALATE>> and <<INTENT:...>> tags, in this EXACT format with double quotes:
+<<LEAD name="" phone="" email="" date="" subject="">>
+Fill ONLY the fields the customer actually gave this turn or earlier in the
+conversation; leave the others as empty strings. Put the person's name in name, digits
+in phone, the email address in email, any preferred day/time (e.g. "Friday",
+"tomorrow 2pm") in date, and in subject what the booking or enquiry is ABOUT — e.g.
+the property or development they want to tour ("Hutu Orchards"), or the topic they
+want to discuss with sales. Fill subject from anywhere in the conversation, not just
+this turn. Leave subject empty if there is no specific subject. Example: customer
+wants a tour of Hutu on Friday and gives "alameen, alameen@gmail.com" ->
+<<LEAD name="Alameen" phone="" email="alameen@gmail.com" date="Friday" subject="Hutu Orchards">>
+Never mention or explain this block; it is removed before the customer sees your
+reply. If the customer gave none of these details this turn, do NOT append a lead
+block.`;
+
+interface ConfiguredIntent {
+  key: string;
+  label: string;
+  description?: string | null;
+  fields?: Array<{ key: string; label: string; required?: boolean }>;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildIntentHandling(intents: ConfiguredIntent[]): string {
+  let block = `INTENT HANDLING (important — decide what the customer WANTS):
 - Before responding to a request, decide whether the customer is (a) asking a
   QUESTION you can answer from the knowledge base, (b) asking a question you CANNOT
   answer, or (c) expressing an ACTION they want to take. Actions are different from
-  questions — handle them deliberately.
-- Recognised actions and what to collect for each (collect details NATURALLY and
-  PROGRESSIVELY — ask one or two things at a time, never fire a long list of
-  questions in one message; it should feel like a friendly conversation, not a form):
-  • BOOK A TOUR / VIEWING / INSPECTION — collect: which property or development they
-    want to see, their preferred day or time, their name, and a phone number or
-    email. Acknowledge the specific request ("I'd love to set up a tour for you"),
-    not a generic "let me connect you".
-  • SPEAK TO A SALES REP / TALK TO SOMEONE / CALL ME — collect: what they'd like to
-    discuss, the best time to reach them, their name, and a phone number or email.
-  • BECOME AN AFFILIATE / PARTNER / AGENT / REFER CLIENTS — collect: their name, a
-    phone number or email, and briefly what they do or the audience/network they'd
-    bring. Acknowledge the partnership interest warmly.
+  questions — handle them deliberately.`;
+
+  if (intents.length > 0) {
+    block += `\n- Recognised actions and what to collect for each (collect details NATURALLY and\n  PROGRESSIVELY — ask one or two things at a time, never fire a long list of\n  questions in one message; it should feel like a friendly conversation, not a form):`;
+    for (const intent of intents) {
+      const fieldList = Array.isArray(intent.fields) && intent.fields.length > 0
+        ? intent.fields.map(f => f.label).join(', ') + ', their name, and a phone number or email'
+        : 'their name, and a phone number or email';
+      const descPart = intent.description ? ` — ${intent.description}` : '';
+      block += `\n  • ${intent.label.toUpperCase()}${descPart} — collect: ${fieldList}. Acknowledge the specific request warmly rather than giving a generic 'let me connect you'.`;
+    }
+  }
+
+  block += `
 - For any unanswerable question that is NOT one of the above actions, treat it as a
   GENERAL enquiry: follow the existing contact-collection rule above.
 - In ALL cases, once you have their name and a phone number or email, follow the
@@ -118,29 +152,23 @@ it in any other situation. If the turn is a normal answer with no hand-off, do N
 append it. The token will be removed before the customer sees your reply.
  ADDITIONALLY, whenever you are handling one of the recognised ACTIONS or a general
 hand-off, append an intent tag as the VERY LAST thing in your reply, right after
-<<ESCALATE>>, in this exact format: <<INTENT:tour>> for booking a tour/viewing,
-<<INTENT:sales>> for speaking to a sales rep, <<INTENT:affiliate>> for becoming an
-affiliate/partner, or <<INTENT:general>> for any other hand-off to the team. Use
-exactly one intent tag. Example ending: "... could I take your name and a phone
-number? <<ESCALATE>> <<INTENT:tour>>". Like <<ESCALATE>>, never mention or explain
-these tags; they are removed before the customer sees your reply.
- LEAD DETAILS: Whenever the customer provides ANY of their contact or booking details
-in this turn (their name, a phone number, an email, or a preferred date/time for a
-tour or callback), append a lead block as the VERY LAST thing in your reply, after any
-<<ESCALATE>> and <<INTENT:...>> tags, in this EXACT format with double quotes:
-<<LEAD name="" phone="" email="" date="" subject="">>
-Fill ONLY the fields the customer actually gave this turn or earlier in the
-conversation; leave the others as empty strings. Put the person's name in name, digits
-in phone, the email address in email, any preferred day/time (e.g. "Friday",
-"tomorrow 2pm") in date, and in subject what the booking or enquiry is ABOUT — e.g.
-the property or development they want to tour ("Hutu Orchards"), or the topic they
-want to discuss with sales. Fill subject from anywhere in the conversation, not just
-this turn. Leave subject empty if there is no specific subject. Example: customer
-wants a tour of Hutu on Friday and gives "alameen, alameen@gmail.com" ->
-<<LEAD name="Alameen" phone="" email="alameen@gmail.com" date="Friday" subject="Hutu Orchards">>
-Never mention or explain this block; it is removed before the customer sees your
-reply. If the customer gave none of these details this turn, do NOT append a lead
-block.`
+<<ESCALATE>>, in this exact format: `;
+
+  if (intents.length > 0) {
+    const tagList = intents.map(i => `<<INTENT:${i.key}>> for ${i.label.toLowerCase()}`).join(', ');
+    block += `${tagList}, or <<INTENT:general>> for any other hand-off to the team.`;
+  } else {
+    block += `<<INTENT:general>> for any hand-off to the team.`;
+  }
+
+  block += ` Use exactly one intent tag. Example ending: "... could I take your name and a phone number? <<ESCALATE>> <<INTENT:general>>". Like <<ESCALATE>>, never mention or explain these tags; they are removed before the customer sees your reply.`;
+
+  return block;
+}
+
+function buildRagBoundaryRule(intents: ConfiguredIntent[]): string {
+  return RAG_BEFORE + buildIntentHandling(intents) + '\n' + RAG_AFTER;
+}
 
 interface Message {
   role: 'user' | 'assistant';
@@ -307,6 +335,17 @@ class ClaudeService {
     const agent = await agentService.getOrCreateAgent(branchId);
     const agentRecord = agent as Record<string, unknown>;
 
+    // Fetch enabled intents for this agent; degrade to [] on error so chat never breaks.
+    const agentId = agentRecord.id as string;
+    let activeIntents: ConfiguredIntent[] = [];
+    try {
+      const allIntents = await intentService.listByAgent(agentId) as Array<ConfiguredIntent & { enabled?: boolean }>;
+      activeIntents = allIntents.filter(i => i.enabled !== false);
+    } catch {
+      // intentService failure is non-fatal
+    }
+    const ragBoundaryRule = buildRagBoundaryRule(activeIntents);
+
     const provider = (agentRecord.llm_provider as string) ?? 'anthropic';
     const model = (agentRecord.llm_model as string) ??
       (provider === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514');
@@ -396,8 +435,8 @@ class ClaudeService {
     }
 
     const systemPrompt = context
-      ? `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}${confirmationContext}`
-      : `${basePrompt}\n\n${RAG_BOUNDARY_RULE}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}${afterHoursContext}${confirmationContext}`;
+      ? `${basePrompt}\n\n${ragBoundaryRule}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}${confirmationContext}`
+      : `${basePrompt}\n\n${ragBoundaryRule}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}${afterHoursContext}${confirmationContext}`;
 
     // 5. Add user message to history
     const updatedMessages: Message[] = [
@@ -429,8 +468,10 @@ class ClaudeService {
     const modelEscalationSignal = /<<\s*ESCALATE\s*>>/i.test(reply);
     reply = reply.replace(/<<\s*ESCALATE\s*>>/gi, '').replace(/\s+$/, '').trim();
 
-    // Detect the intent tag (Phase 1: capture + strip; storage comes later).
-    const intentMatch = reply.match(/<<\s*INTENT\s*:\s*(tour|sales|affiliate|general)\s*>>/i);
+    // Detect the intent tag using the configured keys + general as the valid set.
+    const validKeys = [...activeIntents.map(i => i.key), 'general'];
+    const intentRe = new RegExp(`<<\\s*INTENT\\s*:\\s*(${validKeys.map(escapeRegex).join('|')})\\s*>>`, 'i');
+    const intentMatch = reply.match(intentRe);
     const detectedIntent = intentMatch ? intentMatch[1].toLowerCase() : null;
     reply = reply.replace(/<<\s*INTENT\s*:\s*\w+\s*>>/gi, '').replace(/\s+$/, '').trim();
     if (detectedIntent) {
