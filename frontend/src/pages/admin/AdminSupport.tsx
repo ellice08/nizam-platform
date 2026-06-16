@@ -172,7 +172,7 @@ const AdminSupport = () => {
 
   const openCount = tickets.filter(t => t.status === 'open').length
 
-  const { targetId, isFlashing } = useHighlightOnArrival('t', !loading && tickets.length > 0)
+  const { targetId, isFlashing } = useHighlightOnArrival('t', tickets.length > 0)
 
   // Auto-open the deep-linked ticket when arriving from a notification.
   useEffect(() => {

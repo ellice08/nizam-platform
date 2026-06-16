@@ -32,7 +32,7 @@ const AdminClients = () => {
   const queryClient = useQueryClient()
   const { setTenantOrg, organisationId } = useAuthStore()
   const { data: allOrgs, isLoading, isError } = useAllOrganisations()
-  const { targetId, isFlashing } = useHighlightOnArrival('client', !isLoading && (allOrgs ?? []).length > 0)
+  const { targetId, isFlashing } = useHighlightOnArrival('client', (allOrgs ?? []).length > 0)
   const flashRowRef = useRef<HTMLTableRowElement | null>(null)
 
   // Scroll the highlighted row into view once the list renders.
