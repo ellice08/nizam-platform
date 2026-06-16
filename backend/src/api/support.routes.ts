@@ -292,7 +292,7 @@ router.patch('/tickets/:id/status', authenticate, validate(updateStatusSchema), 
     const { status } = req.body as { status: string };
 
     const { data: ticket } = await supabase
-      .from('support_tickets').select('organisation_id').eq('id', ticketId).maybeSingle();
+      .from('support_tickets').select('organisation_id, subject').eq('id', ticketId).maybeSingle();
     if (!ticket) throw new AppError('Ticket not found', 404);
 
     if (req.tenant.role !== 'super_admin' &&
@@ -304,6 +304,18 @@ router.patch('/tickets/:id/status', authenticate, validate(updateStatusSchema), 
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', ticketId);
     if (error) throw new AppError(error.message, 500);
+
+    if (status === 'resolved' || status === 'closed') {
+      void notificationService.createNotification({
+        organisationId: ticket.organisation_id as string,
+        audience: 'tenant',
+        type: 'support_reply',
+        title: status === 'resolved' ? 'Support ticket resolved' : 'Support ticket closed',
+        body: ticket.subject as string,
+        link: `/dashboard/support?t=${ticketId}`,
+        entityType: 'support_ticket', entityId: ticketId, minRole: null,
+      });
+    }
 
     res.json(ApiResponse.success({ ok: true }, 'Status updated'));
   } catch (err) { next(err); }
