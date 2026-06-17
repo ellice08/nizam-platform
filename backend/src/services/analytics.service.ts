@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import logger from '../utils/logger.js';
 
 interface DateRange {
   from: string;
@@ -27,12 +28,14 @@ function defaultRange(): DateRange {
   };
 }
 
+function dateOnly(s: string): string { return s.slice(0, 10); }
+
 function toIsoEnd(dateStr: string): string {
-  return `${dateStr}T23:59:59.999Z`;
+  return `${dateOnly(dateStr)}T23:59:59.999Z`;
 }
 
 function toIsoStart(dateStr: string): string {
-  return `${dateStr}T00:00:00.000Z`;
+  return `${dateOnly(dateStr)}T00:00:00.000Z`;
 }
 
 function aggregateOverview(rows: RawConversation[]) {
@@ -63,8 +66,8 @@ function aggregateVolume(rows: RawConversation[], from: string, to: string) {
 
   // Fill every day in [from, to] with 0 as default
   const volume: Array<{ date: string; count: number }> = [];
-  const cursor = new Date(`${from}T00:00:00Z`);
-  const end = new Date(`${to}T00:00:00Z`);
+  const cursor = new Date(`${dateOnly(from)}T00:00:00Z`);
+  const end = new Date(`${dateOnly(to)}T00:00:00Z`);
   while (cursor <= end) {
     const day = cursor.toISOString().slice(0, 10);
     volume.push({ date: day, count: counts[day] ?? 0 });
@@ -75,23 +78,26 @@ function aggregateVolume(rows: RawConversation[], from: string, to: string) {
 
 async function fetchConversations(branchIds: string[], range: DateRange): Promise<RawConversation[]> {
   if (branchIds.length === 0) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('conversations')
     .select('id, branch_id, lead_name, lead_phone, lead_email, intent, requires_human, resolved, created_at')
     .in('branch_id', branchIds)
     .gte('created_at', toIsoStart(range.from))
     .lte('created_at', toIsoEnd(range.to));
+  if (error) logger.error(`analytics: fetchConversations failed: ${error.message}`);
   return (data ?? []) as RawConversation[];
 }
 
 class AnalyticsService {
   async resolveBranchIds(orgId: string): Promise<string[]> {
-    const { data } = await supabase.from('branches').select('id').eq('organisation_id', orgId);
+    const { data, error } = await supabase.from('branches').select('id').eq('organisation_id', orgId);
+    if (error) logger.error(`analytics: resolveBranchIds failed: ${error.message}`);
     return (data ?? []).map(b => (b as Record<string, unknown>)['id'] as string);
   }
 
   async getAllBranchIds(): Promise<string[]> {
-    const { data } = await supabase.from('branches').select('id');
+    const { data, error } = await supabase.from('branches').select('id');
+    if (error) logger.error(`analytics: getAllBranchIds failed: ${error.message}`);
     return (data ?? []).map(b => (b as Record<string, unknown>)['id'] as string);
   }
 
