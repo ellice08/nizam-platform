@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   X, Phone, MessageSquare, MessageCircle,
   CheckCircle2, AlertCircle, PhoneCall,
@@ -8,18 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { formatDistanceToNow, format } from 'date-fns'
-import { useConversation, useUpdateConversation } from '@/hooks'
+import { useConversation, useUpdateConversation, useOrgIntents } from '@/hooks'
 import { useAuthStore } from '@/store'
-
-const intentLabel = (intent: string): string => {
-  const map: Record<string, string> = {
-    tour: 'Tour request',
-    sales: 'Speak to sales',
-    affiliate: 'Affiliate enquiry',
-    general: 'General enquiry',
-  };
-  return map[intent] ?? intent;
-};
+import { intentLabel, buildIntentLabelMap } from '@/lib/intentLabels'
 
 type Message = {
   role: 'user' | 'assistant'
@@ -35,7 +26,10 @@ interface ConversationPanelProps {
 const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) => {
   const { data: conversation, isLoading } = useConversation(conversationId ?? '')
   const { mutate: updateConversation, isPending } = useUpdateConversation()
-  const { user } = useAuthStore()
+  const { user, organisationId, tenantOrgId } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const { data: orgIntents } = useOrgIntents(activeOrgId)
+  const intentMap = useMemo(() => buildIntentLabelMap(orgIntents ?? []), [orgIntents])
 
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
@@ -136,7 +130,7 @@ const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) 
               )}
               {conversation.intent && conversation.intent !== 'general' && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-elevated text-[hsl(var(--text-secondary))] border border-border">
-                  {intentLabel(conversation.intent)}
+                  {intentLabel(conversation.intent, intentMap)}
                 </span>
               )}
             </>
@@ -177,7 +171,7 @@ const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) 
                 label: 'Time',
                 value: format(new Date(conversation.created_at), 'dd MMM yyyy, HH:mm'),
               },
-              { label: 'Interest', value: conversation.intent ? intentLabel(conversation.intent) : null },
+              { label: 'Interest', value: conversation.intent && conversation.intent !== 'general' ? intentLabel(conversation.intent, intentMap) : null },
               { label: 'Date',     value: conversation.booking_details?.date ?? null },
               { label: 'About',    value: conversation.booking_details?.subject ?? null },
             ].filter(r => r.value).map(row => (
