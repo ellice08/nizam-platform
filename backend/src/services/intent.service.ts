@@ -77,6 +77,32 @@ class IntentService {
       .eq('id', id);
     if (error) throw new AppError(error.message, 500);
   }
+
+  async listByOrg(organisationId: string) {
+    const { data: branches, error: branchErr } = await supabase
+      .from('branches')
+      .select('id')
+      .eq('organisation_id', organisationId);
+    if (branchErr) throw new AppError(branchErr.message, 500);
+    const branchIds = (branches ?? []).map(b => (b as Record<string, unknown>)['id'] as string);
+    if (branchIds.length === 0) return [];
+
+    const { data: agents, error: agentErr } = await supabase
+      .from('agents')
+      .select('id')
+      .in('branch_id', branchIds);
+    if (agentErr) throw new AppError(agentErr.message, 500);
+    const agentIds = (agents ?? []).map(a => (a as Record<string, unknown>)['id'] as string);
+    if (agentIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('intents')
+      .select('*')
+      .in('agent_id', agentIds)
+      .order('position', { ascending: true });
+    if (error) throw new AppError(error.message, 500);
+    return data ?? [];
+  }
 }
 
 export const intentService = new IntentService();

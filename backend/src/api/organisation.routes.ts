@@ -7,6 +7,7 @@ import { organisationService } from '../services/organisation.service.js';
 import { branchService } from '../services/branch.service.js';
 import { notificationService } from '../services/notification.service.js';
 import { ApiResponse } from '../utils/response.js';
+import { intentService } from '../services/intent.service.js';
 
 const router = express.Router();
 
@@ -132,6 +133,20 @@ router.get('/:id/branches', authenticate, async (req: Request, res: Response): P
   }
   const branches = await branchService.getBranchesByOrg(req.params['id'] as string);
   res.json(ApiResponse.success(branches));
+});
+
+// GET /api/organisations/:id/intents
+router.get('/:id/intents', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const isSuperAdmin = req.tenant.role === 'super_admin';
+    const isOwnOrg = req.tenant.organisation_id === req.params['id'];
+    if (!isSuperAdmin && !isOwnOrg) {
+      res.status(403).json(ApiResponse.error('Insufficient permissions', 'Forbidden'));
+      return;
+    }
+    const intents = await intentService.listByOrg(req.params['id'] as string);
+    res.json(ApiResponse.success(intents));
+  } catch (err) { next(err); }
 });
 
 // POST /api/organisations/:id/branches
