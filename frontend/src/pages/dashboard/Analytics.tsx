@@ -1,94 +1,79 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { format, parseISO } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/nizam/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { useAuthStore } from '@/store'
-import { useOrganisationStats, useConversations } from '@/hooks'
+import { useAuthStore } from "@/store";
+import { useAnalyticsOverview, useAnalyticsVolume, useOrgIntents } from "@/hooks";
+import { buildIntentLabelMap, intentLabel } from "@/lib/intentLabels";
 
-const sentimentData = [
-  { day: "Mon", score: 0.62 },
-  { day: "Tue", score: 0.71 },
-  { day: "Wed", score: 0.68 },
-  { day: "Thu", score: 0.74 },
-  { day: "Fri", score: 0.78 },
-  { day: "Sat", score: 0.81 },
-  { day: "Sun", score: 0.76 },
-];
-
-const topics = [
-  { topic: "Pricing & availability", share: 38 },
-  { topic: "Tour scheduling",        share: 24 },
-  { topic: "Tenancy questions",      share: 16 },
-  { topic: "Payment & deposits",     share: 12 },
-  { topic: "Other",                  share: 10 },
-];
+// Backend returns conversion_rate / escalation_rate already as percent (0-100 scale,
+// e.g. 45.0 for 45%). Just round and append the symbol.
+function formatPct(x: number | undefined | null): string {
+  if (x === undefined || x === null) return "—";
+  return `${Math.round(x)}%`;
+}
 
 const Analytics = () => {
-  const { organisationId, tenantOrgId } = useAuthStore()
-  const activeOrgId = tenantOrgId ?? organisationId ?? ''
-  const { data: stats, isLoading: statsLoading } = useOrganisationStats(activeOrgId)
-  const { data: conversations } = useConversations({ limit: 100 })
+  const { organisationId, tenantOrgId } = useAuthStore();
+  const activeOrgId = tenantOrgId ?? organisationId ?? "";
+  const { data: orgIntents } = useOrgIntents(activeOrgId);
+  const intentMap = useMemo(() => buildIntentLabelMap(orgIntents ?? []), [orgIntents]);
 
-  const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d')
+  const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
 
-  const getDateCutoff = (range: '7d' | '30d' | '90d' | 'all') => {
-    if (range === 'all') return null
-    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - days)
-    return cutoff
-  }
+  const { from, to } = useMemo(() => {
+    const toD = new Date();
+    if (dateRange === "all") return { from: undefined, to: undefined };
+    const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90;
+    const fromD = new Date();
+    fromD.setDate(fromD.getDate() - days);
+    return { from: fromD.toISOString(), to: toD.toISOString() };
+  }, [dateRange]);
 
-  const cutoff = getDateCutoff(dateRange)
+  const { data: overview, isLoading: ovLoading } = useAnalyticsOverview(from, to);
+  const { data: volume, isLoading: volLoading } = useAnalyticsVolume(from, to);
 
-  const filteredConversations = (conversations ?? []).filter(c => {
-    if (!cutoff) return true
-    return new Date(c.created_at) >= cutoff
-  })
+  const isCrossClient = !!overview?.per_client;
 
-  const totalFiltered = filteredConversations.length
-  const resolvedFiltered = filteredConversations.filter(c => c.resolved).length
-  const todayFiltered = filteredConversations.filter(c => {
-    const today = new Date()
-    const d = new Date(c.created_at)
-    return (
-      d.getDate() === today.getDate() &&
-      d.getMonth() === today.getMonth() &&
-      d.getFullYear() === today.getFullYear()
-    )
-  }).length
-  const resolutionRate = totalFiltered
-    ? `${Math.round((resolvedFiltered / totalFiltered) * 100)}%`
-    : '—'
+  const realIntents = (overview?.intent_breakdown ?? [])
+    .filter(i => i.intent && i.intent !== "none" && i.intent !== "general")
+    .map(i => ({ label: intentLabel(i.intent, intentMap), count: i.count }))
+    .sort((a, b) => b.count - a.count);
 
-  const channelData = [
-    { name: "Chat",     value: filteredConversations.filter(c => c.channel === 'chat').length },
-    { name: "Voice",    value: filteredConversations.filter(c => c.channel === 'voice').length },
-    { name: "WhatsApp", value: filteredConversations.filter(c => c.channel === 'whatsapp').length },
-  ]
+  const noneCount = (overview?.intent_breakdown ?? [])
+    .filter(i => !i.intent || i.intent === "none")
+    .reduce((s, i) => s + i.count, 0);
+
+  const volumeIsEmpty =
+    !volume || volume.length === 0 || volume.every(p => p.conversations === 0);
+
+  const perClient = (overview?.per_client ?? [])
+    .slice()
+    .sort((a, b) => b.total_conversations - a.total_conversations);
 
   return (
     <>
       <PageHeader
         eyebrow="Insights"
         title="Analytics"
-        description="Volume, sentiment, and outcomes across channels."
+        description="Volume, conversion, and intent breakdown across all channels."
       >
         <select
           className="nz-input w-44 h-9"
           value={dateRange}
-          onChange={e => setDateRange(e.target.value as '7d' | '30d' | '90d' | 'all')}
+          onChange={e => setDateRange(e.target.value as "7d" | "30d" | "90d" | "all")}
         >
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
@@ -97,93 +82,194 @@ const Analytics = () => {
         </select>
       </PageHeader>
 
-      <div className="grid gap-4 md:grid-cols-4 mb-4">
-        {statsLoading ? (
+      {/* Stat cards */}
+      <div className="grid gap-4 md:grid-cols-4 mb-6">
+        {ovLoading ? (
           [1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)
         ) : (
           <>
-            <StatCard label="Total conversations" value={totalFiltered} />
-            <StatCard label="Resolved"            value={resolvedFiltered} hint={resolutionRate} />
-            <StatCard label="Today"               value={todayFiltered} />
-            <StatCard label="Resolution rate"     value={resolutionRate} />
+            <StatCard
+              label="Total conversations"
+              value={overview?.total_conversations ?? 0}
+            />
+            <StatCard
+              label="Leads captured"
+              value={overview?.leads_captured ?? 0}
+            />
+            <StatCard
+              label="Conversion rate"
+              value={formatPct(overview?.conversion_rate)}
+            />
+            <StatCard
+              label="Escalation rate"
+              value={formatPct(overview?.escalation_rate)}
+              hint={`${overview?.escalations ?? 0} escalated`}
+            />
           </>
         )}
       </div>
 
-      <p className="text-xs text-[hsl(var(--text-tertiary))] mb-6">
-        {dateRange === 'all'
-          ? 'Showing all time data'
-          : `Showing last ${dateRange === '7d' ? '7' : dateRange === '30d' ? '30' : '90'} days`}
-      </p>
-
-      <div className="grid gap-6 lg:grid-cols-2 mb-10">
-        {/* Channel bar chart — real data */}
+      <div className="grid gap-6 lg:grid-cols-2 mb-6">
+        {/* Volume trend */}
         <div className="rounded-lg border border-border bg-surface p-6">
           <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium mb-6">
-            Conversations by channel
+            Conversations over time
           </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={channelData}>
-                <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="name" stroke="hsl(var(--text-secondary))" fontSize={11} />
-                <YAxis stroke="hsl(var(--text-secondary))" fontSize={11} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{ background: "hsl(var(--elevated))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                  cursor={{ fill: "hsl(var(--elevated))" }}
-                />
-                <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Sentiment line chart — placeholder */}
-        <div className="rounded-lg border border-border bg-surface p-6">
-          <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium mb-6">
-            Sentiment over time
-          </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={sentimentData}>
-                <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="day" stroke="hsl(var(--text-secondary))" fontSize={11} />
-                <YAxis stroke="hsl(var(--text-secondary))" fontSize={11} domain={[0, 1]} />
-                <Tooltip
-                  contentStyle={{ background: "hsl(var(--elevated))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                />
-                <Line type="monotone" dataKey="score" stroke="hsl(var(--rose))" strokeWidth={2} dot={{ fill: "hsl(var(--rose))", r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="mt-4 text-xs text-[hsl(var(--text-tertiary))]">
-            Sentiment and topic analysis activates after your first 10 conversations.
-          </p>
-        </div>
-      </div>
-
-      {/* Topics — placeholder */}
-      <div className="rounded-lg border border-border bg-surface p-6">
-        <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium mb-4">
-          Top topics
-        </h3>
-        <div className="space-y-3">
-          {topics.map((t) => (
-            <div key={t.topic}>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-foreground">{t.topic}</span>
-                <span className="nz-mono text-[hsl(var(--text-secondary))]">{t.share}%</span>
-              </div>
-              <div className="mt-2 h-1.5 bg-elevated rounded-sm overflow-hidden">
-                <div className="h-full bg-primary" style={{ width: `${t.share * 2}%` }} />
-              </div>
+          {volLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : volumeIsEmpty ? (
+            <div className="h-64 flex items-center justify-center">
+              <p className="text-sm text-[hsl(var(--text-tertiary))]">
+                No conversations in this range yet.
+              </p>
             </div>
-          ))}
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={volume}>
+                  <defs>
+                    <linearGradient id="convGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    stroke="hsl(var(--text-secondary))"
+                    fontSize={11}
+                    tickFormatter={d => format(parseISO(d as string), "MMM d")}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    stroke="hsl(var(--text-secondary))"
+                    fontSize={11}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--elevated))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    labelFormatter={d => format(parseISO(d as string), "dd MMM yyyy")}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="conversations"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    fill="url(#convGrad)"
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
-        <p className="mt-6 text-xs text-[hsl(var(--text-tertiary))]">
-          Sentiment and topic analysis activates after your first 10 conversations.
-        </p>
+
+        {/* Intent breakdown */}
+        <div className="rounded-lg border border-border bg-surface p-6">
+          <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium mb-6">
+            What customers want
+          </h3>
+          {ovLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : realIntents.length === 0 ? (
+            <div className="h-64 flex items-center justify-center">
+              <p className="text-sm text-[hsl(var(--text-tertiary))]">
+                No specific intents detected yet.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart layout="vertical" data={realIntents} margin={{ left: 8, right: 16 }}>
+                    <CartesianGrid stroke="hsl(var(--border))" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      stroke="hsl(var(--text-secondary))"
+                      fontSize={11}
+                      allowDecimals={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="label"
+                      stroke="hsl(var(--text-secondary))"
+                      fontSize={11}
+                      width={120}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--elevated))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      cursor={{ fill: "hsl(var(--elevated))" }}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {noneCount > 0 && (
+                <p className="mt-3 text-xs text-[hsl(var(--text-tertiary))]">
+                  {noneCount} conversation{noneCount !== 1 ? "s" : ""} had no specific intent.
+                </p>
+              )}
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Cross-client table (super_admin normal mode only) */}
+      {isCrossClient && perClient.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface overflow-hidden">
+          <div className="px-6 py-4 border-b border-border">
+            <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium">
+              By client
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-elevated">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-secondary))] font-medium">
+                    Client
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-secondary))] font-medium">
+                    Conversations
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-secondary))] font-medium">
+                    Leads
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-secondary))] font-medium">
+                    Conversion
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {perClient.map(c => (
+                  <tr key={c.org_id} className="bg-background hover:bg-elevated transition-colors duration-150">
+                    <td className="px-6 py-3 font-medium text-foreground">{c.org_name}</td>
+                    <td className="px-6 py-3 text-right nz-mono text-[hsl(var(--text-secondary))]">
+                      {c.total_conversations}
+                    </td>
+                    <td className="px-6 py-3 text-right nz-mono text-[hsl(var(--text-secondary))]">
+                      {c.leads_captured}
+                    </td>
+                    <td className="px-6 py-3 text-right nz-mono text-[hsl(var(--text-secondary))]">
+                      {formatPct(c.conversion_rate)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </>
   );
 };

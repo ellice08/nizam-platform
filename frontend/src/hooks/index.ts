@@ -27,3 +27,4 @@ export {
 } from './useNotifications'
 export { useHighlightOnArrival } from './useHighlightOnArrival'
 export { useOrgIntents } from './useOrgIntents'
+export { useAnalyticsOverview, useAnalyticsVolume } from './useAnalytics'
