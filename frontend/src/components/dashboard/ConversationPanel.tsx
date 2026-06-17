@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import {
   X, Phone, MessageSquare, MessageCircle,
   CheckCircle2, AlertCircle, PhoneCall,
@@ -8,9 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { formatDistanceToNow, format } from 'date-fns'
-import { useConversation, useUpdateConversation, useOrgIntents } from '@/hooks'
+import { useConversation, useUpdateConversation } from '@/hooks'
 import { useAuthStore } from '@/store'
-import { intentLabel, buildIntentLabelMap } from '@/lib/intentLabels'
+import { intentLabel } from '@/lib/intentLabels'
 
 type Message = {
   role: 'user' | 'assistant'
@@ -21,15 +21,13 @@ type Message = {
 interface ConversationPanelProps {
   conversationId: string | null
   onClose: () => void
+  intentMap?: Record<string, string>
 }
 
-const ConversationPanel = ({ conversationId, onClose }: ConversationPanelProps) => {
+const ConversationPanel = ({ conversationId, onClose, intentMap = {} }: ConversationPanelProps) => {
   const { data: conversation, isLoading } = useConversation(conversationId ?? '')
   const { mutate: updateConversation, isPending } = useUpdateConversation()
-  const { user, organisationId, tenantOrgId } = useAuthStore()
-  const activeOrgId = tenantOrgId ?? organisationId ?? ''
-  const { data: orgIntents } = useOrgIntents(activeOrgId)
-  const intentMap = useMemo(() => buildIntentLabelMap(orgIntents ?? []), [orgIntents])
+  const { user } = useAuthStore()
 
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)

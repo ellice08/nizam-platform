@@ -234,6 +234,7 @@ const Conversations = () => {
           <ConversationPanel
             conversationId={selected}
             onClose={() => setSelected(null)}
+            intentMap={intentMap}
           />
         </div>
       )}
