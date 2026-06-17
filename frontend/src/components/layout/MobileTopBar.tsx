@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, LogOut, LayoutDashboard, MessagesSquare, BookOpen, Bot, BarChart3, CreditCard, Users, Settings, ShieldCheck, UserPlus, Building2, Repeat, FileText } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
+import { navFor } from "./navConfig";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { supabase } from "@/lib/supabase";
@@ -9,27 +9,6 @@ import type { OrganisationWithDetails } from "@/types/api.types";
 import { useThemeStore } from "@/store";
 import { NotificationBell } from "@/components/NotificationBell";
 
-type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean };
-
-const adminItems: NavItem[] = [
-  { to: "/admin", label: "Overview", icon: ShieldCheck, end: true },
-  { to: "/admin/onboard", label: "Onboard client", icon: UserPlus },
-  { to: "/admin/clients", label: "All clients", icon: Building2 },
-  { to: "/admin/tenant-mode", label: "Tenant mode", icon: Repeat },
-  { to: "/admin/drafts", label: "Drafts", icon: FileText },
-  { to: "/admin/settings", label: "Settings", icon: Settings },
-];
-
-const dashboardItems: NavItem[] = [
-  { to: "/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
-  { to: "/dashboard/knowledge", label: "Knowledge", icon: BookOpen },
-  { to: "/dashboard/agent", label: "Agent", icon: Bot },
-  { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
-  { to: "/dashboard/users", label: "Users", icon: Users },
-  { to: "/dashboard/settings", label: "Settings", icon: Settings },
-];
 
 type Props = { variant: "admin" | "dashboard"; org?: OrganisationWithDetails | null };
 
@@ -37,9 +16,9 @@ export function MobileTopBar({ variant, org }: Props) {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { clear } = useAuthStore();
+  const { clear, role } = useAuthStore();
   const { theme } = useThemeStore();
-  const items = variant === "admin" ? adminItems : dashboardItems;
+  const items = navFor(variant, role);
 
   const brandingLogo =
     variant === "dashboard" && org?.branding_config.logo_url
