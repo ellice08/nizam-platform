@@ -26,3 +26,4 @@ export {
   useMarkAllNotificationsRead,
 } from './useNotifications'
 export { useHighlightOnArrival } from './useHighlightOnArrival'
+export { useOrgIntents } from './useOrgIntents'

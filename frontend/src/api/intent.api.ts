@@ -28,4 +28,8 @@ export const intentApi = {
   remove: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/intents/${id}`)
   },
+  listByOrg: async (orgId: string): Promise<AgentIntent[]> => {
+    const { data } = await apiClient.get(`/api/organisations/${orgId}/intents`)
+    return data?.data ?? data ?? []
+  },
 }

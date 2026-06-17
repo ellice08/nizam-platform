@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from 'date-fns'
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/nizam/Badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageSquare, MessageCircle, Phone, Search, Inbox, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useConversations, useHighlightOnArrival } from '@/hooks'
+import { useConversations, useHighlightOnArrival, useOrgIntents } from '@/hooks'
+import { useAuthStore } from '@/store'
+import { buildIntentLabelMap, intentLabel } from '@/lib/intentLabels'
 import type { Conversation } from '@/types/api.types'
 import ConversationPanel from '@/components/dashboard/ConversationPanel'
 
@@ -27,6 +29,11 @@ const StatusBadge = ({ conv }: { conv: Conversation }) => {
 };
 
 const Conversations = () => {
+  const { organisationId, tenantOrgId } = useAuthStore()
+  const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const { data: orgIntents } = useOrgIntents(activeOrgId)
+  const intentMap = useMemo(() => buildIntentLabelMap(orgIntents ?? []), [orgIntents])
+
   const [tab, setTab]                   = useState("all");
   const [showResolved, setShowResolved] = useState(true);
   const [query, setQuery]               = useState("");
@@ -196,7 +203,7 @@ const Conversations = () => {
                           </div>
                           {r.intent && r.intent !== 'general' && (
                             <span className="block text-[11px] text-[hsl(var(--text-tertiary))]">
-                              {r.intent === 'tour' ? 'Tour' : r.intent === 'sales' ? 'Sales' : r.intent === 'affiliate' ? 'Affiliate' : ''}
+                              {intentLabel(r.intent, intentMap)}
                             </span>
                           )}
                           <div className="sm:hidden mt-1 text-[10px] nz-mono text-[hsl(var(--text-tertiary))]">
