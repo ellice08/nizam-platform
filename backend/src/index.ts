@@ -68,7 +68,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use(morgan("dev"));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({
+  limit: "10mb",
+  // Stash the raw buffer on req so webhook signature verification can use it.
+  // The verify callback runs before JSON parsing; it's harmless for all other routes.
+  verify: (req, _res, buf) => { (req as unknown as Record<string, unknown>)['rawBody'] = buf; },
+}));
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json(ApiResponse.success({ status: "ok" }, "Service is healthy"));

@@ -21,6 +21,8 @@ const envSchema = z.object({
   RESEND_FROM_EMAIL: z.string().email(),
   SUPPORT_DEFAULT_EMAIL: z.string().email().default('Alameenellice@gmail.com'),
   SUPPORT_DEFAULT_PHONE: z.string().default('07033788353'),
+  WHATSAPP_VERIFY_TOKEN: z.string().default(''),
+  WHATSAPP_APP_SECRET: z.string().default(''),
   EMBEDDING_MODEL: z.string().default('text-embedding-ada-002'),
   CORS_EXTRA_ORIGINS: z.string().default('http://localhost:8080'),
 });
