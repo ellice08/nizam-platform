@@ -1,10 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import logger from '../utils/logger.js';
 
-interface DateRange {
-  from: string;
-  to: string;
-}
+interface DateRange { from?: string; to?: string }
 
 interface RawConversation {
   id: string;
@@ -16,16 +13,6 @@ interface RawConversation {
   requires_human: boolean | null;
   resolved: boolean | null;
   created_at: string;
-}
-
-function defaultRange(): DateRange {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 29);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
 }
 
 function dateOnly(s: string): string { return s.slice(0, 10); }
@@ -57,18 +44,29 @@ function aggregateOverview(rows: RawConversation[]) {
   };
 }
 
-function aggregateVolume(rows: RawConversation[], from: string, to: string) {
+function aggregateVolume(rows: RawConversation[], from?: string, to?: string) {
+  if (rows.length === 0) return [];
+
   const counts: Record<string, number> = {};
   for (const r of rows) {
     const day = r.created_at.slice(0, 10);
     counts[day] = (counts[day] ?? 0) + 1;
   }
 
-  // Fill every day in [from, to] with 0 as default
+  const days = Object.keys(counts).sort();
+  const startDay = from ? dateOnly(from) : days[0];
+  const endDay   = to   ? dateOnly(to)   : days[days.length - 1];
+
+  const cursorDate = new Date(`${startDay}T00:00:00Z`);
+  const endDate    = new Date(`${endDay}T00:00:00Z`);
+
+  if (isNaN(cursorDate.getTime()) || isNaN(endDate.getTime())) {
+    return days.map(day => ({ date: day, count: counts[day] }));
+  }
+
   const volume: Array<{ date: string; count: number }> = [];
-  const cursor = new Date(`${dateOnly(from)}T00:00:00Z`);
-  const end = new Date(`${dateOnly(to)}T00:00:00Z`);
-  while (cursor <= end) {
+  const cursor = cursorDate;
+  while (cursor <= endDate) {
     const day = cursor.toISOString().slice(0, 10);
     volume.push({ date: day, count: counts[day] ?? 0 });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
@@ -78,12 +76,13 @@ function aggregateVolume(rows: RawConversation[], from: string, to: string) {
 
 async function fetchConversations(branchIds: string[], range: DateRange): Promise<RawConversation[]> {
   if (branchIds.length === 0) return [];
-  const { data, error } = await supabase
+  let q = supabase
     .from('conversations')
     .select('id, branch_id, lead_name, lead_phone, lead_email, intent, requires_human, resolved, created_at')
-    .in('branch_id', branchIds)
-    .gte('created_at', toIsoStart(range.from))
-    .lte('created_at', toIsoEnd(range.to));
+    .in('branch_id', branchIds);
+  if (range.from) q = q.gte('created_at', toIsoStart(range.from));
+  if (range.to)   q = q.lte('created_at', toIsoEnd(range.to));
+  const { data, error } = await q;
   if (error) logger.error(`analytics: fetchConversations failed: ${error.message}`);
   return (data ?? []) as RawConversation[];
 }
@@ -101,20 +100,20 @@ class AnalyticsService {
     return (data ?? []).map(b => (b as Record<string, unknown>)['id'] as string);
   }
 
-  async getOverview(branchIds: string[], rangeInput?: Partial<DateRange>) {
-    const range = { ...defaultRange(), ...rangeInput };
+  async getOverview(branchIds: string[], rangeInput?: DateRange) {
+    const range: DateRange = { from: rangeInput?.from, to: rangeInput?.to };
     const rows = await fetchConversations(branchIds, range);
     return { ...aggregateOverview(rows), from: range.from, to: range.to };
   }
 
-  async getVolume(branchIds: string[], rangeInput?: Partial<DateRange>) {
-    const range = { ...defaultRange(), ...rangeInput };
+  async getVolume(branchIds: string[], rangeInput?: DateRange) {
+    const range: DateRange = { from: rangeInput?.from, to: rangeInput?.to };
     const rows = await fetchConversations(branchIds, range);
     return { volume: aggregateVolume(rows, range.from, range.to), from: range.from, to: range.to };
   }
 
-  async getCrossClientOverview(rangeInput?: Partial<DateRange>) {
-    const range = { ...defaultRange(), ...rangeInput };
+  async getCrossClientOverview(rangeInput?: DateRange) {
+    const range: DateRange = { from: rangeInput?.from, to: rangeInput?.to };
 
     const { data: orgs } = await supabase.from('organisations').select('id, name');
     const { data: branches } = await supabase.from('branches').select('id, organisation_id');
@@ -133,7 +132,6 @@ class AnalyticsService {
 
     const rows = await fetchConversations(allBranchIds, range);
 
-    // Group rows by org
     const byOrg: Record<string, RawConversation[]> = {};
     for (const r of rows) {
       const orgId = branchToOrg[r.branch_id];
