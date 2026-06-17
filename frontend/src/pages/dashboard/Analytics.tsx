@@ -47,14 +47,25 @@ const Analytics = () => {
 
   const isCrossClient = !!overview?.per_client;
 
-  const realIntents = (overview?.intent_breakdown ?? [])
-    .filter(i => i.intent && i.intent !== "none" && i.intent !== "general")
-    .map(i => ({ label: intentLabel(i.intent, intentMap), count: i.count }))
-    .sort((a, b) => b.count - a.count);
+  const breakdown = overview?.intent_breakdown ?? [];
 
-  const noneCount = (overview?.intent_breakdown ?? [])
+  const realIntents = breakdown
+    .filter(i => i.intent && i.intent !== "none" && i.intent !== "general")
+    .map(i => ({ label: intentLabel(i.intent, intentMap), count: i.count }));
+
+  const generalCount = breakdown
+    .filter(i => i.intent === "general")
+    .reduce((s, i) => s + i.count, 0);
+
+  const noneCount = breakdown
     .filter(i => !i.intent || i.intent === "none")
     .reduce((s, i) => s + i.count, 0);
+
+  const chartData = [
+    ...realIntents,
+    ...(generalCount > 0 ? [{ label: "General enquiry", count: generalCount }] : []),
+    ...(noneCount > 0 ? [{ label: "No intent", count: noneCount }] : []),
+  ].sort((a, b) => b.count - a.count);
 
   const volumeIsEmpty =
     !volume || volume.length === 0 || volume.every(p => p.conversations === 0);
@@ -176,50 +187,43 @@ const Analytics = () => {
           </h3>
           {ovLoading ? (
             <Skeleton className="h-64 w-full" />
-          ) : realIntents.length === 0 ? (
+          ) : chartData.length === 0 ? (
             <div className="h-64 flex items-center justify-center">
               <p className="text-sm text-[hsl(var(--text-tertiary))]">
-                No specific intents detected yet.
+                No conversations in this range yet.
               </p>
             </div>
           ) : (
-            <>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart layout="vertical" data={realIntents} margin={{ left: 8, right: 16 }}>
-                    <CartesianGrid stroke="hsl(var(--border))" horizontal={false} />
-                    <XAxis
-                      type="number"
-                      stroke="hsl(var(--text-secondary))"
-                      fontSize={11}
-                      allowDecimals={false}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="label"
-                      stroke="hsl(var(--text-secondary))"
-                      fontSize={11}
-                      width={120}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--elevated))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                      cursor={{ fill: "hsl(var(--elevated))" }}
-                    />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              {noneCount > 0 && (
-                <p className="mt-3 text-xs text-[hsl(var(--text-tertiary))]">
-                  {noneCount} conversation{noneCount !== 1 ? "s" : ""} had no specific intent.
-                </p>
-              )}
-            </>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart layout="vertical" data={chartData} margin={{ left: 8, right: 16 }}>
+                  <CartesianGrid stroke="hsl(var(--border))" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    stroke="hsl(var(--text-secondary))"
+                    fontSize={11}
+                    allowDecimals={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    stroke="hsl(var(--text-secondary))"
+                    fontSize={11}
+                    width={120}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--elevated))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    cursor={{ fill: "hsl(var(--elevated))" }}
+                  />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
       </div>
