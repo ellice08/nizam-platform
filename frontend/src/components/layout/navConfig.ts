@@ -14,6 +14,7 @@ import {
   FileText,
   Inbox,
   LifeBuoy,
+  Radio,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -62,6 +63,7 @@ export const adminSections: NavSection[] = [
 const ALL_WORKSPACE_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/dashboard/conversations", label: "Conversations", icon: MessagesSquare },
+  { to: "/dashboard/channels", label: "Channels", icon: Radio },
   { to: "/dashboard/knowledge", label: "Knowledge", icon: BookOpen },
   { to: "/dashboard/agent", label: "Agent", icon: Bot },
   { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
@@ -78,6 +80,7 @@ const ROLE_NAV: Record<string, string[]> = {
   super_admin: [
     "/dashboard",
     "/dashboard/conversations",
+    "/dashboard/channels",
     "/dashboard/knowledge",
     "/dashboard/agent",
     "/dashboard/analytics",
@@ -89,6 +92,7 @@ const ROLE_NAV: Record<string, string[]> = {
   org_admin: [
     "/dashboard",
     "/dashboard/conversations",
+    "/dashboard/channels",
     "/dashboard/knowledge",
     "/dashboard/agent",
     "/dashboard/analytics",
@@ -100,6 +104,7 @@ const ROLE_NAV: Record<string, string[]> = {
   branch_admin: [
     "/dashboard",
     "/dashboard/conversations",
+    "/dashboard/channels",
     "/dashboard/knowledge",
     "/dashboard/agent",
     "/dashboard/analytics",

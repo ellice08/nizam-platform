@@ -28,3 +28,4 @@ export {
 export { useHighlightOnArrival } from './useHighlightOnArrival'
 export { useOrgIntents } from './useOrgIntents'
 export { useAnalyticsOverview, useAnalyticsVolume } from './useAnalytics'
+export { useWhatsappAccounts, useConnectWhatsapp, useDisconnectWhatsapp } from './useWhatsapp'
