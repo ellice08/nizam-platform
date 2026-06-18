@@ -1,13 +1,66 @@
 import crypto from 'crypto';
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { env } from '../config/env.js';
 import { supabase } from '../lib/supabase.js';
 import { whatsAppService } from '../services/whatsapp.service.js';
 import { claudeService } from '../services/claude.service.js';
+import { authenticate } from '../middleware/auth.middleware.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { ApiResponse } from '../utils/response.js';
+import { AppError } from '../utils/errors.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
+
+// ── Account management (authenticated, org-scoped) ────────────────────────────
+
+const connectSchema = z.object({
+  phoneNumberId:      z.string().min(1),
+  accessToken:        z.string().min(1),
+  verifyToken:        z.string().min(1),
+  displayPhoneNumber: z.string().optional(),
+  wabaId:             z.string().optional(),
+  branchId:           z.string().uuid().nullable().optional(),
+});
+
+// GET /api/whatsapp/accounts
+router.get('/accounts', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const accounts = await whatsAppService.listByOrg(req.tenant.organisation_id);
+    res.json(ApiResponse.success(accounts));
+  } catch (err) { next(err); }
+});
+
+// POST /api/whatsapp/accounts
+router.post('/accounts', authenticate, validate(connectSchema), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const body = req.body as z.infer<typeof connectSchema>;
+    const account = await whatsAppService.connectAccount({
+      organisationId:     req.tenant.organisation_id,
+      branchId:           body.branchId ?? null,
+      phoneNumberId:      body.phoneNumberId,
+      displayPhoneNumber: body.displayPhoneNumber,
+      wabaId:             body.wabaId,
+      accessToken:        body.accessToken,
+      verifyToken:        body.verifyToken,
+    });
+    res.status(201).json(ApiResponse.success(account, 'WhatsApp account connected'));
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/whatsapp/accounts/:id
+router.delete('/accounts/:id', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    // Ownership check — ensure account belongs to this org
+    const accounts = await whatsAppService.listByOrg(req.tenant.organisation_id);
+    const owns = accounts.some(a => a.id === req.params['id']);
+    if (!owns) throw new AppError('Account not found', 404);
+    await whatsAppService.disconnect(req.params['id'] as string);
+    res.json(ApiResponse.success({ ok: true }, 'WhatsApp account disconnected'));
+  } catch (err) { next(err); }
+});
 
 // ── Outbound send helper ───────────────────────────────────────────────────────
 
