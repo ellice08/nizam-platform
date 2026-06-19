@@ -1,27 +1,47 @@
 import { formatDistanceToNow } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/nizam/StatCard";
 import { Badge } from "@/components/nizam/Badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessagesSquare, Phone, MessageSquare, MessageCircle, CircleDot, Inbox } from "lucide-react";
+import { Phone, MessageSquare, MessageCircle, CircleDot, Inbox } from "lucide-react";
 import { useAuthStore } from '@/store'
-import { useOrganisation, useOrganisationStats, useConversations } from '@/hooks'
+import { useOrganisation, useOrganisationStats, useConversations, useWhatsappAccounts } from '@/hooks'
 
 const channelIcon = (c: string) =>
   c === "voice" ? Phone : c === "whatsapp" ? MessageCircle : MessageSquare;
 
-const channels = [
-  { name: "Web chat",  icon: MessageSquare },
-  { name: "Voice",     icon: Phone },
-  { name: "WhatsApp",  icon: MessagesSquare },
-];
+type Tone = 'active' | 'pending' | 'idle'
+
+const dotColor: Record<Tone, string> = {
+  active:  '#4CAF50',
+  pending: '#F59E0B',
+  idle:    'hsl(var(--text-secondary))',
+}
 
 const DashboardOverview = () => {
+  const navigate = useNavigate()
   const { organisationId, tenantOrgId } = useAuthStore()
   const activeOrgId = tenantOrgId ?? organisationId ?? ''
   const { data: org } = useOrganisation(activeOrgId)
   const { data: stats, isLoading: statsLoading } = useOrganisationStats(activeOrgId)
   const { data: conversations, isLoading: convsLoading } = useConversations({ limit: 5 })
+  const { data: waAccounts } = useWhatsappAccounts()
+
+  const waConnected = (waAccounts ?? []).filter(a => a.status === 'connected').length
+  const waTotal     = (waAccounts ?? []).length
+
+  const channels: Array<{ name: string; icon: typeof MessageSquare; status: string; tone: Tone; link?: string }> = [
+    { name: 'Web chat',  icon: MessageSquare,  status: 'Active',        tone: 'active' },
+    { name: 'WhatsApp',  icon: MessageCircle,
+      status: waConnected > 0
+        ? (waConnected === 1 ? '1 connected' : `${waConnected} connected`)
+        : waTotal > 0 ? 'Pending setup' : 'Not connected',
+      tone: waConnected > 0 ? 'active' : waTotal > 0 ? 'pending' : 'idle',
+      link: '/dashboard/channels',
+    },
+    { name: 'Voice',     icon: Phone,          status: 'Coming soon',   tone: 'idle'   },
+  ]
 
   const resolutionHint = stats?.total_conversations
     ? `${Math.round((stats.resolved_conversations / stats.total_conversations) * 100)}% resolution`
@@ -114,11 +134,15 @@ const DashboardOverview = () => {
             {channels.map((c) => {
               const Icon = c.icon;
               return (
-                <li key={c.name} className="flex items-center gap-3 px-6 py-4">
+                <li
+                  key={c.name}
+                  onClick={c.link ? () => navigate(c.link!) : undefined}
+                  className={`flex items-center gap-3 px-6 py-4 transition-colors duration-150${c.link ? ' cursor-pointer hover:bg-elevated' : ''}`}
+                >
                   <Icon className="h-4 w-4 text-[hsl(var(--text-secondary))]" strokeWidth={1.5} />
                   <span className="text-sm text-foreground flex-1">{c.name}</span>
-                  <CircleDot className="h-3 w-3 text-[#4CAF50]" strokeWidth={1.5} />
-                  <Badge variant="starter">Configured</Badge>
+                  <CircleDot className="h-3 w-3" style={{ color: dotColor[c.tone] }} strokeWidth={1.5} />
+                  <Badge variant={c.tone === 'active' ? 'starter' : 'neutral'}>{c.status}</Badge>
                 </li>
               );
             })}
