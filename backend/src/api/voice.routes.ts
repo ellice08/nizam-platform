@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env.js';
+import { supabase } from '../lib/supabase.js';
 import { voiceService } from '../services/voice.service.js';
 import { claudeService } from '../services/claude.service.js';
 import { authenticate } from '../middleware/auth.middleware.js';
@@ -143,6 +144,149 @@ router.post('/functions/agent-respond', async (req: Request, res: Response): Pro
 
   } catch (err) {
     gracefulFallback((err as Error).message);
+  }
+});
+
+// ── POST /api/voice/webhook — Retell call-event webhook ──────────────────────
+// Receives call_started / call_ended / call_analyzed from Retell.
+// Stores transcript, recording_url, sentiment, and call summary onto the
+// conversation so completed calls appear in the inbox.
+//
+// call.* fields read:
+//   agent_id, call_id, recording_url, transcript_object, call_analysis.user_sentiment,
+//   call_analysis.call_summary
+//
+// Role mapping: transcript_object[].role 'agent' → 'assistant', anything else → 'user'
+
+router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // 1. Signature verification
+    if (!verifyRetellSignature(req)) {
+      res.sendStatus(401);
+      return;
+    }
+
+    const body  = req.body as Record<string, unknown>;
+    const event = body['event'] as string | undefined;
+    const call  = body['call']  as Record<string, unknown> | undefined;
+
+    // 2. Log event + call shape once to confirm field names against a real call
+    logger.info('voice webhook event', {
+      event,
+      callKeys: call ? Object.keys(call) : null,
+    });
+
+    // 3. Extract routing keys
+    if (!call) {
+      res.sendStatus(200);
+      return;
+    }
+
+    const agentId = call['agent_id'] as string | undefined;
+    const callId  = call['call_id']  as string | undefined;
+
+    if (!agentId || !callId) {
+      res.sendStatus(200);
+      return;
+    }
+
+    // 4. Route to tenant
+    const account = await voiceService.getByAgentId(agentId);
+    if (!account) {
+      logger.warn(`voice webhook: no account for agent_id ${agentId}`);
+      res.sendStatus(200);
+      return;
+    }
+
+    const { branchId } = await voiceService.resolveAgentForAccount(account);
+
+    // 5a. call_started — conversation created on first agent-respond turn; nothing to store
+    if (event === 'call_started') {
+      logger.info(`voice webhook: call_started callId=${callId} branchId=${branchId}`);
+      res.sendStatus(200);
+      return;
+    }
+
+    // 5b. call_ended / call_analyzed — enrich the conversation (idempotent)
+    if (event === 'call_ended' || event === 'call_analyzed') {
+      // Find conversation threaded by branch_id + call_id (mirrors getOrCreateConversation)
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('branch_id', branchId)
+        .eq('call_id', callId)
+        .maybeSingle();
+
+      // If agent-respond never fired, create a stub so the call still lands in the inbox
+      let conv = existing as Record<string, unknown> | null;
+      if (!conv) {
+        const { data: created, error: createErr } = await supabase
+          .from('conversations')
+          .insert({
+            branch_id:      branchId,
+            channel:        'voice',
+            call_id:        callId,
+            messages:       [],
+            resolved:       false,
+            requires_human: false,
+          })
+          .select()
+          .single();
+
+        if (createErr || !created) {
+          logger.error(`voice webhook: failed to create stub conversation: ${createErr?.message}`);
+          res.sendStatus(200);
+          return;
+        }
+        conv = created as Record<string, unknown>;
+      }
+
+      // Build update — only set fields present in this payload (idempotent partial enrichment)
+      const updateObj: Record<string, unknown> = {};
+
+      const recordingUrl = call['recording_url'] as string | undefined;
+      if (recordingUrl) updateObj['recording_url'] = recordingUrl;
+
+      // Prefer transcript_object (structured); ignore raw transcript string
+      const transcriptObject = call['transcript_object'] as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(transcriptObject) && transcriptObject.length > 0) {
+        updateObj['messages'] = transcriptObject.map(t => ({
+          role:    t['role'] === 'agent' ? 'assistant' : 'user',
+          content: (t['content'] as string) ?? '',
+        }));
+      }
+
+      // call_analysis present on call_analyzed; may also appear on call_ended
+      const analysis = call['call_analysis'] as Record<string, unknown> | undefined;
+      if (analysis) {
+        const sentiment = analysis['user_sentiment'] as string | undefined;
+        if (sentiment) updateObj['sentiment'] = sentiment;
+
+        const summary = analysis['call_summary'] as string | undefined;
+        if (summary) updateObj['notes'] = summary;
+      }
+
+      if (Object.keys(updateObj).length > 0) {
+        const { error: updateErr } = await supabase
+          .from('conversations')
+          .update(updateObj)
+          .eq('id', conv['id'] as string);
+
+        if (updateErr) {
+          logger.error(`voice webhook: failed to update conversation ${conv['id'] as string}: ${updateErr.message}`);
+        } else {
+          logger.info(`voice webhook: enriched conversation ${conv['id'] as string} on ${event}`, {
+            fields: Object.keys(updateObj),
+          });
+        }
+      }
+    }
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    logger.error(`voice webhook: unhandled error: ${(err as Error).message}`);
+    res.sendStatus(200);
   }
 });
 
