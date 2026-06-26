@@ -263,7 +263,15 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
         if (sentiment) updateObj['sentiment'] = sentiment;
 
         const summary = analysis['call_summary'] as string | undefined;
-        if (summary) updateObj['notes'] = summary;
+        if (summary) {
+          const summaryNote = {
+            text:     `Call summary: ${summary}`,
+            added_by: 'system',
+            added_at: new Date().toISOString(),
+          };
+          const existingNotes = Array.isArray(conv['notes']) ? (conv['notes'] as unknown[]) : [];
+          updateObj['notes'] = [...existingNotes, summaryNote];
+        }
       }
 
       if (Object.keys(updateObj).length > 0) {
