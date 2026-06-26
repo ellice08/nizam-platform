@@ -32,6 +32,12 @@ const ConversationPanel = ({ conversationId, onClose, intentMap = {} }: Conversa
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
 
+  const notesArray = Array.isArray(conversation?.notes)
+    ? conversation.notes
+    : conversation?.notes
+      ? [{ text: String(conversation.notes), added_by: 'system', added_at: conversation.created_at ?? new Date().toISOString() }]
+      : []
+
   const channelIcon = (channel: string) => {
     if (channel === 'voice') return <Phone size={14} strokeWidth={1.5} />
     if (channel === 'whatsapp') return <MessageCircle size={14} strokeWidth={1.5} />
@@ -78,7 +84,7 @@ const ConversationPanel = ({ conversationId, onClose, intentMap = {} }: Conversa
 
   const handleAddNote = () => {
     if (!newNote.trim() || !conversation) return
-    const existingNotes = conversation.notes ?? []
+    const existingNotes = Array.isArray(conversation.notes) ? conversation.notes : []
     const updatedNotes = [
       ...existingNotes,
       {
@@ -363,11 +369,11 @@ const ConversationPanel = ({ conversationId, onClose, intentMap = {} }: Conversa
               </div>
             )}
 
-            {!conversation.notes || conversation.notes.length === 0 ? (
+            {notesArray.length === 0 ? (
               <p className="text-sm text-[hsl(var(--text-tertiary))]">No notes yet</p>
             ) : (
               <div className="space-y-3">
-                {conversation.notes.map((note, i) => (
+                {notesArray.map((note, i) => (
                   <div key={i} className="bg-elevated rounded-lg p-3 border border-border">
                     <p className="text-sm text-foreground leading-relaxed">{note.text}</p>
                     <p className="text-xs text-[hsl(var(--text-tertiary))] mt-2">
