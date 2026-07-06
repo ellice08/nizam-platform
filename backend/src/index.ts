@@ -1,3 +1,4 @@
+import http from "http";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
@@ -10,6 +11,7 @@ import { AppError } from "./utils/errors.js";
 import { ApiResponse } from "./utils/response.js";
 import { testConnection } from "./lib/test-connection.js";
 import { registerRoutes } from "./api/index.js";
+import { attachVoiceWebSocket } from "./api/voice.websocket.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -108,7 +110,10 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 const PORT = process.env.PORT ?? env.PORT ?? "4000";
 const NODE_ENV = process.env.NODE_ENV ?? env.NODE_ENV ?? "development";
 
-app.listen(PORT, () => {
+const server = http.createServer(app);
+attachVoiceWebSocket(server);
+
+server.listen(PORT, () => {
   logger.info(`Server running on port ${PORT} [${NODE_ENV}]`);
 });
 

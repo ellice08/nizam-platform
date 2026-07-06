@@ -34,6 +34,7 @@
     "stripe": "^22.1.0",
     "twilio": "^6.0.0",
     "winston": "^3.19.0",
+    "ws": "^8.21.0",
     "zod": "^4.4.1"
   },
   "devDependencies": {
@@ -42,6 +43,7 @@
     "@types/express": "^5.0.6",
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.6.0",
+    "@types/ws": "^8.18.1",
     "nodemon": "^3.1.14",
     "tsx": "^4.19.4",
     "typescript": "^6.0.3"
