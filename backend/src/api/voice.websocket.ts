@@ -6,10 +6,13 @@ import { voiceService } from '../services/voice.service.js';
 import { claudeService } from '../services/claude.service.js';
 import logger from '../utils/logger.js';
 
-// ── Retell Custom LLM WebSocket — VA1 (non-streaming) ─────────────────────────
+// ── Retell Custom LLM WebSocket — VA2 (streaming) ──────────────────────────────
 // Retell connects to wss://<host>/llm-websocket/{call_id} and expects our
 // server to speak first (config + greeting), then exchange JSON events keyed
 // by interaction_type. See Retell Custom LLM docs / official node demo.
+// response_required streams chatStream() token chunks live (content_complete:
+// false) so speech starts at time-to-first-token instead of waiting for the
+// full reply.
 
 interface ConnectionState {
   callId: string;
@@ -141,10 +144,29 @@ function handleMessage(ws: WebSocket, state: ConnectionState, msg: Record<string
       return;
     }
 
-    case 'response_required':
     case 'reminder_required': {
+      // Caller has gone quiet — fast canned re-engagement, no LLM call.
       const responseId = Number(msg['response_id'] ?? 0);
       state.latestResponseId = responseId;
+
+      sendSafe(ws, {
+        response_type: 'response',
+        response_id: responseId,
+        content: "Are you still there? I'm happy to help with anything about our projects.",
+        content_complete: true,
+        end_call: false,
+      });
+      return;
+    }
+
+    case 'response_required': {
+      const responseId = Number(msg['response_id'] ?? 0);
+      state.latestResponseId = responseId;
+
+      // Socket already closing/closed — nothing to stream to; don't waste an LLM call.
+      if (ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
 
       const transcript = msg['transcript'] as Array<Record<string, unknown>> | undefined;
       if (!state.loggedTranscriptShape) {
@@ -156,17 +178,6 @@ function handleMessage(ws: WebSocket, state: ConnectionState, msg: Record<string
       }
 
       const lastUserUtterance = extractLastUserUtterance(transcript);
-
-      if (interactionType === 'reminder_required' && !lastUserUtterance) {
-        sendSafe(ws, {
-          response_type: 'response',
-          response_id: responseId,
-          content: "Are you still there? I'm happy to help with anything about our projects.",
-          content_complete: true,
-          end_call: false,
-        });
-        return;
-      }
 
       if (!state.branchId) {
         sendSafe(ws, {
@@ -180,22 +191,49 @@ function handleMessage(ws: WebSocket, state: ConnectionState, msg: Record<string
       }
 
       const t0 = Date.now();
-      claudeService.chat({
+      let firstTokenLogged = false;
+      // Once a response is superseded or the socket closes mid-stream, stop
+      // forwarding chunks — but let the LLM stream finish internally so
+      // post-processing (tag parsing, conversation storage, escalation) still runs.
+      let stopForwarding = false;
+
+      claudeService.chatStream({
         branchId: state.branchId,
         message: lastUserUtterance ?? '',
         sessionId: state.callId,
         channel: 'voice',
+        onToken: (chunk: string) => {
+          if (stopForwarding) return;
+          if (responseId !== state.latestResponseId || ws.readyState !== WebSocket.OPEN) {
+            stopForwarding = true;
+            return;
+          }
+          if (!firstTokenLogged) {
+            firstTokenLogged = true;
+            logger.info(`voice ws first token: ${Date.now() - t0}ms (call ${state.callId})`);
+          }
+          sendSafe(ws, {
+            response_type: 'response',
+            response_id: responseId,
+            content: chunk,
+            content_complete: false,
+            end_call: false,
+          });
+        },
       })
-        .then((result) => {
+        .then(() => {
           logger.info(`voice ws chat latency: ${Date.now() - t0}ms (call ${state.callId})`);
           if (responseId !== state.latestResponseId) {
             logger.info(`voice ws: dropping stale response ${responseId} (latest ${state.latestResponseId})`);
             return;
           }
+          if (ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
           sendSafe(ws, {
             response_type: 'response',
             response_id: responseId,
-            content: result.reply,
+            content: '',
             content_complete: true,
             end_call: false,
           });

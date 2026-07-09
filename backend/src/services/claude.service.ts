@@ -170,6 +170,70 @@ function buildRagBoundaryRule(intents: ConfiguredIntent[]): string {
   return RAG_BEFORE + buildIntentHandling(intents) + '\n' + RAG_AFTER;
 }
 
+// ── Tag-safe streaming emitter ────────────────────────────────────────────
+// Buffers raw LLM tokens and forwards clean speech/text to the caller, holding
+// back anything that might be the start of a <<...>> control tag (ESCALATE /
+// INTENT / LEAD) until it's confirmed one way or the other. Confirmed tags are
+// discarded entirely from the emit stream — post-processing (finalizeTurn)
+// strips and parses them from the full accumulated text, same as the
+// non-streaming path — so they must never reach the caller.
+class TagSafeEmitter {
+  private pending = '';
+
+  constructor(private readonly onToken: (text: string) => void) {}
+
+  push(raw: string): void {
+    if (!raw) return;
+    this.pending += raw;
+    this.drain();
+  }
+
+  private drain(): void {
+    for (;;) {
+      const ltIndex = this.pending.indexOf('<');
+
+      if (ltIndex === -1) {
+        if (this.pending) {
+          this.onToken(this.pending);
+          this.pending = '';
+        }
+        return;
+      }
+
+      if (ltIndex > 0) {
+        this.onToken(this.pending.slice(0, ltIndex));
+        this.pending = this.pending.slice(ltIndex);
+      }
+
+      // pending now starts with '<'; need a second char to know if it's '<<'
+      if (this.pending.length < 2) return;
+
+      if (!this.pending.startsWith('<<')) {
+        // lone '<' — not a tag; release it and keep scanning the rest
+        this.onToken(this.pending[0]);
+        this.pending = this.pending.slice(1);
+        continue;
+      }
+
+      // starts with '<<' — a control tag; hold until it closes with '>>'
+      const endIndex = this.pending.indexOf('>>');
+      if (endIndex === -1) return; // incomplete tag — wait for more tokens
+
+      // discard the whole tag; finalizeTurn parses/strips it from the full text
+      this.pending = this.pending.slice(endIndex + 2);
+    }
+  }
+
+  flush(): void {
+    if (!this.pending) return;
+    let text = this.pending;
+    this.pending = '';
+    // Strip any tag remnant (complete or truncated by stream end) before flushing.
+    text = text.replace(/<<[^>]*>>/g, '').replace(/<<[^>]*$/g, '');
+    if (text) this.onToken(text);
+  }
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -191,6 +255,26 @@ interface ChatResult {
   conversationId: string;
   requiresHuman: boolean;
   newEscalation: boolean;
+}
+
+// Shared setup output — everything chat() and chatStream() need before and
+// after the LLM call, so the two paths cannot drift from each other.
+interface PreparedTurn {
+  branchId: string;
+  message: string;
+  sessionId: string;
+  channel: 'chat' | 'voice' | 'whatsapp';
+  leadPhone?: string;
+  provider: string;
+  model: string;
+  systemPrompt: string;
+  updatedMessages: Message[];
+  previousMessages: Message[];
+  agentRecord: Record<string, unknown>;
+  activeIntents: ConfiguredIntent[];
+  existingConversation: Record<string, unknown>;
+  conversationId: string;
+  afterHours: boolean;
 }
 
 class ClaudeService {
@@ -235,6 +319,37 @@ class ClaudeService {
     });
 
     return response.choices[0]?.message?.content ?? '';
+  }
+
+  private async callOpenAIStream(
+    systemPrompt: string,
+    messages: Message[],
+    model: string,
+    onRawToken: (text: string) => void
+  ): Promise<string> {
+    const stream = await openaiClient.chat.completions.create({
+      model: model ?? 'gpt-4o',
+      max_tokens: 600,
+      temperature: 0.7,
+      stream: true,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages.map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+      ],
+    });
+
+    let full = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? '';
+      if (delta) {
+        full += delta;
+        onRawToken(delta);
+      }
+    }
+    return full;
   }
 
   private async sendEscalationNotification(params: {
@@ -328,7 +443,10 @@ class ClaudeService {
     }
   }
 
-  async chat(params: ChatParams): Promise<ChatResult> {
+  // Shared setup path for chat() and chatStream(): agent config, intents, RAG
+  // context, system prompt construction, and conversation get/create. Both
+  // callers get an identical PreparedTurn — no room for the two paths to drift.
+  private async prepareTurn(params: ChatParams): Promise<PreparedTurn> {
     const { branchId, message, sessionId, channel, leadName, leadPhone } = params;
 
     // 1. Fetch agent config for this branch
@@ -388,7 +506,7 @@ class ClaudeService {
     });
 
     const conversationId = existingConversation.id as string;
-    const messages = (existingConversation.messages as Message[]) ?? [];
+    const previousMessages = (existingConversation.messages as Message[]) ?? [];
 
     // 4b. Build final system prompt now that we have conversation state
     const hasContact = !!(
@@ -440,27 +558,96 @@ class ClaudeService {
 
     // 5. Add user message to history
     const updatedMessages: Message[] = [
-      ...messages,
+      ...previousMessages,
       { role: 'user', content: message },
     ];
 
-    // 6. Call the correct LLM provider
-    let reply: string;
+    return {
+      branchId,
+      message,
+      sessionId,
+      channel,
+      leadPhone,
+      provider,
+      model,
+      systemPrompt,
+      updatedMessages,
+      previousMessages,
+      agentRecord,
+      activeIntents,
+      existingConversation,
+      conversationId,
+      afterHours,
+    };
+  }
 
+  async chat(params: ChatParams): Promise<ChatResult> {
+    const turn = await this.prepareTurn(params);
+
+    let reply: string;
     try {
-      if (provider === 'openai') {
-        reply = await this.callOpenAI(systemPrompt, updatedMessages, model);
-        logger.info(`LLM: OpenAI ${model} — branch ${branchId}`);
+      if (turn.provider === 'openai') {
+        reply = await this.callOpenAI(turn.systemPrompt, turn.updatedMessages, turn.model);
+        logger.info(`LLM: OpenAI ${turn.model} — branch ${turn.branchId}`);
       } else {
-        reply = await this.callAnthropic(systemPrompt, updatedMessages, model);
-        logger.info(`LLM: Anthropic ${model} — branch ${branchId}`);
+        reply = await this.callAnthropic(turn.systemPrompt, turn.updatedMessages, turn.model);
+        logger.info(`LLM: Anthropic ${turn.model} — branch ${turn.branchId}`);
       }
     } catch (err) {
       logger.error(
-        `LLM call failed (${provider}): ${err instanceof Error ? err.message : String(err)}`
+        `LLM call failed (${turn.provider}): ${err instanceof Error ? err.message : String(err)}`
       );
       throw err;
     }
+
+    return this.finalizeTurn(turn, reply);
+  }
+
+  // Streaming variant — same setup + same post-processing as chat(), only the
+  // LLM call and delivery differ. onToken receives tag-stripped text chunks as
+  // they arrive so a caller (e.g. the voice websocket) can forward them live.
+  async chatStream(params: ChatParams & { onToken: (text: string) => void }): Promise<ChatResult> {
+    const { onToken, ...chatParams } = params;
+    const turn = await this.prepareTurn(chatParams);
+
+    const emitter = new TagSafeEmitter(onToken);
+
+    let reply: string;
+    try {
+      if (turn.provider === 'openai') {
+        reply = await this.callOpenAIStream(turn.systemPrompt, turn.updatedMessages, turn.model, (rawToken) => {
+          emitter.push(rawToken);
+        });
+        logger.info(`LLM: OpenAI ${turn.model} (stream) — branch ${turn.branchId}`);
+      } else {
+        // VA2: Anthropic has no streaming path yet — fall back to one non-streaming
+        // call and emit it as a single chunk. Streaming Anthropic can come later.
+        logger.info(`LLM stream fallback: Anthropic ${turn.model} — non-streaming single-shot emit — branch ${turn.branchId}`);
+        reply = await this.callAnthropic(turn.systemPrompt, turn.updatedMessages, turn.model);
+        emitter.push(reply);
+      }
+    } catch (err) {
+      logger.error(
+        `LLM stream call failed (${turn.provider}): ${err instanceof Error ? err.message : String(err)}`
+      );
+      throw err;
+    }
+    emitter.flush();
+
+    return this.finalizeTurn(turn, reply);
+  }
+
+  // Shared post-processing for chat() and chatStream(): tag detect/strip
+  // (ESCALATE / INTENT / LEAD), contact extraction, escalation resolution,
+  // conversation storage, and notifications. Identical for both callers.
+  private async finalizeTurn(turn: PreparedTurn, rawReply: string): Promise<ChatResult> {
+    const {
+      branchId, message, sessionId, channel, leadPhone, provider,
+      updatedMessages, previousMessages, agentRecord, activeIntents,
+      existingConversation, conversationId, afterHours,
+    } = turn;
+
+    let reply = rawReply;
 
     // Primary escalation signal: the model appends <<ESCALATE>> when handing off.
     // Detect it, then strip it (and any stray whitespace) before the reply is used
@@ -526,7 +713,6 @@ class ClaudeService {
 
     // 6b. Check if user is providing contact details
     // after a previous escalation request
-    const previousMessages = messages // messages before this turn
     const lastAssistantMessage = [...previousMessages]
       .reverse()
       .find(m => m.role === 'assistant')
