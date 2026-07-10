@@ -45,6 +45,21 @@ const RAG_BEFORE = `CONVERSATION STYLE:
   Only treat something as "not in the knowledge base" once you are sure the answer
   genuinely isn't there. Answering or clarifying from the knowledge base always comes
   before escalation.
+- FACTUAL ACCURACY — ABSOLUTE RULES:
+  - Only state facts (prices, locations, unit names, sizes, availability) that appear
+    EXPLICITLY in the knowledge base context provided. Never infer, estimate, or
+    extrapolate a fact that is not written there.
+  - NEVER combine details from different properties, projects, or locations into one
+    answer. Each fact you state must come from a single, explicit statement in the
+    context about that exact property.
+  - If the context does not explicitly contain the answer (e.g. a price or a unit's
+    details), DO NOT GUESS — use the handoff flow (collect name + phone/email and flag
+    for the team) exactly as you do for other unknown answers.
+  - Never assume a property exists in another location because of a similar name. If
+    the customer mentions a property or location you cannot find explicitly in the
+    context, say you want to confirm with the team rather than describing it.
+  - A wrong price or invented property is the worst possible failure — when in ANY
+    doubt, hand off.
 - If something is not in the knowledge base AND you
   have not yet collected contact details in this
   conversation, say warmly: "That one I'll need to
@@ -557,7 +572,7 @@ class ClaudeService {
     }
 
     const systemPrompt = context
-      ? `${basePrompt}\n\n${ragBoundaryRule}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Synthesise and rephrase naturally, never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}${confirmationContext}`
+      ? `${basePrompt}\n\n${ragBoundaryRule}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Rephrase naturally in a warm conversational tone, but never merge facts from different properties or invent details not explicitly present. Never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}${confirmationContext}`
       : `${basePrompt}\n\n${ragBoundaryRule}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}${afterHoursContext}${confirmationContext}`;
 
     // 5. Add user message to history
