@@ -418,7 +418,11 @@ class RagService {
     matchCount?: number;
     matchThreshold?: number;
   }): Promise<string> {
-    const { query, branchId, matchCount = 8, matchThreshold = 0.7 } = params;
+    // Default lowered 0.7 -> 0.45: an empty context (threshold too strict on a
+    // short/paraphrased query) makes the model confidently deny inventory we
+    // actually have; loose context is benign since the prompt's RAG boundary
+    // rules already constrain what the model can do with it.
+    const { query, branchId, matchCount = 8, matchThreshold = 0.45 } = params;
 
     try {
       const embedding = await this.embedText(query);

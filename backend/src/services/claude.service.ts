@@ -465,8 +465,12 @@ class ClaudeService {
     const ragBoundaryRule = buildRagBoundaryRule(activeIntents);
 
     const provider = (agentRecord.llm_provider as string) ?? 'anthropic';
+    // Voice latency: time-to-first-token matters most there, and gpt-4o-mini
+    // is materially faster than gpt-4o for the same reply quality on this prompt.
     const model = (agentRecord.llm_model as string) ??
-      (provider === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514');
+      (provider === 'openai'
+        ? (channel === 'voice' ? 'gpt-4o-mini' : 'gpt-4o')
+        : 'claude-sonnet-4-20250514');
 
     // 1b. Fetch branch timezone for after-hours evaluation
     const { data: branchRow } = await supabase
