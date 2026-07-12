@@ -495,26 +495,10 @@ class ClaudeService {
       .maybeSingle();
     const branchTimezone = (branchRow as { timezone?: string } | null)?.timezone ?? 'Africa/Lagos';
 
-    // 2. Get RAG context from pgvector
-    const context = await ragService.getContext({
-      query: message,
-      branchId,
-      matchCount: 8,
-      matchThreshold: 0.7,
-    });
-
-    // 3. Build base prompt (systemPrompt finalised after step 4)
-    const agentName = (agentRecord.name as string) ?? 'Aria';
-
-    const rawPrompt = (agentRecord.system_prompt as string) ??
-      `You are ${agentName}, a warm and helpful assistant.`;
-
-    const basePrompt = rawPrompt
-      .replace(/\{\{agent_name\}\}/g, agentName)
-      .replace(/^You are Aria,/m, `You are ${agentName},`)
-      .replace(/^You are Aria /m, `You are ${agentName} `);
-
-    // 4. Get or create conversation
+    // 2. Get or create conversation — moved ahead of RAG retrieval so its
+    // history can seed the retrieval query below (follow-ups like "how many
+    // sqm is it" have no subject on their own and need recent turns for
+    // retrieval to find the right chunk).
     const existingConversation = await this.getOrCreateConversation({
       sessionId,
       branchId,
@@ -526,6 +510,35 @@ class ClaudeService {
 
     const conversationId = existingConversation.id as string;
     const previousMessages = (existingConversation.messages as Message[]) ?? [];
+
+    // 3. Get RAG context from pgvector. Retrieval query includes the last 3
+    // exchanges (6 messages) plus the new message so subject-less follow-ups
+    // still retrieve against the right topic, not just the bare latest
+    // message. Capped to ~1500 chars from the END so the newest text (the
+    // actual question) always survives the cap.
+    const recentTurns = previousMessages.slice(-6).map(m => m.content).join('\n');
+    const rawRetrievalQuery = recentTurns ? `${recentTurns}\n${message}` : message;
+    const retrievalQuery = rawRetrievalQuery.length > 1500
+      ? rawRetrievalQuery.slice(-1500)
+      : rawRetrievalQuery;
+
+    const context = await ragService.getContext({
+      query: retrievalQuery,
+      branchId,
+      matchCount: 8,
+      matchThreshold: 0.6,
+    });
+
+    // 4. Build base prompt (systemPrompt finalised after step 4b)
+    const agentName = (agentRecord.name as string) ?? 'Aria';
+
+    const rawPrompt = (agentRecord.system_prompt as string) ??
+      `You are ${agentName}, a warm and helpful assistant.`;
+
+    const basePrompt = rawPrompt
+      .replace(/\{\{agent_name\}\}/g, agentName)
+      .replace(/^You are Aria,/m, `You are ${agentName},`)
+      .replace(/^You are Aria /m, `You are ${agentName} `);
 
     // 4b. Build final system prompt now that we have conversation state
     const hasContact = !!(

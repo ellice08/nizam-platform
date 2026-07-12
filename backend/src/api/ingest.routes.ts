@@ -37,7 +37,11 @@ async function extractText(
   filename: string
 ): Promise<string> {
   if (mimetype === 'application/pdf') {
-    const { default: pdfParse } = await import('pdf-parse');
+    // Import the internal lib directly — importing the package's index.js
+    // trips its debug self-test (which tries to read a fixture file at
+    // './test/data/05-versions-space.pdf' relative to cwd and throws ENOENT).
+    // @ts-expect-error — no published types for this internal subpath
+    const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js');
     const result = await pdfParse(buffer);
     return result.text;
   }

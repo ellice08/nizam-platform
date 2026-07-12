@@ -418,11 +418,13 @@ class RagService {
     matchCount?: number;
     matchThreshold?: number;
   }): Promise<string> {
-    // Default lowered 0.7 -> 0.45: an empty context (threshold too strict on a
-    // short/paraphrased query) makes the model confidently deny inventory we
-    // actually have; loose context is benign since the prompt's RAG boundary
-    // rules already constrain what the model can do with it.
-    const { query, branchId, matchCount = 8, matchThreshold = 0.45 } = params;
+    // Default tightened 0.45 -> 0.6: with per-unit structured chunks now in
+    // the knowledge base, correct matches score high, so the looser floor was
+    // only admitting conflation-fodder (thin, tangential chunks that gave the
+    // model raw material to blend facts across properties). The contextualized
+    // retrieval query (see prepareTurn) also means legitimate follow-ups score
+    // higher on their own, reducing the need for a lenient floor.
+    const { query, branchId, matchCount = 8, matchThreshold = 0.6 } = params;
 
     try {
       const embedding = await this.embedText(query);
