@@ -412,12 +412,16 @@ class RagService {
     return { pagesIndexed, chunksCreated: totalChunks, errors }
   }
 
-  async getContext(params: {
+  // Returns the raw matched chunk contents (no joining) so callers can merge
+  // and dedupe results from multiple searches (see prepareTurn's dual-query
+  // retrieval). getContext below wraps this for the single-query, joined-
+  // string use case.
+  async getContextChunks(params: {
     query: string;
     branchId: string;
     matchCount?: number;
     matchThreshold?: number;
-  }): Promise<string> {
+  }): Promise<string[]> {
     // Default tightened 0.45 -> 0.6: with per-unit structured chunks now in
     // the knowledge base, correct matches score high, so the looser floor was
     // only admitting conflation-fodder (thin, tangential chunks that gave the
@@ -438,18 +442,26 @@ class RagService {
 
       if (error) {
         logger.error(`RAG search error: ${error.message}`);
-        return '';
+        return [];
       }
 
-      if (!data || data.length === 0) return '';
+      if (!data || data.length === 0) return [];
 
-      return (data as Array<{ content: string }>)
-        .map(row => row.content)
-        .join('\n\n---\n\n');
+      return (data as Array<{ content: string }>).map(row => row.content);
     } catch (err) {
       logger.error(`getContext error: ${err instanceof Error ? err.message : String(err)}`);
-      return '';
+      return [];
     }
+  }
+
+  async getContext(params: {
+    query: string;
+    branchId: string;
+    matchCount?: number;
+    matchThreshold?: number;
+  }): Promise<string> {
+    const chunks = await this.getContextChunks(params);
+    return chunks.join('\n\n---\n\n');
   }
 
   async deleteChunksBySource(params: {
