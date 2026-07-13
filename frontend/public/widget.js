@@ -74,28 +74,59 @@
   const styles = `
     #nizam-widget-btn {
       position: fixed;
-      bottom: 24px;
-      right: 24px;
-      width: 56px;
-      height: 56px;
+      right: 20px;
+      bottom: 72px;
+      /* z-index kept high (not Tailwind's z-50) — this button is embedded on
+         arbitrary third-party host pages with unknown stacking contexts, so
+         a low z-index risks it being hidden behind host content. */
+      z-index: 999998;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      background: var(--nizam-primary, #7A2535);
+      background: rgba(var(--nizam-primary-rgb, 122, 37, 53), 0.2);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+      box-shadow:
+        0 10px 15px -3px rgba(var(--nizam-primary-rgb, 122, 37, 53), 0.2),
+        0 4px 6px -4px rgba(var(--nizam-primary-rgb, 122, 37, 53), 0.2);
       border: none;
       cursor: pointer;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 999998;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      outline: none;
+      transition: all 0.4s ease-in-out;
+    }
+    @media (min-width: 768px) {
+      #nizam-widget-btn {
+        bottom: 136px;
+        width: 48px;
+        height: 48px;
+      }
+      #nizam-widget-panel {
+        bottom: 200px;
+      }
+    }
+    @media (min-width: 1024px) {
+      #nizam-widget-btn {
+        bottom: 76px;
+      }
+      #nizam-widget-panel {
+        bottom: 140px;
+      }
     }
     #nizam-widget-btn:hover {
-      transform: scale(1.08);
-      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+      background: var(--nizam-primary, #7A2535);
+      transform: scale(1.1);
+    }
+    #nizam-widget-btn:focus-visible {
+      box-shadow:
+        0 0 0 2px #ffffff,
+        0 0 0 4px var(--nizam-primary, #7A2535);
     }
     #nizam-widget-btn svg {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       fill: none;
       stroke: #ffffff;
       stroke-width: 1.5;
@@ -104,8 +135,8 @@
     }
     #nizam-widget-panel {
       position: fixed;
-      bottom: 92px;
-      right: 24px;
+      bottom: 132px;
+      right: 20px;
       width: 360px;
       max-height: 540px;
       background: #0E0E0C;
@@ -384,12 +415,8 @@
       #nizam-widget-panel {
         width: calc(100vw - 16px);
         right: 8px;
-        bottom: 80px;
+        bottom: 132px;
         border-radius: 12px;
-      }
-      #nizam-widget-btn {
-        right: 16px;
-        bottom: 16px;
       }
     }
   `;
@@ -451,9 +478,27 @@
     bindEvents();
   }
 
+  function hexToRgb(hex) {
+    var fallback = '122, 37, 53'; // #7A2535 default
+    if (!hex) return fallback;
+    var clean = hex.replace('#', '');
+    if (clean.length === 3) {
+      clean = clean.split('').map(function (c) { return c + c; }).join('');
+    }
+    var num = parseInt(clean, 16);
+    if (isNaN(num) || clean.length !== 6) return fallback;
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255].join(', ');
+  }
+
   function applyBranding() {
     document.documentElement.style.setProperty(
       '--nizam-primary', config.primaryColor
+    );
+    // Drives the launcher button's translucent brand-tinted background/shadow
+    // (rgba(var(--nizam-primary-rgb), alpha)) — CSS custom properties can't
+    // hold a hex string in an rgba() call, so we split it into "r, g, b" here.
+    document.documentElement.style.setProperty(
+      '--nizam-primary-rgb', hexToRgb(config.primaryColor)
     );
     const avatar = document.getElementById('nizam-widget-avatar');
     if (avatar) {
@@ -463,8 +508,10 @@
     const agentNameEl = document.getElementById('nizam-widget-agent-name');
     if (agentNameEl) agentNameEl.textContent = config.agentName;
 
-    const btn = document.getElementById('nizam-widget-btn');
-    if (btn) btn.style.background = config.primaryColor;
+    // Note: the launcher button's background is intentionally NOT set here —
+    // it's translucent brand-tinted by default and solidifies to
+    // var(--nizam-primary) on hover via CSS. Setting an inline style here
+    // would win specificity over the :hover rule and break that effect.
 
     const sendBtn = document.getElementById('nizam-widget-send');
     if (sendBtn) sendBtn.style.background = config.primaryColor;
@@ -512,7 +559,7 @@
     if (isOpen) {
       panel.classList.add('open');
       btn.innerHTML = `
-        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;stroke-width:2;fill:none">
+        <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#fff;stroke-width:2;fill:none">
           <path d="M18 6L6 18M6 6l12 12"/>
         </svg>
       `;
@@ -528,7 +575,7 @@
     } else {
       panel.classList.remove('open');
       btn.innerHTML = `
-        <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:#fff;stroke-width:1.5;fill:none">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;stroke-width:1.5;fill:none">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
       `;
