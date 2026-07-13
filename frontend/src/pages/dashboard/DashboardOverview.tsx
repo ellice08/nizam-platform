@@ -6,7 +6,7 @@ import { Badge } from "@/components/nizam/Badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Phone, MessageSquare, MessageCircle, CircleDot, Inbox } from "lucide-react";
 import { useAuthStore } from '@/store'
-import { useOrganisation, useOrganisationStats, useConversations, useWhatsappAccounts } from '@/hooks'
+import { useOrganisation, useOrganisationStats, useConversations, useWhatsappAccounts, useVoiceAccounts } from '@/hooks'
 
 const channelIcon = (c: string) =>
   c === "voice" ? Phone : c === "whatsapp" ? MessageCircle : MessageSquare;
@@ -27,9 +27,13 @@ const DashboardOverview = () => {
   const { data: stats, isLoading: statsLoading } = useOrganisationStats(activeOrgId)
   const { data: conversations, isLoading: convsLoading } = useConversations({ limit: 5 })
   const { data: waAccounts } = useWhatsappAccounts()
+  const { data: voiceAccounts } = useVoiceAccounts()
 
   const waConnected = (waAccounts ?? []).filter(a => a.status === 'connected').length
   const waTotal     = (waAccounts ?? []).length
+
+  const voiceConnected = (voiceAccounts ?? []).filter(a => a.status === 'connected').length
+  const voiceTotal     = (voiceAccounts ?? []).length
 
   const channels: Array<{ name: string; icon: typeof MessageSquare; status: string; tone: Tone; link?: string }> = [
     { name: 'Web chat',  icon: MessageSquare,  status: 'Active',        tone: 'active' },
@@ -40,7 +44,13 @@ const DashboardOverview = () => {
       tone: waConnected > 0 ? 'active' : waTotal > 0 ? 'pending' : 'idle',
       link: '/dashboard/channels',
     },
-    { name: 'Voice',     icon: Phone,          status: 'Coming soon',   tone: 'idle'   },
+    { name: 'Voice',     icon: Phone,
+      status: voiceConnected > 0
+        ? (voiceConnected === 1 ? '1 connected' : `${voiceConnected} connected`)
+        : voiceTotal > 0 ? 'Pending setup' : 'Not connected',
+      tone: voiceConnected > 0 ? 'active' : voiceTotal > 0 ? 'pending' : 'idle',
+      link: '/dashboard/channels',
+    },
   ]
 
   const resolutionHint = stats?.total_conversations

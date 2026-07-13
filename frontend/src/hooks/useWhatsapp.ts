@@ -7,6 +7,8 @@ export const useWhatsappAccounts = () => {
   return useQuery({
     queryKey: ['whatsapp-accounts', tenantOrgId],
     queryFn: () => whatsappApi.list(),
+    refetchInterval: 45_000,
+    refetchOnWindowFocus: true,
   })
 }
 
