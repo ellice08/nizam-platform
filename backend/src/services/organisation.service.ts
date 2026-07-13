@@ -72,9 +72,26 @@ class OrganisationService {
     orgId: string,
     data: Partial<{ name: string; industry: string; plan: string; branding_config: unknown; subdomain: string }>
   ) {
+    const updateData: Record<string, unknown> = { ...data };
+
+    // branding_config is jsonb — merge into the existing value instead of
+    // overwriting the whole column, so a partial update (e.g. just the new
+    // theme fields) never clobbers unrelated branding keys (logo_url, colors,
+    // font, etc. set by a different save path).
+    if (data.branding_config && typeof data.branding_config === 'object') {
+      const { data: existing } = await supabase
+        .from('organisations')
+        .select('branding_config')
+        .eq('id', orgId)
+        .maybeSingle();
+
+      const existingBranding = (existing as Record<string, unknown> | null)?.['branding_config'] as Record<string, unknown> | null ?? {};
+      updateData.branding_config = { ...existingBranding, ...(data.branding_config as Record<string, unknown>) };
+    }
+
     const { data: org, error } = await supabase
       .from('organisations')
-      .update(data)
+      .update(updateData)
       .eq('id', orgId)
       .select()
       .single();

@@ -52,6 +52,9 @@ router.get('/config/:orgId', async (req: Request, res: Response, next: NextFunct
       agentName,
       primaryColor: (branding.primary_color as string) ?? '#7A2535',
       secondaryColor: (branding.secondary_color as string) ?? '#C4909A',
+      themeMode: (branding.theme_mode as string) ?? 'auto',
+      fontFamily: (branding.font_family as string) ?? 'inherit',
+      cornerRadius: (branding.corner_radius as string) ?? 'rounded',
     }))
   } catch (err) {
     next(err)
