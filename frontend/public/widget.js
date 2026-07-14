@@ -68,10 +68,31 @@
     agentName: 'Assistant',
     primaryColor: '#7A2535',
     secondaryColor: '#C4909A',
+    themeMode: 'auto',
+    fontFamily: 'inherit',
+    cornerRadius: 'rounded',
   };
 
   // ─── CSS ────────────────────────────────────────────────────
+  // Palette lives entirely in --nzw-* custom properties, scoped to
+  // #nizam-widget-root (never :root) so it can never leak into the host
+  // page's own styles. The block below is the built-in dark-mode default —
+  // applyTheme() overrides these via root.style.setProperty() at runtime, and
+  // every var() call below also carries the same value as its fallback arg,
+  // so the widget renders identically to before even if theming JS never ran.
   const styles = `
+    #nizam-widget-root {
+      --nzw-bg: #0E0E0C;
+      --nzw-surface: #141410;
+      --nzw-text: #FAFAFA;
+      --nzw-text-muted: #888880;
+      --nzw-primary: #7A2535;
+      --nzw-primary-rgb: 122, 37, 53;
+      --nzw-primary-contrast: #ffffff;
+      --nzw-border: #2A2A26;
+      --nzw-font: Arial, sans-serif;
+      --nzw-radius: 12px;
+    }
     #nizam-widget-btn {
       position: fixed;
       right: 20px;
@@ -83,12 +104,12 @@
       width: 44px;
       height: 44px;
       border-radius: 50%;
-      background: rgba(var(--nizam-primary-rgb, 122, 37, 53), 0.2);
+      background: rgba(var(--nzw-primary-rgb, 122, 37, 53), 0.2);
       -webkit-backdrop-filter: blur(4px);
       backdrop-filter: blur(4px);
       box-shadow:
-        0 10px 15px -3px rgba(var(--nizam-primary-rgb, 122, 37, 53), 0.2),
-        0 4px 6px -4px rgba(var(--nizam-primary-rgb, 122, 37, 53), 0.2);
+        0 10px 15px -3px rgba(var(--nzw-primary-rgb, 122, 37, 53), 0.2),
+        0 4px 6px -4px rgba(var(--nzw-primary-rgb, 122, 37, 53), 0.2);
       border: none;
       cursor: pointer;
       display: flex;
@@ -116,19 +137,19 @@
       }
     }
     #nizam-widget-btn:hover {
-      background: var(--nizam-primary, #7A2535);
+      background: var(--nzw-primary, #7A2535);
       transform: scale(1.1);
     }
     #nizam-widget-btn:focus-visible {
       box-shadow:
         0 0 0 2px #ffffff,
-        0 0 0 4px var(--nizam-primary, #7A2535);
+        0 0 0 4px var(--nzw-primary, #7A2535);
     }
     #nizam-widget-btn svg {
       width: 20px;
       height: 20px;
       fill: none;
-      stroke: #ffffff;
+      stroke: var(--nzw-primary-contrast, #ffffff);
       stroke-width: 1.5;
       stroke-linecap: round;
       stroke-linejoin: round;
@@ -139,9 +160,9 @@
       right: 20px;
       width: 360px;
       max-height: 540px;
-      background: #0E0E0C;
-      border: 1px solid #2A2A26;
-      border-radius: 16px;
+      background: var(--nzw-bg, #0E0E0C);
+      border: 1px solid var(--nzw-border, #2A2A26);
+      border-radius: calc(var(--nzw-radius, 12px) * 1.333);
       box-shadow: 0 8px 40px rgba(0,0,0,0.5);
       display: flex;
       flex-direction: column;
@@ -159,11 +180,11 @@
     }
     #nizam-widget-header {
       padding: 16px 20px;
-      border-bottom: 1px solid #2A2A26;
+      border-bottom: 1px solid var(--nzw-border, #2A2A26);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: #141410;
+      background: var(--nzw-surface, #141410);
       flex-shrink: 0;
     }
     #nizam-widget-header-left {
@@ -175,14 +196,14 @@
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: var(--nizam-primary, #7A2535);
+      background: var(--nzw-primary, #7A2535);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 14px;
-      color: white;
+      color: var(--nzw-primary-contrast, #ffffff);
       font-weight: 600;
-      font-family: Arial, sans-serif;
+      font-family: var(--nzw-font, Arial, sans-serif);
     }
     #nizam-widget-header-text {
       display: flex;
@@ -191,13 +212,13 @@
     #nizam-widget-agent-name {
       font-size: 13px;
       font-weight: 600;
-      color: #FAFAFA;
-      font-family: Arial, sans-serif;
+      color: var(--nzw-text, #FAFAFA);
+      font-family: var(--nzw-font, Arial, sans-serif);
     }
     #nizam-widget-status {
       font-size: 11px;
-      color: #888880;
-      font-family: Arial, sans-serif;
+      color: var(--nzw-text-muted, #888880);
+      font-family: var(--nzw-font, Arial, sans-serif);
       display: flex;
       align-items: center;
       gap: 4px;
@@ -215,7 +236,7 @@
       border: none;
       cursor: pointer;
       padding: 4px;
-      color: #888880;
+      color: var(--nzw-text-muted, #888880);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -223,8 +244,8 @@
       transition: background 0.15s ease;
     }
     #nizam-widget-close:hover {
-      background: #2A2A26;
-      color: #FAFAFA;
+      background: var(--nzw-border, #2A2A26);
+      color: var(--nzw-text, #FAFAFA);
     }
     #nizam-widget-close svg {
       width: 16px;
@@ -238,7 +259,7 @@
       border: none;
       cursor: pointer;
       padding: 4px;
-      color: #888880;
+      color: var(--nzw-text-muted, #888880);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -247,8 +268,8 @@
       margin-right: 4px;
     }
     #nizam-widget-newchat:hover {
-      background: #2A2A26;
-      color: #FAFAFA;
+      background: var(--nzw-border, #2A2A26);
+      color: var(--nzw-text, #FAFAFA);
     }
     #nizam-widget-newchat svg {
       width: 16px;
@@ -266,15 +287,15 @@
       gap: 12px;
       min-height: 280px;
       max-height: 360px;
-      background: #0E0E0C;
+      background: var(--nzw-bg, #0E0E0C);
       scrollbar-width: thin;
-      scrollbar-color: #2A2A26 transparent;
+      scrollbar-color: var(--nzw-border, #2A2A26) transparent;
     }
     #nizam-widget-messages::-webkit-scrollbar {
       width: 4px;
     }
     #nizam-widget-messages::-webkit-scrollbar-thumb {
-      background: #2A2A26;
+      background: var(--nzw-border, #2A2A26);
       border-radius: 4px;
     }
     .nizam-msg {
@@ -292,21 +313,21 @@
     }
     .nizam-msg-bubble {
       padding: 10px 14px;
-      border-radius: 12px;
+      border-radius: var(--nzw-radius, 12px);
       font-size: 13px;
       line-height: 1.55;
-      font-family: Arial, sans-serif;
+      font-family: var(--nzw-font, Arial, sans-serif);
     }
     .nizam-msg.user .nizam-msg-bubble {
-      background: var(--nizam-primary, #7A2535);
-      color: #FAFAFA;
-      border-bottom-right-radius: 4px;
+      background: var(--nzw-primary, #7A2535);
+      color: var(--nzw-primary-contrast, #FAFAFA);
+      border-bottom-right-radius: calc(var(--nzw-radius, 12px) / 3);
     }
     .nizam-msg.assistant .nizam-msg-bubble {
-      background: #1A1A16;
-      color: #FAFAFA;
-      border: 1px solid #2A2A26;
-      border-bottom-left-radius: 4px;
+      background: var(--nzw-surface, #1A1A16);
+      color: var(--nzw-text, #FAFAFA);
+      border: 1px solid var(--nzw-border, #2A2A26);
+      border-bottom-left-radius: calc(var(--nzw-radius, 12px) / 3);
     }
     .nizam-msg-escalated {
       font-size: 11px;
@@ -321,16 +342,16 @@
       align-items: center;
       gap: 4px;
       padding: 10px 14px;
-      background: #1A1A16;
-      border: 1px solid #2A2A26;
-      border-radius: 12px;
-      border-bottom-left-radius: 4px;
+      background: var(--nzw-surface, #1A1A16);
+      border: 1px solid var(--nzw-border, #2A2A26);
+      border-radius: var(--nzw-radius, 12px);
+      border-bottom-left-radius: calc(var(--nzw-radius, 12px) / 3);
       align-self: flex-start;
     }
     .nizam-typing span {
       width: 6px;
       height: 6px;
-      background: #888880;
+      background: var(--nzw-text-muted, #888880);
       border-radius: 50%;
       animation: nizamBounce 1.2s infinite;
     }
@@ -346,22 +367,22 @@
     }
     #nizam-widget-input-area {
       padding: 12px 16px;
-      border-top: 1px solid #2A2A26;
+      border-top: 1px solid var(--nzw-border, #2A2A26);
       display: flex;
       gap: 8px;
       align-items: flex-end;
-      background: #141410;
+      background: var(--nzw-surface, #141410);
       flex-shrink: 0;
     }
     #nizam-widget-input {
       flex: 1;
-      background: #0E0E0C;
-      border: 1px solid #2A2A26;
+      background: var(--nzw-bg, #0E0E0C);
+      border: 1px solid var(--nzw-border, #2A2A26);
       border-radius: 10px;
       padding: 10px 14px;
       font-size: 13px;
-      color: #FAFAFA;
-      font-family: Arial, sans-serif;
+      color: var(--nzw-text, #FAFAFA);
+      font-family: var(--nzw-font, Arial, sans-serif);
       resize: none;
       outline: none;
       min-height: 40px;
@@ -370,7 +391,7 @@
       transition: border-color 0.15s ease;
     }
     #nizam-widget-input:focus {
-      border-color: var(--nizam-primary, #7A2535);
+      border-color: var(--nzw-primary, #7A2535);
     }
     #nizam-widget-input::placeholder {
       color: #555550;
@@ -379,7 +400,7 @@
       width: 36px;
       height: 36px;
       border-radius: 8px;
-      background: var(--nizam-primary, #7A2535);
+      background: var(--nzw-primary, #7A2535);
       border: none;
       cursor: pointer;
       display: flex;
@@ -398,7 +419,7 @@
     #nizam-widget-send svg {
       width: 16px;
       height: 16px;
-      stroke: #FAFAFA;
+      stroke: var(--nzw-primary-contrast, #FAFAFA);
       stroke-width: 1.5;
       fill: none;
     }
@@ -407,8 +428,8 @@
       padding: 6px 0 10px;
       font-size: 10px;
       color: #444440;
-      font-family: Arial, sans-serif;
-      background: #141410;
+      font-family: var(--nzw-font, Arial, sans-serif);
+      background: var(--nzw-surface, #141410);
       flex-shrink: 0;
     }
     @media (max-width: 480px) {
@@ -416,7 +437,7 @@
         width: calc(100vw - 16px);
         right: 8px;
         bottom: 132px;
-        border-radius: 12px;
+        border-radius: var(--nzw-radius, 12px);
       }
     }
   `;
@@ -427,6 +448,13 @@
     styleEl.textContent = styles;
     document.head.appendChild(styleEl);
 
+    // Scoped root — the ONLY element theming CSS variables are set on (see
+    // applyTheme below). Everything lives inside it so the variables cascade
+    // to descendants without ever touching the host page's :root.
+    const root = document.createElement('div');
+    root.id = 'nizam-widget-root';
+    document.body.appendChild(root);
+
     // Floating button
     const btn = document.createElement('button');
     btn.id = 'nizam-widget-btn';
@@ -436,7 +464,7 @@
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
     `;
-    document.body.appendChild(btn);
+    root.appendChild(btn);
 
     // Chat panel
     const panel = document.createElement('div');
@@ -472,49 +500,210 @@
       </div>
       <div id="nizam-widget-powered">Powered by Ellice Systems</div>
     `;
-    document.body.appendChild(panel);
+    root.appendChild(panel);
 
-    applyBranding();
+    applyContent();
     bindEvents();
   }
 
-  function hexToRgb(hex) {
-    var fallback = '122, 37, 53'; // #7A2535 default
-    if (!hex) return fallback;
+  function applyContent() {
+    // Text/label content only — colors are handled entirely by applyTheme()
+    // via CSS variables, so there's no inline-style color assignment here
+    // (an inline style would win specificity over the :hover rule the
+    // launcher button relies on to stay translucent until hovered).
+    const avatar = document.getElementById('nizam-widget-avatar');
+    if (avatar) avatar.textContent = config.agentName.charAt(0).toUpperCase();
+
+    const agentNameEl = document.getElementById('nizam-widget-agent-name');
+    if (agentNameEl) agentNameEl.textContent = config.agentName;
+  }
+
+  // ─── Theming ────────────────────────────────────────────────
+  // Built-in dark palette (matches the CSS defaults declared on
+  // #nizam-widget-root) and a light counterpart for host-site auto-detection.
+  var DARK_PALETTE = {
+    bg: '#0E0E0C',
+    surface: '#141410',
+    text: '#FAFAFA',
+    textMuted: '#888880',
+    border: '#2A2A26',
+  };
+  var LIGHT_PALETTE = {
+    bg: '#FFFFFF',
+    surface: '#F5F5F3',
+    text: '#1A1A16',
+    textMuted: '#6B6B63',
+    border: '#E5E5E0',
+  };
+
+  function parseRgbString(str) {
+    var m = str && str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/i);
+    if (!m) return null;
+    return {
+      r: parseInt(m[1], 10),
+      g: parseInt(m[2], 10),
+      b: parseInt(m[3], 10),
+      a: m[4] !== undefined ? parseFloat(m[4]) : 1,
+    };
+  }
+
+  function hexToRgbObj(hex) {
+    if (!hex) return null;
     var clean = hex.replace('#', '');
     if (clean.length === 3) {
       clean = clean.split('').map(function (c) { return c + c; }).join('');
     }
+    if (clean.length !== 6) return null;
     var num = parseInt(clean, 16);
-    if (isNaN(num) || clean.length !== 6) return fallback;
-    return [(num >> 16) & 255, (num >> 8) & 255, num & 255].join(', ');
+    if (isNaN(num)) return null;
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
   }
 
-  function applyBranding() {
-    document.documentElement.style.setProperty(
-      '--nizam-primary', config.primaryColor
-    );
-    // Drives the launcher button's translucent brand-tinted background/shadow
-    // (rgba(var(--nizam-primary-rgb), alpha)) — CSS custom properties can't
-    // hold a hex string in an rgba() call, so we split it into "r, g, b" here.
-    document.documentElement.style.setProperty(
-      '--nizam-primary-rgb', hexToRgb(config.primaryColor)
-    );
-    const avatar = document.getElementById('nizam-widget-avatar');
-    if (avatar) {
-      avatar.textContent = config.agentName.charAt(0).toUpperCase();
-      avatar.style.background = config.primaryColor;
+  // Accepts either a hex string ("#7A2535") or an rgb()/rgba() string —
+  // detected accents come back from getComputedStyle as rgb(), while config
+  // colors are hex, so callers need both forms to work.
+  function toRgbComponents(color) {
+    if (!color) return null;
+    if (color.charAt(0) === '#') return hexToRgbObj(color);
+    var parsed = parseRgbString(color);
+    return parsed ? { r: parsed.r, g: parsed.g, b: parsed.b } : null;
+  }
+
+  function relativeLuminance(r, g, b) {
+    function chan(c) {
+      var v = c / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
     }
-    const agentNameEl = document.getElementById('nizam-widget-agent-name');
-    if (agentNameEl) agentNameEl.textContent = config.agentName;
+    return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b);
+  }
 
-    // Note: the launcher button's background is intentionally NOT set here —
-    // it's translucent brand-tinted by default and solidifies to
-    // var(--nizam-primary) on hover via CSS. Setting an inline style here
-    // would win specificity over the :hover rule and break that effect.
+  function rgbTuple(color) {
+    var rgb = toRgbComponents(color);
+    return rgb ? [rgb.r, rgb.g, rgb.b].join(', ') : '122, 37, 53';
+  }
 
-    const sendBtn = document.getElementById('nizam-widget-send');
-    if (sendBtn) sendBtn.style.background = config.primaryColor;
+  function contrastColor(color) {
+    var rgb = toRgbComponents(color);
+    if (!rgb) return '#ffffff';
+    return relativeLuminance(rgb.r, rgb.g, rgb.b) > 0.5 ? '#000000' : '#ffffff';
+  }
+
+  function radiusPx(mode) {
+    if (mode === 'sharp') return '4px';
+    if (mode === 'pill') return '20px';
+    return '12px'; // rounded (default)
+  }
+
+  // Reads the HOST page (not our widget) to infer a sensible starting point:
+  // dark/light mode from the body's actual background, the body's font stack,
+  // and — best-effort — a brand accent color from a link or button. Every
+  // piece is independently try/caught; any doubt yields null/fallback rather
+  // than a wrong guess.
+  function detectHostTheme() {
+    var result = { mode: null, font: null, accent: null };
+
+    try {
+      var bodyBg = getComputedStyle(document.body).backgroundColor;
+      var bgRgb = parseRgbString(bodyBg);
+      if (bgRgb && bgRgb.a > 0) {
+        result.mode = relativeLuminance(bgRgb.r, bgRgb.g, bgRgb.b) < 0.5 ? 'dark' : 'light';
+      }
+    } catch (e) { /* fall through to matchMedia below */ }
+
+    if (!result.mode) {
+      try {
+        result.mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          ? 'dark' : 'light';
+      } catch (e) {
+        result.mode = 'dark'; // matches the built-in default palette
+      }
+    }
+
+    try {
+      var bodyFont = getComputedStyle(document.body).fontFamily;
+      if (bodyFont && bodyFont.trim()) result.font = bodyFont;
+    } catch (e) { /* leave null — caller falls back */ }
+
+    try {
+      var found = null;
+      var isGrayscale = function (rgb) { return rgb.r === rgb.g && rgb.g === rgb.b; };
+
+      var anchors = document.querySelectorAll('a');
+      for (var i = 0; i < anchors.length && i < 50 && !found; i++) {
+        var linkRgb = parseRgbString(getComputedStyle(anchors[i]).color);
+        if (linkRgb && linkRgb.a > 0 && !isGrayscale(linkRgb)) {
+          found = getComputedStyle(anchors[i]).color;
+        }
+      }
+
+      if (!found) {
+        var buttons = document.querySelectorAll('button, [type="submit"], .btn, .button');
+        for (var j = 0; j < buttons.length && j < 30 && !found; j++) {
+          var btnRgb = parseRgbString(getComputedStyle(buttons[j]).backgroundColor);
+          if (btnRgb && btnRgb.a > 0 && !isGrayscale(btnRgb)) {
+            found = getComputedStyle(buttons[j]).backgroundColor;
+          }
+        }
+      }
+
+      result.accent = found;
+    } catch (e) {
+      result.accent = null;
+    }
+
+    return result;
+  }
+
+  function isAutoMode() {
+    return !config.themeMode || config.themeMode === 'auto';
+  }
+
+  // Merge order: tenant override (config) > detected (host page) > built-in
+  // dark defaults. config.primaryColor always wins over detected.accent in
+  // practice — both our local defaults and the config endpoint always supply
+  // a non-empty primaryColor, so detected.accent only matters as a structural
+  // fallback if that ever changes.
+  function applyTheme(cfg, detected) {
+    var root = document.getElementById('nizam-widget-root');
+    if (!root) return;
+
+    var mode = (cfg.themeMode && cfg.themeMode !== 'auto')
+      ? cfg.themeMode
+      : (detected.mode || 'dark');
+
+    var font = (cfg.fontFamily && cfg.fontFamily !== 'inherit')
+      ? cfg.fontFamily
+      : (detected.font || 'Arial, sans-serif');
+
+    var primary = cfg.primaryColor || detected.accent || '#7A2535';
+    var radius = radiusPx(cfg.cornerRadius);
+    var palette = mode === 'light' ? LIGHT_PALETTE : DARK_PALETTE;
+
+    root.style.setProperty('--nzw-bg', palette.bg);
+    root.style.setProperty('--nzw-surface', palette.surface);
+    root.style.setProperty('--nzw-text', palette.text);
+    root.style.setProperty('--nzw-text-muted', palette.textMuted);
+    root.style.setProperty('--nzw-border', palette.border);
+    root.style.setProperty('--nzw-primary', primary);
+    root.style.setProperty('--nzw-primary-rgb', rgbTuple(primary));
+    root.style.setProperty('--nzw-primary-contrast', contrastColor(primary));
+    root.style.setProperty('--nzw-font', font);
+    root.style.setProperty('--nzw-radius', radius);
+  }
+
+  // Live theme switching: only relevant when the tenant hasn't forced a mode
+  // (themeMode 'auto') — re-run full detection (not just the media query,
+  // since the host page's own body background may change too) and re-apply.
+  function watchAutoTheme() {
+    try {
+      var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+      if (!mq) return;
+      var handler = function () {
+        if (isAutoMode()) applyTheme(config, detectHostTheme());
+      };
+      if (mq.addEventListener) mq.addEventListener('change', handler);
+      else if (mq.addListener) mq.addListener(handler); // Safari < 14
+    } catch (e) { /* live switching is a nice-to-have, never fatal */ }
   }
 
   // ─── Events ──────────────────────────────────────────────────
@@ -559,7 +748,7 @@
     if (isOpen) {
       panel.classList.add('open');
       btn.innerHTML = `
-        <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#fff;stroke-width:2;fill:none">
+        <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:var(--nzw-primary-contrast, #fff);stroke-width:2;fill:none">
           <path d="M18 6L6 18M6 6l12 12"/>
         </svg>
       `;
@@ -575,7 +764,7 @@
     } else {
       panel.classList.remove('open');
       btn.innerHTML = `
-        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;stroke-width:1.5;fill:none">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:var(--nzw-primary-contrast, #fff);stroke-width:1.5;fill:none">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
       `;
@@ -945,6 +1134,14 @@
     }
 
     buildWidget();
+
+    try {
+      applyTheme(config, detectHostTheme());
+    } catch (e) {
+      // Theming must never break the widget — CSS var() fallbacks already
+      // reproduce the built-in dark palette if this fails entirely.
+    }
+    watchAutoTheme();
 
     // Defer page capture so it never competes with page load or widget render
     if ('requestIdleCallback' in window) {

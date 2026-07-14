@@ -16,6 +16,9 @@ export interface Organisation {
     accent_color?: string
     background_color?: string
     font: string
+    theme_mode?: 'auto' | 'light' | 'dark'
+    font_family?: string
+    corner_radius?: 'sharp' | 'rounded' | 'pill'
   }
   implementation_paid: boolean
   support_expires_at: string | null

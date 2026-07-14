@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ComponentType } from 'react'
 import { MessageSquare, Phone, Wifi, CheckCircle2, AlertCircle, Clock, Plus, Trash2, ChevronUp, Copy } from 'lucide-react'
 import { toast } from 'sonner'
@@ -6,12 +6,13 @@ import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/nizam/Badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useAuthStore } from '@/store'
+import { useAuthStore, useThemeStore } from '@/store'
 import {
-  useBranches,
+  useBranches, useOrganisation,
   useWhatsappAccounts, useConnectWhatsapp, useDisconnectWhatsapp,
   useVoiceAccounts, useConnectVoice, useDisconnectVoice,
 } from '@/hooks'
+import { organisationApi } from '@/api'
 import type { WhatsAppAccount, VoiceAccount } from '@/api'
 import type { Branch } from '@/types/api.types'
 
@@ -73,7 +74,7 @@ const ChannelSection = ({ name, description, icon: Icon, iconWrapClass, iconClas
 )
 
 // ── Web chat body — embed snippet (moved here from Agent.tsx; that copy is
-// left in place for now) plus a placeholder for upcoming appearance settings.
+// left in place for now) plus widget appearance controls.
 
 const WebChatBody = () => {
   const { organisationId } = useAuthStore()
@@ -109,10 +110,241 @@ const WebChatBody = () => {
       <p className="text-xs text-[hsl(var(--text-tertiary))]">
         Paste this snippet into the <code className="nz-mono">&lt;head&gt;</code> of your website to activate the chat widget.
       </p>
-      <p className="text-xs text-[hsl(var(--text-tertiary))] pt-3 border-t border-border">
-        Appearance settings coming soon.
-      </p>
+
+      {organisationId && <WebChatAppearance organisationId={organisationId} />}
     </>
+  )
+}
+
+// ── Web chat appearance — theme/color/font/radius, saved to branding_config
+// (merged server-side); the widget reads them via its /config endpoint.
+
+type ThemeMode = 'auto' | 'light' | 'dark'
+type CornerRadius = 'sharp' | 'rounded' | 'pill'
+
+const RADIUS_PX: Record<CornerRadius, number> = { sharp: 4, rounded: 12, pill: 20 }
+
+const FONT_PRESETS = [
+  { value: 'inherit', label: 'Inherit from site (default)' },
+  { value: 'system-ui, -apple-system, "Segoe UI", sans-serif', label: 'System UI' },
+  { value: 'Georgia, serif', label: 'Georgia' },
+] as const
+const CUSTOM_FONT_VALUE = '__custom__'
+
+function hexToRgbLocal(hex: string): { r: number; g: number; b: number } | null {
+  const clean = hex.replace('#', '')
+  const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean
+  if (full.length !== 6) return null
+  const num = parseInt(full, 16)
+  if (Number.isNaN(num)) return null
+  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 }
+}
+
+// Same relative-luminance approach as the widget's own contrastColor(), kept
+// in sync so the dashboard preview matches what the widget actually renders.
+function contrastTextColor(hex: string): string {
+  const rgb = hexToRgbLocal(hex)
+  if (!rgb) return '#ffffff'
+  const chan = (c: number) => {
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  const lum = 0.2126 * chan(rgb.r) + 0.7152 * chan(rgb.g) + 0.0722 * chan(rgb.b)
+  return lum > 0.5 ? '#000000' : '#ffffff'
+}
+
+const SegmentedControl = <T extends string>({
+  options, value, onChange,
+}: { options: ReadonlyArray<{ value: T; label: string }>; value: T; onChange: (v: T) => void }) => (
+  <div className="inline-flex rounded-lg border border-border bg-background p-0.5">
+    {options.map(opt => (
+      <button
+        key={opt.value}
+        type="button"
+        onClick={() => onChange(opt.value)}
+        className={`px-3 py-1.5 text-xs rounded-md transition-colors duration-150 ${
+          value === opt.value
+            ? 'bg-primary text-primary-foreground'
+            : 'text-[hsl(var(--text-secondary))] hover:text-foreground'
+        }`}
+      >
+        {opt.label}
+      </button>
+    ))}
+  </div>
+)
+
+const WebChatAppearance = ({ organisationId }: { organisationId: string }) => {
+  const { data: org, refetch } = useOrganisation(organisationId)
+  const { resolvedTheme } = useThemeStore()
+
+  const [themeMode, setThemeMode] = useState<ThemeMode>('auto')
+  const [primaryColor, setPrimaryColor] = useState('#7A2535')
+  const [fontChoice, setFontChoice] = useState<string>('inherit')
+  const [customFont, setCustomFont] = useState('')
+  const [cornerRadius, setCornerRadius] = useState<CornerRadius>('rounded')
+  const [saving, setSaving] = useState(false)
+
+  // Prefill from the org's current branding_config once it loads.
+  useEffect(() => {
+    const branding = org?.branding_config
+    if (!branding) return
+    if (branding.theme_mode) setThemeMode(branding.theme_mode)
+    if (branding.primary_color) setPrimaryColor(branding.primary_color)
+    if (branding.corner_radius) setCornerRadius(branding.corner_radius)
+    if (branding.font_family) {
+      const preset = FONT_PRESETS.find(p => p.value === branding.font_family)
+      if (preset) {
+        setFontChoice(preset.value)
+      } else {
+        setFontChoice(CUSTOM_FONT_VALUE)
+        setCustomFont(branding.font_family)
+      }
+    }
+  }, [org])
+
+  const effectiveFont = fontChoice === CUSTOM_FONT_VALUE ? (customFont.trim() || 'inherit') : fontChoice
+  const previewIsDark = themeMode === 'dark' || (themeMode === 'auto' && resolvedTheme === 'dark')
+  const contrastOnPrimary = contrastTextColor(primaryColor)
+
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+      await organisationApi.updateOrganisation(organisationId, {
+        branding_config: {
+          theme_mode: themeMode,
+          primary_color: primaryColor,
+          font_family: effectiveFont,
+          corner_radius: cornerRadius,
+        },
+      })
+      await refetch()
+      toast.success('Widget appearance saved.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save appearance settings.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="pt-4 mt-1 border-t border-border space-y-4">
+      <h3 className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--text-secondary))] font-medium">
+        Appearance
+      </h3>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-1.5">
+            Theme mode
+          </label>
+          <SegmentedControl
+            value={themeMode}
+            onChange={setThemeMode}
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-1.5">
+            Corner style
+          </label>
+          <SegmentedControl
+            value={cornerRadius}
+            onChange={setCornerRadius}
+            options={[
+              { value: 'sharp', label: 'Sharp' },
+              { value: 'rounded', label: 'Rounded' },
+              { value: 'pill', label: 'Pill' },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-1.5">
+          Primary color
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={primaryColor}
+            onChange={e => setPrimaryColor(e.target.value)}
+            className="h-9 w-9 rounded cursor-pointer border-0 bg-transparent p-0"
+          />
+          <input
+            type="text"
+            value={primaryColor}
+            onChange={e => setPrimaryColor(e.target.value)}
+            placeholder="#7A2535"
+            className="nz-input nz-mono flex-1"
+            maxLength={7}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-1.5">
+          Font
+        </label>
+        <select
+          className="nz-input w-full"
+          value={fontChoice}
+          onChange={e => setFontChoice(e.target.value)}
+        >
+          {FONT_PRESETS.map(p => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+          <option value={CUSTOM_FONT_VALUE}>Custom…</option>
+        </select>
+        {fontChoice === CUSTOM_FONT_VALUE && (
+          <input
+            type="text"
+            value={customFont}
+            onChange={e => setCustomFont(e.target.value)}
+            placeholder='e.g. "Poppins", sans-serif'
+            className="nz-input w-full mt-2 nz-mono"
+          />
+        )}
+      </div>
+
+      {/* Live preview — cheap: one styled div reflecting current form state */}
+      <div
+        className="rounded-lg border border-border p-4 flex items-center justify-center transition-colors duration-150"
+        style={{ background: previewIsDark ? '#0E0E0C' : '#FFFFFF' }}
+      >
+        <div
+          className="max-w-[220px] px-3 py-2 text-sm shadow-sm"
+          style={{
+            background: primaryColor,
+            color: contrastOnPrimary,
+            borderRadius: `${RADIUS_PX[cornerRadius]}px`,
+            fontFamily: fontChoice === 'inherit' ? undefined : effectiveFont,
+          }}
+        >
+          Hi there! How can I help?
+        </div>
+      </div>
+      <p className="text-xs text-[hsl(var(--text-tertiary))]">
+        Auto matches your website's theme automatically.
+      </p>
+
+      <div className="flex gap-2 pt-1">
+        <Button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-primary hover:bg-primary-hover text-primary-foreground"
+          size="sm"
+        >
+          {saving ? 'Saving…' : 'Save appearance'}
+        </Button>
+      </div>
+    </div>
   )
 }
 
