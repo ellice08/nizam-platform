@@ -46,15 +46,22 @@ router.get('/config/:orgId', async (req: Request, res: Response, next: NextFunct
     }
 
     const branding = (org.branding_config as Record<string, unknown>) ?? {}
+    // Widget appearance lives in its own namespace so it never collides with
+    // the org's dashboard branding (Settings > Branding also writes
+    // branding_config.primary_color, etc.). Old top-level theme_mode/
+    // font_family/corner_radius are a secondary fallback for values saved by
+    // the previous (pre-namespace) version of the appearance form.
+    const w = (branding.widget as Record<string, unknown>) ?? {}
 
     res.json(ApiResponse.success({
       orgName: org.name,
       agentName,
-      primaryColor: (branding.primary_color as string) ?? '#7A2535',
+      // widget-specific color wins; otherwise inherit the brand color.
+      primaryColor: (w.primary_color as string) ?? (branding.primary_color as string) ?? '#7A2535',
       secondaryColor: (branding.secondary_color as string) ?? '#C4909A',
-      themeMode: (branding.theme_mode as string) ?? 'auto',
-      fontFamily: (branding.font_family as string) ?? 'inherit',
-      cornerRadius: (branding.corner_radius as string) ?? 'rounded',
+      themeMode: (w.theme_mode as string) ?? (branding.theme_mode as string) ?? 'auto',
+      fontFamily: (w.font_family as string) ?? (branding.font_family as string) ?? 'inherit',
+      cornerRadius: (w.corner_radius as string) ?? (branding.corner_radius as string) ?? 'rounded',
     }))
   } catch (err) {
     next(err)

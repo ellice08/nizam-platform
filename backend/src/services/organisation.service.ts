@@ -86,7 +86,23 @@ class OrganisationService {
         .maybeSingle();
 
       const existingBranding = (existing as Record<string, unknown> | null)?.['branding_config'] as Record<string, unknown> | null ?? {};
-      updateData.branding_config = { ...existingBranding, ...(data.branding_config as Record<string, unknown>) };
+      const incomingBranding = data.branding_config as Record<string, unknown>;
+
+      // Shallow merge handles every top-level key except `widget` — that one
+      // needs its own deep merge, otherwise a widget-only save (e.g. just
+      // { theme_mode }) would blow away the other widget fields already
+      // saved (primary_color, font_family, corner_radius), and a Branding-tab
+      // save (no `widget` key at all) must leave branding_config.widget
+      // completely untouched.
+      const existingWidget = existingBranding.widget as Record<string, unknown> | undefined;
+      const incomingWidget = incomingBranding.widget as Record<string, unknown> | undefined;
+
+      const mergedBranding: Record<string, unknown> = { ...existingBranding, ...incomingBranding };
+      if (existingWidget || incomingWidget) {
+        mergedBranding.widget = { ...existingWidget, ...incomingWidget };
+      }
+
+      updateData.branding_config = mergedBranding;
     }
 
     const { data: org, error } = await supabase
