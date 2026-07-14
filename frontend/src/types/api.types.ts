@@ -16,9 +16,18 @@ export interface Organisation {
     accent_color?: string
     background_color?: string
     font: string
+    // Deprecated top-level theme fields — kept for read-fallback only; new
+    // saves go under `widget` (see below) so the chat widget's appearance is
+    // isolated from the org's dashboard branding.
     theme_mode?: 'auto' | 'light' | 'dark'
     font_family?: string
     corner_radius?: 'sharp' | 'rounded' | 'pill'
+    widget?: {
+      theme_mode?: 'auto' | 'light' | 'dark'
+      primary_color?: string
+      font_family?: string
+      corner_radius?: 'sharp' | 'rounded' | 'pill'
+    }
   }
   implementation_paid: boolean
   support_expires_at: string | null

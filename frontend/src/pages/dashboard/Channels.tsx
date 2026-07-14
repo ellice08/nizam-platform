@@ -185,20 +185,31 @@ const WebChatAppearance = ({ organisationId }: { organisationId: string }) => {
   const [cornerRadius, setCornerRadius] = useState<CornerRadius>('rounded')
   const [saving, setSaving] = useState(false)
 
-  // Prefill from the org's current branding_config once it loads.
+  // Prefill from org.branding_config.widget, falling back to the old
+  // top-level theme fields, then (for color only) to the org's brand
+  // primary_color — matches the read-fallback chain the widget itself uses.
   useEffect(() => {
     const branding = org?.branding_config
     if (!branding) return
-    if (branding.theme_mode) setThemeMode(branding.theme_mode)
-    if (branding.primary_color) setPrimaryColor(branding.primary_color)
-    if (branding.corner_radius) setCornerRadius(branding.corner_radius)
-    if (branding.font_family) {
-      const preset = FONT_PRESETS.find(p => p.value === branding.font_family)
+    const widget = branding.widget
+
+    const themeModeValue = widget?.theme_mode ?? branding.theme_mode
+    if (themeModeValue) setThemeMode(themeModeValue)
+
+    const primaryColorValue = widget?.primary_color ?? branding.primary_color
+    if (primaryColorValue) setPrimaryColor(primaryColorValue)
+
+    const cornerRadiusValue = widget?.corner_radius ?? branding.corner_radius
+    if (cornerRadiusValue) setCornerRadius(cornerRadiusValue)
+
+    const fontFamilyValue = widget?.font_family ?? branding.font_family
+    if (fontFamilyValue) {
+      const preset = FONT_PRESETS.find(p => p.value === fontFamilyValue)
       if (preset) {
         setFontChoice(preset.value)
       } else {
         setFontChoice(CUSTOM_FONT_VALUE)
-        setCustomFont(branding.font_family)
+        setCustomFont(fontFamilyValue)
       }
     }
   }, [org])
@@ -212,10 +223,12 @@ const WebChatAppearance = ({ organisationId }: { organisationId: string }) => {
       setSaving(true)
       await organisationApi.updateOrganisation(organisationId, {
         branding_config: {
-          theme_mode: themeMode,
-          primary_color: primaryColor,
-          font_family: effectiveFont,
-          corner_radius: cornerRadius,
+          widget: {
+            theme_mode: themeMode,
+            primary_color: primaryColor,
+            font_family: effectiveFont,
+            corner_radius: cornerRadius,
+          },
         },
       })
       await refetch()
@@ -285,6 +298,9 @@ const WebChatAppearance = ({ organisationId }: { organisationId: string }) => {
             maxLength={7}
           />
         </div>
+        <p className="mt-1.5 text-xs text-[hsl(var(--text-tertiary))]">
+          Only affects the chat widget — your dashboard branding is unchanged.
+        </p>
       </div>
 
       <div>

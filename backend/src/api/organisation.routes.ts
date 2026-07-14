@@ -26,12 +26,30 @@ const createOrganisationSchema = z.object({
   plan: z.string().optional(),
 });
 
+// Known branding_config keys get explicit validation (theme_mode/corner_radius
+// as strict enums so a bad value 400s instead of silently landing in the DB);
+// .passthrough() keeps other/future keys (logo_url, colors, etc.) accepted
+// as-is, matching the previously fully-permissive behavior for those.
+const brandingConfigSchema = z.object({
+  logo_url: z.string().nullable().optional(),
+  logo_dark_url: z.string().nullable().optional(),
+  primary_color: z.string().optional(),
+  primary_hover_color: z.string().optional(),
+  secondary_color: z.string().optional(),
+  accent_color: z.string().optional(),
+  background_color: z.string().optional(),
+  font: z.string().optional(),
+  theme_mode: z.enum(['light', 'dark', 'auto']).optional(),
+  font_family: z.string().optional(),
+  corner_radius: z.enum(['sharp', 'rounded', 'pill']).optional(),
+}).passthrough();
+
 const updateOrganisationSchema = z.object({
   name: z.string().optional(),
   industry: z.string().optional(),
   plan: z.string().optional(),
   subdomain: z.string().optional(),
-  branding_config: z.unknown().optional(),
+  branding_config: brandingConfigSchema.optional(),
 });
 
 const createBranchSchema = z.object({
