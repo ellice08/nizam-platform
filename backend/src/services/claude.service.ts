@@ -883,11 +883,16 @@ class ClaudeService {
     const phraseEscalation = escalationPhrases.some(phrase =>
       reply.toLowerCase().includes(phrase.toLowerCase())
     )
-    const newEscalation = modelEscalationSignal || phraseEscalation
+    const escalationSignalThisTurn = modelEscalationSignal || phraseEscalation
+    // Edge-trigger: notify only on the transition INTO escalation, not on every
+    // subsequent turn where the model re-emits <<ESCALATE>> or a handoff phrase
+    // (e.g. "someone will be in touch" appears in nearly every post-handoff reply,
+    // which previously re-fired the alert email/notification each turn).
+    const newEscalation = escalationSignalThisTurn && !alreadyEscalated
 
     // After-hours conversations always require human follow-up — the team must
     // call back when the business reopens, even if no escalation phrase fired.
-    const requiresHuman = alreadyEscalated || newEscalation || afterHours
+    const requiresHuman = alreadyEscalated || escalationSignalThisTurn || afterHours
 
     // 8. Save updated conversation
     const finalMessages: Message[] = [
