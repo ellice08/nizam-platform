@@ -993,17 +993,28 @@ class ClaudeService {
     const leadCapturedNow = hasFullContactNow && !hadFullContactBefore;
 
     const escalationPendingBefore = !!(existingConversation.escalation_pending_since);
-    // Consolidate — send the real email now — once there's BOTH an
-    // escalation (this turn, or still waiting from an earlier one) AND a
-    // freshly-complete contact, whether they land in the same turn or not.
+    // Consolidate — supersede + emit the lead-captured notification — once
+    // there's BOTH an escalation (this turn, or still waiting from an
+    // earlier one) AND a freshly-complete contact, whether they land in the
+    // same turn or not.
     const consolidateNow = (newEscalation || escalationPendingBefore) && leadCapturedNow;
 
+    // Voice defers the actual EMAIL (and clearing the pending flag) to call
+    // end — a call is only "complete" once it actually ends, so mid-call is
+    // the wrong moment to send the consolidated summary. voice.routes.ts's
+    // call_ended/call_analyzed hook calls sendPendingEscalation once the call
+    // is over, which re-reads the conversation and picks the lead-inclusive
+    // copy itself. Chat/WhatsApp have no equivalent "end" signal, so they
+    // still send as soon as the lead completes.
+    const sendConsolidatedEmailNow = consolidateNow && channel !== 'voice';
+
     let escalationPendingSinceUpdate: string | null | undefined;
-    if (consolidateNow) {
+    if (sendConsolidatedEmailNow) {
       escalationPendingSinceUpdate = null; // sent now — nothing left pending
     } else if (newEscalation) {
       escalationPendingSinceUpdate = new Date().toISOString(); // start the grace window
-    } // else: leave untouched — still pending with no new contact, or nothing changed
+    } // else: leave untouched — still pending (voice deferring to call-end,
+      // or no new contact this turn), or nothing changed
 
     await supabase
       .from('conversations')
@@ -1022,14 +1033,17 @@ class ClaudeService {
       })
       .eq('id', conversationId);
 
-    const leadNewlyCaptured =
-      (!!finalName  && !existingConversation.lead_name)  ||
-      (!!finalPhone && !existingConversation.lead_phone) ||
-      (!!finalEmail && !existingConversation.lead_email);
-    if (leadNewlyCaptured) {
+    // Gated on the SAME complete-lead condition as leadCapturedNow (name AND
+    // phone-or-email, newly complete this turn) — not on any single fragment
+    // newly appearing, which used to fire once for a name-only capture and
+    // again once the phone arrived (two emits for one lead). Mutually
+    // exclusive with the consolidation branch below: a lead landing on an
+    // escalated conversation gets the "needs follow-up" notification only,
+    // never this plain one too.
+    if (leadCapturedNow && !consolidateNow) {
       void notificationService.createNotification({
         branchId, type: 'lead', title: 'New lead captured',
-        body: [finalName, finalPhone, finalEmail].filter(Boolean).join(' · ') || 'New contact',
+        body: [nameAfter, phoneAfter, emailAfter].filter(Boolean).join(' · ') || 'New contact',
         link: `/dashboard/conversations?c=${conversationId}`,
         entityType: 'conversation', entityId: conversationId, minRole: null,
         audience: 'tenant',
@@ -1050,10 +1064,11 @@ class ClaudeService {
 
     if (consolidateNow) {
       // Full contact is in hand (just now, or the escalation had been
-      // waiting on it) — send the ONE real email now instead of the bare
-      // "needs attention" ping, and supersede any earlier needs-attention
-      // notification for this conversation so the inbox shows one entry, not
-      // two, for the same event.
+      // waiting on it) — the bell rings immediately either way (realtime),
+      // and supersede any earlier needs-attention notification for this
+      // conversation so the inbox shows one entry, not two, for the same
+      // event. The EMAIL itself is gated separately: chat/WhatsApp send it
+      // now; voice defers to call_ended (see sendConsolidatedEmailNow above).
       await notificationService.supersedeNotification({
         entityType: 'conversation', entityId: conversationId, type: 'escalation',
       });
@@ -1064,10 +1079,12 @@ class ClaudeService {
         entityType: 'conversation', entityId: conversationId, minRole: null,
         audience: 'tenant',
       });
-      void this.sendEscalationNotification({
-        branchId, agentRecord, conversation: enrichedConversation,
-        customerQuestion: message, channel, leadCaptured: true,
-      });
+      if (sendConsolidatedEmailNow) {
+        void this.sendEscalationNotification({
+          branchId, agentRecord, conversation: enrichedConversation,
+          customerQuestion: message, channel, leadCaptured: true,
+        });
+      }
     } else if ((newEscalation || afterHours) && !alreadyEscalated) {
       // Bell rings immediately either way. The email is different: a fresh
       // escalation signal defers its email to the pending/consolidation flow
