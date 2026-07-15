@@ -288,6 +288,18 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
           });
         }
       }
+
+      // Voice has a real end-of-conversation signal — use it instead of
+      // waiting for the sweeper's 5-minute inactivity check. Consolidated
+      // copy if a lead was captured during the call, no-contact fallback
+      // otherwise; sendPendingEscalation is a no-op if nothing is pending.
+      if (conv['escalation_pending_since']) {
+        try {
+          await claudeService.sendPendingEscalation(conv['id'] as string);
+        } catch (err) {
+          logger.error(`voice webhook: sendPendingEscalation failed for ${conv['id'] as string}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     }
 
     res.sendStatus(200);

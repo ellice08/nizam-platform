@@ -396,8 +396,12 @@ class ClaudeService {
     conversation: Record<string, unknown>;
     customerQuestion: string;
     channel: string;
+    // Consolidated-email copy variants — see finalizeTurn's pending/
+    // consolidation flow and sendPendingEscalation (sweeper + voice call-end).
+    leadCaptured?: boolean;
+    noContactFallback?: boolean;
   }): Promise<void> {
-    const { branchId, agentRecord, conversation, customerQuestion, channel } = params;
+    const { branchId, agentRecord, conversation, customerQuestion, channel, leadCaptured, noContactFallback } = params;
     try {
       // 1. Gather recipient emails
       const recipients = new Set<string>();
@@ -464,13 +468,24 @@ class ClaudeService {
         .map(m => `${m.role === 'user' ? 'Customer' : 'AI'}: ${m.content}`)
         .join('\n');
 
-      // 3. Send the alert
+      // 3. Send the alert — copy depends on whether contact was captured.
+      let question = customerQuestion;
+      if (leadCaptured) {
+        const leadName = (conversation.lead_name as string | null) ?? 'Unknown';
+        const contactDetail = (conversation.lead_phone as string | null)
+          ?? (conversation.lead_email as string | null)
+          ?? 'no phone/email on file';
+        question = `Customer requested follow-up — contact captured: ${leadName}, ${contactDetail}`;
+      } else if (noContactFallback) {
+        question = 'Customer needed assistance — no contact captured. Review the conversation.';
+      }
+
       await notificationService.sendEscalationAlert({
         toEmails,
         customerName: (conversation.lead_name as string | null) ?? 'A customer',
         channel,
         transcript,
-        question: customerQuestion,
+        question,
         branchName,
       });
 
@@ -479,6 +494,64 @@ class ClaudeService {
       // Never let notification failure break the chat flow
       logger.error(`Escalation notification failed for branch ${branchId}`, { err });
     }
+  }
+
+  // Public entry point for the deferred-email flow (finalizeTurn no longer
+  // sends the escalation email inline — it sets escalation_pending_since and
+  // waits for lead capture, this method, or the sweeper). Called by:
+  //   - escalationSweeper.ts for conversations stuck pending after 5min of
+  //     inactivity (no-contact fallback copy — see the invariant below), and
+  //   - voice.routes.ts on call_ended/call_analyzed (voice has a real
+  //     end-of-conversation signal, so it doesn't need to wait for the sweep).
+  // Loads the conversation fresh and decides the copy variant from its
+  // CURRENT state — invariant: if a full contact (name + phone/email) had
+  // already been captured, finalizeTurn's consolidation branch would have
+  // already sent the email and cleared escalation_pending_since during the
+  // live turn, so by the time either caller reaches a still-pending row, the
+  // lead was genuinely never captured. Checking fresh (rather than assuming)
+  // costs nothing and stays correct if that invariant ever changes.
+  async sendPendingEscalation(conversationId: string): Promise<void> {
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (!conv) return;
+    const conversation = conv as Record<string, unknown>;
+
+    // No-op if nothing is actually pending (already sent, or never escalated) —
+    // protects against double-firing if a caller's own guard is imperfect.
+    if (!conversation.escalation_pending_since) return;
+
+    const branchId = conversation.branch_id as string | undefined;
+    if (!branchId) return;
+
+    const agent = await agentService.getOrCreateAgent(branchId);
+    const agentRecord = agent as Record<string, unknown>;
+
+    const msgs = Array.isArray(conversation.messages) ? conversation.messages as Message[] : [];
+    const lastUserMessage = [...msgs].reverse().find(m => m.role === 'user');
+    const customerQuestion = lastUserMessage?.content ?? '';
+
+    const hasName = !!(conversation.lead_name as string | null);
+    const hasContact = !!(conversation.lead_phone as string | null) || !!(conversation.lead_email as string | null);
+    const leadCaptured = hasName && hasContact;
+
+    await this.sendEscalationNotification({
+      branchId,
+      agentRecord,
+      conversation,
+      customerQuestion,
+      channel: (conversation.channel as string) ?? 'chat',
+      leadCaptured,
+      noContactFallback: !leadCaptured,
+    });
+
+    await supabase
+      .from('conversations')
+      .update({ escalation_pending_since: null })
+      .eq('id', conversationId);
   }
 
   // Shared setup path for chat() and chatStream(): agent config, intents, RAG
@@ -904,22 +977,48 @@ class ClaudeService {
       },
     ];
 
+    const nameAfter  = finalName  ?? (existingConversation.lead_name  as string | null);
+    const phoneAfter = finalPhone ?? leadPhone ?? (existingConversation.lead_phone as string | null);
+    const emailAfter = finalEmail ?? (existingConversation.lead_email as string | null);
+
+    // "Lead captured" for escalation-EMAIL consolidation purposes: a full
+    // contact (name AND phone-or-email), transitioning from incomplete to
+    // complete this turn. Stricter than leadNewlyCaptured below, which fires
+    // the general lead notification on ANY new fragment (name alone, etc.).
+    const nameBefore  = existingConversation.lead_name  as string | null;
+    const phoneBefore = existingConversation.lead_phone as string | null;
+    const emailBefore = existingConversation.lead_email as string | null;
+    const hadFullContactBefore = !!nameBefore && !!(phoneBefore || emailBefore);
+    const hasFullContactNow    = !!nameAfter  && !!(phoneAfter  || emailAfter);
+    const leadCapturedNow = hasFullContactNow && !hadFullContactBefore;
+
+    const escalationPendingBefore = !!(existingConversation.escalation_pending_since);
+    // Consolidate — send the real email now — once there's BOTH an
+    // escalation (this turn, or still waiting from an earlier one) AND a
+    // freshly-complete contact, whether they land in the same turn or not.
+    const consolidateNow = (newEscalation || escalationPendingBefore) && leadCapturedNow;
+
+    let escalationPendingSinceUpdate: string | null | undefined;
+    if (consolidateNow) {
+      escalationPendingSinceUpdate = null; // sent now — nothing left pending
+    } else if (newEscalation) {
+      escalationPendingSinceUpdate = new Date().toISOString(); // start the grace window
+    } // else: leave untouched — still pending with no new contact, or nothing changed
+
     await supabase
       .from('conversations')
       .update({
         messages: finalMessages,
         requires_human: requiresHuman,
-        lead_name: finalName ??
-          (existingConversation.lead_name as string | null),
-        lead_phone: finalPhone ?? leadPhone ??
-          (existingConversation.lead_phone as string | null),
-        lead_email: finalEmail ??
-          (existingConversation.lead_email as string | null),
+        lead_name: nameAfter,
+        lead_phone: phoneAfter,
+        lead_email: emailAfter,
         intent: persistedIntent,
         booking_details: hasBookingDetails
           ? { ...(existingConversation.booking_details as Record<string, unknown> ?? {}), ...bookingDetails }
           : (existingConversation.booking_details as Record<string, unknown> ?? null),
         updated_at: new Date().toISOString(),
+        ...(escalationPendingSinceUpdate !== undefined ? { escalation_pending_since: escalationPendingSinceUpdate } : {}),
       })
       .eq('id', conversationId);
 
@@ -937,29 +1036,59 @@ class ClaudeService {
       });
     }
 
-    if ((newEscalation || afterHours) && !alreadyEscalated) {
+    const enrichedConversation = {
+      ...existingConversation,
+      messages: finalMessages,
+      lead_name: nameAfter,
+      lead_phone: phoneAfter,
+      lead_email: emailAfter,
+      intent: persistedIntent,
+      booking_details: hasBookingDetails
+        ? bookingDetails
+        : (existingConversation.booking_details ?? null),
+    };
+
+    if (consolidateNow) {
+      // Full contact is in hand (just now, or the escalation had been
+      // waiting on it) — send the ONE real email now instead of the bare
+      // "needs attention" ping, and supersede any earlier needs-attention
+      // notification for this conversation so the inbox shows one entry, not
+      // two, for the same event.
+      await notificationService.supersedeNotification({
+        entityType: 'conversation', entityId: conversationId, type: 'escalation',
+      });
       void notificationService.createNotification({
-        branchId, type: 'escalation', title: 'Conversation needs attention',
-        body: (finalName ?? (existingConversation.lead_name as string | null)) ?? 'A customer needs a human',
+        branchId, type: 'escalation', title: 'New lead captured — needs follow-up',
+        body: (nameAfter as string | null) ?? 'A customer needs a human',
         link: `/dashboard/conversations?c=${conversationId}`,
         entityType: 'conversation', entityId: conversationId, minRole: null,
         audience: 'tenant',
       });
       void this.sendEscalationNotification({
-        branchId,
-        agentRecord,
-        conversation: {
-          ...existingConversation,
-          messages: finalMessages,
-          lead_name: finalName ?? (existingConversation.lead_name as string | null),
-          intent: persistedIntent,
-          booking_details: hasBookingDetails
-            ? bookingDetails
-            : (existingConversation.booking_details ?? null),
-        },
-        customerQuestion: message,
-        channel,
+        branchId, agentRecord, conversation: enrichedConversation,
+        customerQuestion: message, channel, leadCaptured: true,
       });
+    } else if ((newEscalation || afterHours) && !alreadyEscalated) {
+      // Bell rings immediately either way. The email is different: a fresh
+      // escalation signal defers its email to the pending/consolidation flow
+      // above (lead capture, voice call-end, or the 5-min sweeper); a pure
+      // after-hours trigger (no escalation signal) keeps the old immediate-
+      // email behavior unchanged — after-hours doesn't have a "wait for
+      // contact" concept, and afterHours is recomputed fresh every turn, so
+      // deferring it here would risk it never being consolidated at all.
+      void notificationService.createNotification({
+        branchId, type: 'escalation', title: 'Conversation needs attention',
+        body: (nameAfter as string | null) ?? 'A customer needs a human',
+        link: `/dashboard/conversations?c=${conversationId}`,
+        entityType: 'conversation', entityId: conversationId, minRole: null,
+        audience: 'tenant',
+      });
+      if (afterHours && !newEscalation) {
+        void this.sendEscalationNotification({
+          branchId, agentRecord, conversation: enrichedConversation,
+          customerQuestion: message, channel,
+        });
+      }
     }
 
     logger.info(

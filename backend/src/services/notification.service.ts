@@ -427,6 +427,28 @@ class NotificationService {
       logger.error('createNotification failed', { err, type: params.type });
     }
   }
+
+  // Marks a notification as superseded by simply deleting the matching rows —
+  // the replacement notification (e.g. lead-captured) links to the same
+  // conversation, so nothing is lost by removing the one it replaces.
+  async supersedeNotification(params: {
+    entityType: string;
+    entityId: string;
+    type: string;
+  }): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('entity_type', params.entityType)
+        .eq('entity_id', params.entityId)
+        .eq('type', params.type)
+        .eq('audience', 'tenant');
+      if (error) throw error;
+    } catch (err) {
+      logger.error('supersedeNotification failed', { err, ...params });
+    }
+  }
 }
 
 export const notificationService = new NotificationService();

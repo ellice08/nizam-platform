@@ -12,6 +12,7 @@ import { ApiResponse } from "./utils/response.js";
 import { testConnection } from "./lib/test-connection.js";
 import { registerRoutes } from "./api/index.js";
 import { attachVoiceWebSocket } from "./api/voice.websocket.js";
+import { startEscalationSweeper } from "./services/escalationSweeper.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -115,6 +116,7 @@ attachVoiceWebSocket(server);
 
 server.listen(PORT, () => {
   logger.info(`Server running on port ${PORT} [${NODE_ENV}]`);
+  startEscalationSweeper();
 });
 
 export default app;
