@@ -431,19 +431,32 @@ class NotificationService {
   // Marks a notification as superseded by simply deleting the matching rows —
   // the replacement notification (e.g. lead-captured) links to the same
   // conversation, so nothing is lost by removing the one it replaces.
+  //
+  // createdBefore is for delayed mop-up re-supersede calls (see claude
+  // service's consolidateNow branch): without it, a re-supersede scheduled
+  // AFTER the replacement notification was created would match and delete
+  // that replacement too, since it shares the same entity/type. Passing the
+  // timestamp captured just before the replacement was inserted restricts
+  // the delete to rows that predate it — the stale race leftover, never the
+  // new notification itself.
   async supersedeNotification(params: {
     entityType: string;
     entityId: string;
     type: string;
+    createdBefore?: string;
   }): Promise<void> {
     try {
-      const { error } = await supabase
+      let query = supabase
         .from('notifications')
         .delete()
         .eq('entity_type', params.entityType)
         .eq('entity_id', params.entityId)
         .eq('type', params.type)
         .eq('audience', 'tenant');
+      if (params.createdBefore) {
+        query = query.lt('created_at', params.createdBefore);
+      }
+      const { error } = await query;
       if (error) throw error;
     } catch (err) {
       logger.error('supersedeNotification failed', { err, ...params });

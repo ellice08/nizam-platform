@@ -1103,6 +1103,23 @@ class ClaudeService {
       await notificationService.supersedeNotification({
         entityType: 'conversation', entityId: conversationId, type: 'escalation',
       });
+      // Mop-up for the other half of the race: a near-simultaneous escalation
+      // turn's "needs attention" insert may still have been in flight when
+      // the supersede above ran, landing just after it found nothing to
+      // delete. #1's insert-side guard prevents most of these; this catches
+      // whatever slips through in a single delayed re-supersede. Acceptable
+      // as an in-process timer — if the process restarts inside the 5s
+      // window, the insert-side guard has already covered the common case.
+      // createdBefore is captured NOW, before the "needs follow-up" row
+      // below is inserted — the delayed call below must never delete that
+      // row itself just because it happens to share the same entity/type.
+      const consolidationStartedAt = new Date().toISOString();
+      setTimeout(() => {
+        void notificationService.supersedeNotification({
+          entityType: 'conversation', entityId: conversationId, type: 'escalation',
+          createdBefore: consolidationStartedAt,
+        });
+      }, 5000);
       void notificationService.createNotification({
         branchId, type: 'escalation', title: 'New lead captured — needs follow-up',
         body: (nameAfter as string | null) ?? 'A customer needs a human',
@@ -1117,18 +1134,35 @@ class ClaudeService {
         });
       }
     } else if (pendingWindowOpensNow) {
-      // Bell rings immediately. No immediate email — both a fresh escalation
-      // signal and a fresh after-hours trigger now defer the email to the
-      // pending/consolidation flow above (lead capture, voice call-end, or
-      // the 5-min sweeper), so after-hours conversations never email
-      // mid-call with a one-exchange transcript.
-      void notificationService.createNotification({
-        branchId, type: 'escalation', title: 'Conversation needs attention',
-        body: (nameAfter as string | null) ?? 'A customer needs a human',
-        link: `/dashboard/conversations?c=${conversationId}`,
-        entityType: 'conversation', entityId: conversationId, minRole: null,
-        audience: 'tenant',
-      });
+      // Guard against a near-simultaneous lead turn (VA2 overlapping-
+      // transcript voice turns): if that turn's finalize already claimed and
+      // announced the lead, inserting "needs attention" here — even though
+      // this turn's OWN supersede check ran before that insert existed and
+      // found nothing to delete — would leave a stale bell row sitting next
+      // to the fuller "needs follow-up" one. Re-check fresh (not the
+      // in-memory existingConversation snapshot, which predates the race) and
+      // skip the insert entirely if a lead has already been announced.
+      const { data: freshRow } = await supabase
+        .from('conversations')
+        .select('lead_announced_at')
+        .eq('id', conversationId)
+        .maybeSingle();
+      const leadAlreadyAnnounced = !!(freshRow as { lead_announced_at?: string | null } | null)?.lead_announced_at;
+
+      if (!leadAlreadyAnnounced) {
+        // Bell rings immediately. No immediate email — both a fresh escalation
+        // signal and a fresh after-hours trigger now defer the email to the
+        // pending/consolidation flow above (lead capture, voice call-end, or
+        // the 5-min sweeper), so after-hours conversations never email
+        // mid-call with a one-exchange transcript.
+        void notificationService.createNotification({
+          branchId, type: 'escalation', title: 'Conversation needs attention',
+          body: (nameAfter as string | null) ?? 'A customer needs a human',
+          link: `/dashboard/conversations?c=${conversationId}`,
+          entityType: 'conversation', entityId: conversationId, minRole: null,
+          audience: 'tenant',
+        });
+      }
     }
 
     logger.info(
