@@ -947,11 +947,17 @@ class ClaudeService {
       'team reaches out',
     ];
 
-    // Once requiresHuman is true it stays true for this
-    // conversation — never reset it even if subsequent
-    // replies don't contain escalation phrases
-    const alreadyEscalated =
-      (existingConversation.requires_human as boolean) === true
+    // Escalation latch is driven ONLY by escalated_at (set exactly once, on
+    // the newEscalation edge below) — never by requires_human. requires_human
+    // is also set by afterHours, which is recomputed fresh every turn and
+    // can flip back to false once business hours reopen; using it as the
+    // latch meant a single after-hours turn permanently suppressed
+    // newEscalation for the rest of the conversation (alreadyEscalated would
+    // already read true from that afterHours-driven requires_human write, so
+    // a REAL escalation later in the same conversation never got its own
+    // pending window, supersede, or notification — silent abandonment).
+    const alreadyEscalated = !!(existingConversation.escalated_at)
+    const requiresHumanBefore = (existingConversation.requires_human as boolean) === true
 
     const phraseEscalation = escalationPhrases.some(phrase =>
       reply.toLowerCase().includes(phrase.toLowerCase())
@@ -965,6 +971,8 @@ class ClaudeService {
 
     // After-hours conversations always require human follow-up — the team must
     // call back when the business reopens, even if no escalation phrase fired.
+    // Unchanged shape — afterHours still surfaces "needs attention" in the UI,
+    // it just no longer feeds the escalation latch above.
     const requiresHuman = alreadyEscalated || escalationSignalThisTurn || afterHours
 
     // 8. Save updated conversation
@@ -981,23 +989,45 @@ class ClaudeService {
     const phoneAfter = finalPhone ?? leadPhone ?? (existingConversation.lead_phone as string | null);
     const emailAfter = finalEmail ?? (existingConversation.lead_email as string | null);
 
-    // "Lead captured" for escalation-EMAIL consolidation purposes: a full
-    // contact (name AND phone-or-email), transitioning from incomplete to
-    // complete this turn. Stricter than leadNewlyCaptured below, which fires
-    // the general lead notification on ANY new fragment (name alone, etc.).
-    const nameBefore  = existingConversation.lead_name  as string | null;
-    const phoneBefore = existingConversation.lead_phone as string | null;
-    const emailBefore = existingConversation.lead_email as string | null;
-    const hadFullContactBefore = !!nameBefore && !!(phoneBefore || emailBefore);
-    const hasFullContactNow    = !!nameAfter  && !!(phoneAfter  || emailAfter);
-    const leadCapturedNow = hasFullContactNow && !hadFullContactBefore;
-
     const escalationPendingBefore = !!(existingConversation.escalation_pending_since);
+    // First after-hours turn opens the SAME pending window escalation uses
+    // below, instead of emailing immediately — guarded so it only fires once
+    // per closed period, not on every after-hours turn. (Without this guard,
+    // decoupling alreadyEscalated from requires_human above means
+    // !alreadyEscalated is true on every turn of a pure after-hours
+    // conversation, since escalated_at never gets set for it.)
+    const afterHoursFirstTrigger =
+      afterHours && !newEscalation && !alreadyEscalated &&
+      !escalationPendingBefore && !requiresHumanBefore;
+    const pendingWindowOpensNow = newEscalation || afterHoursFirstTrigger;
+
+    // ATOMIC LEAD ANNOUNCEMENT — replaces the old presence-transition gate
+    // (leadCapturedNow), which raced: two concurrent turns (e.g. two
+    // overlapping voice turns, each parsing a different phone number from a
+    // partial transcript) each independently compared against their own
+    // stale snapshot and both saw "lead newly complete". This is a single
+    // atomic UPDATE ... WHERE lead_announced_at IS NULL — Postgres
+    // serializes concurrent writes to the same row, so exactly one racing
+    // turn ever gets a row back. The loser still persists its (possibly
+    // different) parsed values via the update below; it just never
+    // announces — data updates, announcements don't repeat.
+    const leadCompleteAfter = !!nameAfter && !!(phoneAfter || emailAfter);
+    let shouldAnnounceLead = false;
+    if (leadCompleteAfter) {
+      const { data: claimed } = await supabase
+        .from('conversations')
+        .update({ lead_announced_at: new Date().toISOString() })
+        .eq('id', conversationId)
+        .is('lead_announced_at', null)
+        .select('id');
+      shouldAnnounceLead = !!(claimed && claimed.length > 0);
+    }
+
     // Consolidate — supersede + emit the lead-captured notification — once
-    // there's BOTH an escalation (this turn, or still waiting from an
-    // earlier one) AND a freshly-complete contact, whether they land in the
-    // same turn or not.
-    const consolidateNow = (newEscalation || escalationPendingBefore) && leadCapturedNow;
+    // there's BOTH a pending window (escalation or after-hours, opening this
+    // turn or already open from an earlier one) AND a lead that just won the
+    // announcement claim.
+    const consolidateNow = (pendingWindowOpensNow || escalationPendingBefore) && shouldAnnounceLead;
 
     // Voice defers the actual EMAIL (and clearing the pending flag) to call
     // end — a call is only "complete" once it actually ends, so mid-call is
@@ -1011,10 +1041,10 @@ class ClaudeService {
     let escalationPendingSinceUpdate: string | null | undefined;
     if (sendConsolidatedEmailNow) {
       escalationPendingSinceUpdate = null; // sent now — nothing left pending
-    } else if (newEscalation) {
+    } else if (pendingWindowOpensNow) {
       escalationPendingSinceUpdate = new Date().toISOString(); // start the grace window
     } // else: leave untouched — still pending (voice deferring to call-end,
-      // or no new contact this turn), or nothing changed
+      // or nothing changed)
 
     await supabase
       .from('conversations')
@@ -1030,17 +1060,18 @@ class ClaudeService {
           : (existingConversation.booking_details as Record<string, unknown> ?? null),
         updated_at: new Date().toISOString(),
         ...(escalationPendingSinceUpdate !== undefined ? { escalation_pending_since: escalationPendingSinceUpdate } : {}),
+        ...(newEscalation ? { escalated_at: new Date().toISOString() } : {}),
       })
       .eq('id', conversationId);
 
-    // Gated on the SAME complete-lead condition as leadCapturedNow (name AND
-    // phone-or-email, newly complete this turn) — not on any single fragment
-    // newly appearing, which used to fire once for a name-only capture and
-    // again once the phone arrived (two emits for one lead). Mutually
-    // exclusive with the consolidation branch below: a lead landing on an
-    // escalated conversation gets the "needs follow-up" notification only,
-    // never this plain one too.
-    if (leadCapturedNow && !consolidateNow) {
+    // Gated on the atomic claim (shouldAnnounceLead), not on any single
+    // fragment newly appearing (used to fire once for a name-only capture
+    // and again once the phone arrived) and not on a presence-transition
+    // heuristic (which could race — see above). Mutually exclusive with the
+    // consolidation branch below: a lead landing on an escalated/after-hours
+    // conversation gets the "needs follow-up" notification only, never this
+    // plain one too.
+    if (shouldAnnounceLead && !consolidateNow) {
       void notificationService.createNotification({
         branchId, type: 'lead', title: 'New lead captured',
         body: [nameAfter, phoneAfter, emailAfter].filter(Boolean).join(' · ') || 'New contact',
@@ -1063,9 +1094,9 @@ class ClaudeService {
     };
 
     if (consolidateNow) {
-      // Full contact is in hand (just now, or the escalation had been
-      // waiting on it) — the bell rings immediately either way (realtime),
-      // and supersede any earlier needs-attention notification for this
+      // Full contact is in hand (just now, or the window had been waiting on
+      // it) — the bell rings immediately either way (realtime), and
+      // supersede any earlier needs-attention notification for this
       // conversation so the inbox shows one entry, not two, for the same
       // event. The EMAIL itself is gated separately: chat/WhatsApp send it
       // now; voice defers to call_ended (see sendConsolidatedEmailNow above).
@@ -1085,14 +1116,12 @@ class ClaudeService {
           customerQuestion: message, channel, leadCaptured: true,
         });
       }
-    } else if ((newEscalation || afterHours) && !alreadyEscalated) {
-      // Bell rings immediately either way. The email is different: a fresh
-      // escalation signal defers its email to the pending/consolidation flow
-      // above (lead capture, voice call-end, or the 5-min sweeper); a pure
-      // after-hours trigger (no escalation signal) keeps the old immediate-
-      // email behavior unchanged — after-hours doesn't have a "wait for
-      // contact" concept, and afterHours is recomputed fresh every turn, so
-      // deferring it here would risk it never being consolidated at all.
+    } else if (pendingWindowOpensNow) {
+      // Bell rings immediately. No immediate email — both a fresh escalation
+      // signal and a fresh after-hours trigger now defer the email to the
+      // pending/consolidation flow above (lead capture, voice call-end, or
+      // the 5-min sweeper), so after-hours conversations never email
+      // mid-call with a one-exchange transcript.
       void notificationService.createNotification({
         branchId, type: 'escalation', title: 'Conversation needs attention',
         body: (nameAfter as string | null) ?? 'A customer needs a human',
@@ -1100,12 +1129,6 @@ class ClaudeService {
         entityType: 'conversation', entityId: conversationId, minRole: null,
         audience: 'tenant',
       });
-      if (afterHours && !newEscalation) {
-        void this.sendEscalationNotification({
-          branchId, agentRecord, conversation: enrichedConversation,
-          customerQuestion: message, channel,
-        });
-      }
     }
 
     logger.info(
