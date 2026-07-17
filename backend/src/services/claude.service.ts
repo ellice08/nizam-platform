@@ -162,12 +162,28 @@ function buildIntentHandling(intents: ConfiguredIntent[]): string {
   if (intents.length > 0) {
     block += `\n- Recognised actions and what to collect for each (collect details NATURALLY and\n  PROGRESSIVELY — ask one or two things at a time, never fire a long list of\n  questions in one message; it should feel like a friendly conversation, not a form):`;
     for (const intent of intents) {
-      const fieldList = Array.isArray(intent.fields) && intent.fields.length > 0
-        ? intent.fields.map(f => f.label).join(', ') + ', their name, and a phone number or email'
-        : 'their name, and a phone number or email';
+      let fieldList: string;
+      if (Array.isArray(intent.fields) && intent.fields.length > 0) {
+        const requiredLabels = intent.fields.filter(f => f.required).map(f => f.label);
+        const optionalLabels = intent.fields.filter(f => !f.required).map(f => f.label);
+        if (requiredLabels.length > 0) {
+          fieldList = `${requiredLabels.join(', ')} (all REQUIRED)` +
+            (optionalLabels.length > 0 ? `, plus ${optionalLabels.join(', ')} if offered` : '') +
+            ', their name, and a phone number or email';
+        } else {
+          fieldList = intent.fields.map(f => f.label).join(', ') + ', their name, and a phone number or email';
+        }
+      } else {
+        fieldList = 'their name, and a phone number or email';
+      }
       const descPart = intent.description ? ` — ${intent.description}` : '';
       block += `\n  • ${intent.label.toUpperCase()}${descPart} — collect: ${fieldList}. Acknowledge the specific request warmly rather than giving a generic 'let me connect you'.`;
     }
+    block += `\n- Before confirming or completing any of the actions above, you MUST have collected
+  every REQUIRED field listed for it (plus the customer's name and one contact
+  method). If any required field is missing, ask for it — one question at a time —
+  BEFORE giving any confirmation that the request is booked, scheduled, or completed.
+  Never state or imply a booking is confirmed while a required field is missing.`;
   }
 
   block += `
