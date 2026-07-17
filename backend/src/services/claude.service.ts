@@ -648,6 +648,18 @@ class ClaudeService {
       .replace(/^You are Aria,/m, `You are ${agentName},`)
       .replace(/^You are Aria /m, `You are ${agentName} `);
 
+    // Tone — set on the Agent page (agents.tone) but never previously read by
+    // the backend; wiring it here applies it to chat, WhatsApp, and voice
+    // alike since prepareTurn is shared by all three.
+    const tone = (agentRecord.tone as string) ?? 'professional';
+    const toneInstructions: Record<string, string> = {
+      professional: 'TONE: Composed and professional. Warm but businesslike; clear, efficient sentences.',
+      friendly: 'TONE: Warm, upbeat and conversational. Use the customer\'s first name when known, light natural phrasing, and an approachable energy — while staying professional.',
+      formal: 'TONE: Formal and courteous. Measured phrasing, no contractions, respectful address (e.g. "Mr/Ms" with surnames when known), precise language.',
+    };
+    const toneBlock = toneInstructions[tone] ?? toneInstructions.professional;
+    const toneContext = `\n\n${toneBlock}`;
+
     // 4b. Build final system prompt now that we have conversation state
     const hasContact = !!(
       (existingConversation.lead_phone as string | null) ||
@@ -683,9 +695,22 @@ class ClaudeService {
     const confirmationHours = (responseTimeConfig as { confirmation_hours?: number } | null | undefined)?.confirmation_hours ?? 2;
     const confirmationEnabled = (responseTimeConfig as { confirmation_enabled?: boolean } | null | undefined)?.confirmation_enabled ?? false;
 
+    // Honest response-time promises: a configured "within X hours" window can
+    // extend past today's close, which would make the promise false. Only
+    // meaningful when business_hours are actually configured — otherwise
+    // there's no close time to check against, so behave as before.
+    const businessHoursEnabled = !!((responseTimeConfig?.business_hours as { enabled?: boolean } | undefined)?.enabled);
+    const minutesUntilClose = afterHours ? 0 : this.computeMinutesUntilClose(responseTimeConfig?.business_hours, branchTimezone);
+    const windowMinutes = confirmationHours * 60;
+    const windowExceedsClose = businessHoursEnabled && !afterHours && windowMinutes > minutesUntilClose;
+
     let confirmationContext = '';
     if (afterHours) {
       confirmationContext = `\n\nCONFIRMATION TIMING: When the customer provides their contact details, confirm warmly and tell them the team is currently offline but will follow up ${nextOpen}. Phrase it naturally and warmly, e.g. "Thank you — our team is offline right now, but they'll follow up ${nextOpen}." Do NOT promise a specific number of hours while closed.`;
+    } else if (confirmationEnabled && windowExceedsClose && minutesUntilClose >= 30) {
+      confirmationContext = `\n\nCONFIRMATION TIMING: The configured response window doesn't fit before we close today — when the customer provides their contact details, confirm warmly that someone will be in touch before we close today. Do NOT state ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'} or any specific number of hours. Keep the phrase "be in touch" in your confirmation.`;
+    } else if (confirmationEnabled && windowExceedsClose) {
+      confirmationContext = `\n\nCONFIRMATION TIMING: The configured response window doesn't fit before we close today and there isn't enough time left — when the customer provides their contact details, confirm warmly that someone will be in touch first thing next business day. Do NOT state ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'} or any specific number of hours. Keep the phrase "be in touch" in your confirmation.`;
     } else if (confirmationEnabled) {
       confirmationContext = `\n\nCONFIRMATION TIMING: When the customer provides their contact details, confirm warmly that someone will be in touch within ${confirmationHours} hour${confirmationHours === 1 ? '' : 's'}. Keep the phrase "be in touch" in your confirmation.`;
     } else {
@@ -693,8 +718,8 @@ class ClaudeService {
     }
 
     const systemPrompt = context
-      ? `${basePrompt}\n\n${ragBoundaryRule}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Rephrase naturally in a warm conversational tone, but never merge facts from different properties or invent details not explicitly present. Never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${contactContext}${afterHoursContext}${confirmationContext}`
-      : `${basePrompt}\n\n${ragBoundaryRule}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${contactContext}${afterHoursContext}${confirmationContext}`;
+      ? `${basePrompt}\n\n${ragBoundaryRule}\n\nKNOWLEDGE BASE — read this thoroughly and use it to inform your responses. Rephrase naturally in a warm conversational tone, but never merge facts from different properties or invent details not explicitly present. Never quote directly:\n\n${context}\n\nRemember: respond as a warm professional having a real conversation, not as a search result.${toneContext}${contactContext}${afterHoursContext}${confirmationContext}`
+      : `${basePrompt}\n\n${ragBoundaryRule}\n\nNote: No knowledge base has been set up yet. For any specific business questions, let the customer know a team member will follow up with them.${toneContext}${contactContext}${afterHoursContext}${confirmationContext}`;
 
     // 5. Add user message to history
     const updatedMessages: Message[] = [
@@ -1221,6 +1246,55 @@ class ClaudeService {
       return nowMinutes < openMinutes || nowMinutes >= closeMinutes;
     } catch {
       return false; // never let this break the chat
+    }
+  }
+
+  // Minutes remaining until today's close, using the same business_hours
+  // shape and day/time resolution as isAfterHours. Only meaningful when
+  // called for a day that isn't already closed — callers should gate with
+  // afterHours (see prepareTurn) so this only runs when today is open and
+  // the current time is within it.
+  private computeMinutesUntilClose(businessHours: unknown, timezone: string): number {
+    try {
+      const bh = businessHours as {
+        enabled?: boolean;
+        days?: Record<string, { open: string; close: string; closed: boolean }>;
+      } | null | undefined;
+
+      if (!bh || !bh.enabled || !bh.days) return 0;
+
+      const tz = timezone || 'Africa/Lagos';
+
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date());
+
+      const weekdayRaw = parts.find(p => p.type === 'weekday')?.value ?? '';
+      let hourStr = parts.find(p => p.type === 'hour')?.value ?? '0';
+      const minStr = parts.find(p => p.type === 'minute')?.value ?? '0';
+      if (hourStr === '24') hourStr = '0';
+
+      const dayMap: Record<string, string> = {
+        Mon: 'mon', Tue: 'tue', Wed: 'wed', Thu: 'thu',
+        Fri: 'fri', Sat: 'sat', Sun: 'sun',
+      };
+      const dayKey = dayMap[weekdayRaw];
+      if (!dayKey) return 0;
+
+      const today = bh.days[dayKey];
+      if (!today || today.closed) return 0;
+
+      const nowMinutes = parseInt(hourStr, 10) * 60 + parseInt(minStr, 10);
+      const [cH, cM] = (today.close || '23:59').split(':').map(Number);
+      const closeMinutes = cH * 60 + (cM || 0);
+
+      return Math.max(0, closeMinutes - nowMinutes);
+    } catch {
+      return 0; // never let this break the chat
     }
   }
 
