@@ -14,8 +14,10 @@ import intentRoutes from './intent.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import whatsappRoutes from './whatsapp.routes.js';
 import voiceRoutes from './voice.routes.js';
+import versionRoutes from './version.routes.js';
 
 export function registerRoutes(app: Express): void {
+  app.use('/api/version', versionRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/organisations', organisationRoutes);
   app.use('/api/conversations', conversationRoutes);
