@@ -2,6 +2,16 @@ import { useState, useRef, useCallback } from 'react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { FileText, Globe, Upload, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store'
@@ -91,6 +101,12 @@ const Knowledge = () => {
     }
   }, [handleFiles])
 
+  const [pendingDelete, setPendingDelete] = useState<{
+    sourceUrl: string
+    label: string
+    chunkCount: number
+  } | null>(null)
+
   const handleDelete = (sourceUrl: string) => {
     if (!resolvedBranchId) return
     deleteSource(
@@ -100,6 +116,12 @@ const Knowledge = () => {
         onError: () => toast.error('Failed to remove document'),
       }
     )
+  }
+
+  const handleDeleteConfirm = () => {
+    if (!pendingDelete) return
+    handleDelete(pendingDelete.sourceUrl)
+    setPendingDelete(null)
   }
 
   const handleCrawl = async () => {
@@ -270,7 +292,11 @@ const Knowledge = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleDelete(source.source_url)}
+                  onClick={() => setPendingDelete({
+                    sourceUrl: source.source_url,
+                    label: getFilenameFromUrl(source.source_url),
+                    chunkCount: source.chunk_count,
+                  })}
                   disabled={deleting}
                   className="p-1.5 h-auto text-[hsl(var(--text-tertiary))] hover:text-destructive"
                   title="Remove from knowledge base"
@@ -382,7 +408,11 @@ const Knowledge = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleDelete(source.source_url)}
+                  onClick={() => setPendingDelete({
+                    sourceUrl: source.source_url,
+                    label: source.source_url.replace(/^https?:\/\//, ''),
+                    chunkCount: source.chunk_count,
+                  })}
                   disabled={deleting}
                   className="p-1.5 h-auto text-[hsl(var(--text-tertiary))] hover:text-destructive"
                   title="Remove from knowledge base"
@@ -394,6 +424,28 @@ const Knowledge = () => {
           </div>
         )}
       </div>
+
+      <AlertDialog open={pendingDelete !== null} onOpenChange={open => { if (!open) setPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{pendingDelete?.label}</strong> and its{' '}
+              {pendingDelete?.chunkCount} indexed chunk(s) from the knowledge base. Your agent
+              will no longer be able to answer questions using this content. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove document
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <p className="mt-6 text-xs text-[hsl(var(--text-tertiary))] text-center">
         Your AI agent only answers questions using content indexed here.
