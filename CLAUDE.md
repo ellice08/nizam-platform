@@ -286,29 +286,24 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   "Failed to process <filename>"); confirm the file appears in the Documents list with N chunks; then
   ask the agent a question only answerable from that PDF's content to confirm the full RAG round-trip,
   not just extraction.
-- *(c) Duplicates — investigated, NOT cleaned up yet (needs go-ahead):* wrote
-  `backend/scripts/findDuplicateChunks.ts` (read-only — groups chunks by branch_id + exact content
-  hash). Across the whole DB (230 chunks total, all in the Maryam branch right now): only **2 exact-
-  duplicate groups**, not the widespread problem originally suspected. Root cause found: it's NOT the
-  widget's silent auto-capture path — `ragService.capturePage()` (used by `POST /api/widget/ingest`,
-  the "browse the site → auto-index" flow) IS properly deduped, hashing content and skipping re-ingest
-  when unchanged, deleting-then-replacing only when content actually changed. The real duplicate
-  source is `ragService.crawlAndIngest()` (used by the Knowledge page's "Add page" button →
-  `POST /api/ingest/crawl`) — it calls `ingestText()` directly per crawled page with **no content-hash
-  check and no delete-before-insert**, and despite the UI copy saying "add a single page" it's
-  actually a BFS crawler that follows same-domain links up to `maxPages` (10). Re-running "Add page"
-  against a site you've already added will silently create fresh duplicate chunks for any page whose
-  content is unchanged. Note: exact-hash matching won't catch near-duplicates — the enrichment step
-  (LLM-generated Q&A, temperature 0.2) can reword identically-meant content differently across runs,
-  so the real dilution from repeated crawls is likely worse than the 2 exact matches found. Separately
-  (not a duplicate per se): the DB currently has several `localhost:8080/...` and `127.0.0.1:8000/...`
-  captured pages — these are local dev-testing artifacts from crawling against a local dev server, not
-  real client content; worth a manual cleanup independent of the dedup fix.
-  **Proposed next steps (waiting on go-ahead, not yet done):** (1) run a keep-oldest cleanup — delete
-  all but the oldest row in each exact-duplicate group; (2) fix `crawlAndIngest` to dedupe the same way
-  `capturePage` does (content-hash + delete-existing-for-source before insert) so re-running "Add page"
-  stops creating duplicates; (3) separately, delete the `localhost`/`127.0.0.1` dev-testing pages from
-  the Maryam branch.
+- *(c) Duplicates — DONE.* Root cause: `ragService.crawlAndIngest()` (used by the Knowledge page's
+  "Add page" button → `POST /api/ingest/crawl`) called `ingestText()` directly per crawled page with
+  no content-hash check and no delete-before-insert, and — despite the UI copy already saying "add a
+  single page" — it was actually a BFS crawler following same-domain links up to `maxPages` (10). The
+  widget's silent auto-capture path (`ragService.capturePage()`, used by `POST /api/widget/ingest`) was
+  never the problem — it was already properly deduped (content-hash skip / delete-then-replace).
+  **Fix shipped:** `crawlAndIngest` is removed. "Add page" now calls a new `ragService.captureSinglePage()`
+  — fetches exactly the one URL server-side (no link-following) and routes through the existing
+  `capturePage()` dedup logic, so it now matches its own UI copy and can't create duplicates on re-run.
+  `POST /api/ingest/crawl` and `organisationApi.crawlWebsite` dropped `maxPages`/`errors` (dead once
+  crawling is single-page — a request now either fully succeeds or throws, no per-page partial failures).
+  **Cleanup run:** `backend/scripts/cleanupDuplicateChunks.ts` (keep-oldest) removed 2 exact-duplicate
+  chunk rows. `backend/scripts/cleanupDevTestPages.ts` removed every `captured_pages` row (and their
+  chunks) whose host was localhost/127.0.0.1/a private LAN IP — turned out to be **all 40** captured_pages
+  in the DB; none were real client content. Final state: 45 `document_chunks`, all from the one real
+  uploaded document; 0 `captured_pages`. `backend/scripts/findDuplicateChunks.ts` stays as a read-only
+  audit tool for future checks. Near-duplicate (non-exact) detection for LLM-enriched chunks is still
+  unsolved — tracked in §9.
 - *Why:* demo integrity (don't delete knowledge on stage) + RAG quality (dupes/crawl noise dilute
   retrieval).
 
@@ -413,6 +408,15 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - Notification auto-expiry/dismiss (parked).
 - Post-close voice `chat()` waste (a turn can run after the socket closed — guarded now, but verify).
 - Booking flow occasionally over-asks — mostly fixed; watch for recurrence.
+- Near-duplicate detection for LLM-enriched chunks (unsolved): the enrichment pass in
+  `ragService.enrichContent()` generates Q&A/summary passages at temperature 0.2, so the same
+  underlying fact re-ingested (re-uploaded doc, re-crawled page with minor edits) can produce
+  textually different but semantically identical chunks — exact-hash dedup (`findDuplicateChunks.ts`,
+  `capturePage`'s content-hash) won't catch these, only byte-identical duplicates. No fix scoped yet
+  (options would be embedding-similarity dedup at ingest time, or hashing the source text pre-enrichment
+  rather than the enriched output). **Preferred mitigation is upstream, not a dedup algorithm:**
+  structured, deliberate uploads (see §8 Tier 3 [9] "knowledge-quality productization") mean fewer
+  ad-hoc re-ingests in the first place, which is the actual source of near-duplicate drift.
 
 ---
 
