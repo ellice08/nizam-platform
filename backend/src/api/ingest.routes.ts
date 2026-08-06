@@ -158,16 +158,17 @@ router.delete(
 );
 
 // POST /api/ingest/crawl
-// Crawl a website and index it into the knowledge base
+// Add a single page to the knowledge base (fetches server-side, dedupes by
+// content hash the same way the widget's auto-capture does — see
+// ragService.captureSinglePage).
 router.post(
   '/crawl',
   authenticate,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { url, branch_id, max_pages } = req.body as {
+      const { url, branch_id } = req.body as {
         url?: string
         branch_id?: string
-        max_pages?: number
       }
 
       if (!url) {
@@ -188,20 +189,27 @@ router.post(
         throw new AppError('Invalid URL — must include https://', 400)
       }
 
-      logger.info(`Starting crawl: ${url} for branch ${branchId}`)
+      logger.info(`Adding page: ${url} for branch ${branchId}`)
 
-      const result = await ragService.crawlAndIngest({
+      const captured = await ragService.captureSinglePage({
         url,
         branchId,
-        maxPages: max_pages ?? 10,
+        orgId: req.tenant.organisation_id,
       })
 
-      res.status(201).json(
-        ApiResponse.success(
-          result,
-          `Crawled ${result.pagesIndexed} page(s) — ${result.chunksCreated} chunks indexed`
-        )
-      )
+      const result = {
+        pagesIndexed: captured.status === 'skipped' ? 0 : 1,
+        chunksCreated: captured.chunksCreated,
+      }
+
+      const message =
+        captured.status === 'skipped'
+          ? 'No new content to index — page is unchanged or too short'
+          : captured.status === 'updated'
+            ? `Page content changed — re-indexed with ${captured.chunksCreated} chunks`
+            : `Page added — ${captured.chunksCreated} chunks indexed`
+
+      res.status(201).json(ApiResponse.success(result, message))
     } catch (err) {
       next(err)
     }

@@ -46,7 +46,6 @@ const Knowledge = () => {
   const [crawlResult, setCrawlResult] = useState<{
     pagesIndexed: number
     chunksCreated: number
-    errors: string[]
   } | null>(null)
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
@@ -140,16 +139,13 @@ const Knowledge = () => {
       const result = await organisationApi.crawlWebsite({
         url: crawlUrl,
         branchId: resolvedBranchId,
-        maxPages: 10,
       })
       setCrawlResult(result)
       if (result.pagesIndexed > 0) {
-        toast.success(
-          `Crawled ${result.pagesIndexed} page(s) — ${result.chunksCreated} chunks indexed`
-        )
+        toast.success(`Page added — ${result.chunksCreated} chunks indexed`)
         void refetch()
       } else {
-        toast.warning('No pages could be indexed from that URL')
+        toast.info('No changes — this page is already indexed with this content')
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Crawl failed')
@@ -355,14 +351,10 @@ const Knowledge = () => {
           {crawlResult && (
             <div className="mt-3 p-3 rounded-lg bg-elevated border border-border text-xs space-y-1">
               <p className="text-foreground">
-                {crawlResult.pagesIndexed} page(s) indexed,{' '}
-                {crawlResult.chunksCreated} chunks created
+                {crawlResult.pagesIndexed > 0
+                  ? `Page indexed — ${crawlResult.chunksCreated} chunks created`
+                  : 'No changes — this page is already indexed with this content'}
               </p>
-              {crawlResult.errors.length > 0 && (
-                <p className="text-[hsl(var(--text-tertiary))]">
-                  {crawlResult.errors.length} page(s) could not be indexed
-                </p>
-              )}
             </div>
           )}
         </div>

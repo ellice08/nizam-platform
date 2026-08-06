@@ -170,20 +170,16 @@ const deleteKnowledgeSource = async (
 const crawlWebsite = async (params: {
   url: string
   branchId: string
-  maxPages?: number
 }): Promise<{
   pagesIndexed: number
   chunksCreated: number
-  errors: string[]
 }> => {
   const response = await apiClient.post<ApiSuccess<{
     pagesIndexed: number
     chunksCreated: number
-    errors: string[]
   }>>('/api/ingest/crawl', {
     url: params.url,
     branch_id: params.branchId,
-    max_pages: params.maxPages ?? 10,
   })
   return response.data.data
 }
