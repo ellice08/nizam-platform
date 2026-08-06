@@ -273,15 +273,44 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - *Why:* ends the recurring "is the deployed build current?" forensics (cost hours once).
 - *Status:* shipped — commit `4a24ba3`, pushed to `main`.
 
-**[3] KB hygiene**
-- *What:* (a) delete-confirmation on Knowledge documents (currently one-click delete → risk of
-  accidental loss). (b) Verify a PDF actually indexes end-to-end now that the pdf-parse import bug is
-  fixed. (c) Clean duplicate chunks + investigate whether the website crawler re-ingests on page
-  visits (duplicate FAQ chunks were observed → possible crawler dedup bug).
+**[3] KB hygiene — (a) DONE, (b) DONE, (c) investigated, cleanup NOT yet run**
+- *(a) Delete-confirmation:* shipped — `frontend/src/pages/dashboard/Knowledge.tsx` now opens an
+  `AlertDialog` (same pattern as `AdminClientDetail.tsx`) showing the doc/page name + chunk count
+  before calling the existing `deleteSource` mutation. Verified live against the Maryam tenant:
+  Cancel leaves data untouched, Confirm deletes and the list refreshes. Commit `08b65a6`.
+- *(b) PDF ingestion:* the `pdf-parse/lib/pdf-parse.js` subpath-import fix (avoids the package's
+  ENOENT self-test) is confirmed in place at `backend/src/api/ingest.routes.ts:44`. Walkthrough to
+  verify end-to-end: upload a real text-layer PDF (not a scanned image — no OCR) under 10MB on the
+  Knowledge page; watch for the "Uploading and indexing…" state then a green check + chunk count in
+  the Upload results panel (a red X + inline error means extraction failed — check backend logs for
+  "Failed to process <filename>"); confirm the file appears in the Documents list with N chunks; then
+  ask the agent a question only answerable from that PDF's content to confirm the full RAG round-trip,
+  not just extraction.
+- *(c) Duplicates — investigated, NOT cleaned up yet (needs go-ahead):* wrote
+  `backend/scripts/findDuplicateChunks.ts` (read-only — groups chunks by branch_id + exact content
+  hash). Across the whole DB (230 chunks total, all in the Maryam branch right now): only **2 exact-
+  duplicate groups**, not the widespread problem originally suspected. Root cause found: it's NOT the
+  widget's silent auto-capture path — `ragService.capturePage()` (used by `POST /api/widget/ingest`,
+  the "browse the site → auto-index" flow) IS properly deduped, hashing content and skipping re-ingest
+  when unchanged, deleting-then-replacing only when content actually changed. The real duplicate
+  source is `ragService.crawlAndIngest()` (used by the Knowledge page's "Add page" button →
+  `POST /api/ingest/crawl`) — it calls `ingestText()` directly per crawled page with **no content-hash
+  check and no delete-before-insert**, and despite the UI copy saying "add a single page" it's
+  actually a BFS crawler that follows same-domain links up to `maxPages` (10). Re-running "Add page"
+  against a site you've already added will silently create fresh duplicate chunks for any page whose
+  content is unchanged. Note: exact-hash matching won't catch near-duplicates — the enrichment step
+  (LLM-generated Q&A, temperature 0.2) can reword identically-meant content differently across runs,
+  so the real dilution from repeated crawls is likely worse than the 2 exact matches found. Separately
+  (not a duplicate per se): the DB currently has several `localhost:8080/...` and `127.0.0.1:8000/...`
+  captured pages — these are local dev-testing artifacts from crawling against a local dev server, not
+  real client content; worth a manual cleanup independent of the dedup fix.
+  **Proposed next steps (waiting on go-ahead, not yet done):** (1) run a keep-oldest cleanup — delete
+  all but the oldest row in each exact-duplicate group; (2) fix `crawlAndIngest` to dedupe the same way
+  `capturePage` does (content-hash + delete-existing-for-source before insert) so re-running "Add page"
+  stops creating duplicates; (3) separately, delete the `localhost`/`127.0.0.1` dev-testing pages from
+  the Maryam branch.
 - *Why:* demo integrity (don't delete knowledge on stage) + RAG quality (dupes/crawl noise dilute
   retrieval).
-- *Approach:* delete-confirm = small frontend modal. PDF verify = upload a test PDF, check chunks
-  indexed. Dedup = a cleanup query + crawler review.
 
 **[4] ASR / accent swap (Retell dashboard)**
 - *What:* switch the Retell agent's Realtime Transcription provider/model to something accent-robust
