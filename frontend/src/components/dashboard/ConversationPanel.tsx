@@ -6,6 +6,14 @@ import {
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { formatDistanceToNow, format } from 'date-fns'
 import { useConversation, useUpdateConversation } from '@/hooks'
@@ -31,6 +39,8 @@ const ConversationPanel = ({ conversationId, onClose, intentMap = {} }: Conversa
 
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+  const [resolutionNote, setResolutionNote] = useState('')
 
   const notesArray = Array.isArray(conversation?.notes)
     ? conversation.notes
@@ -46,23 +56,59 @@ const ConversationPanel = ({ conversationId, onClose, intentMap = {} }: Conversa
 
   const handleResolve = () => {
     if (!conversation) return
+    if (!conversation.resolved) {
+      // About to mark resolved — ask what was done first (skippable).
+      setResolutionNote('')
+      setResolveDialogOpen(true)
+      return
+    }
+    // Toggling back to unresolved — no prompt needed, same as before.
     updateConversation(
       {
         id: conversation.id,
         data: {
-          resolved: !conversation.resolved,
+          resolved: false,
           actioned_by: user?.id,
           actioned_at: new Date().toISOString(),
         },
       },
       {
-        onSuccess: () => toast.success(
-          conversation.resolved ? 'Marked as unresolved' : 'Marked as resolved'
-        ),
+        onSuccess: () => toast.success('Marked as unresolved'),
         onError: () => toast.error('Failed to update'),
       }
     )
   }
+
+  const doResolve = (noteText: string | null) => {
+    if (!conversation) return
+    const existingNotes = Array.isArray(conversation.notes) ? conversation.notes : []
+    const notes = noteText
+      ? [...existingNotes, { text: noteText, added_by: user?.email ?? 'Team member', added_at: new Date().toISOString() }]
+      : undefined
+
+    updateConversation(
+      {
+        id: conversation.id,
+        data: {
+          resolved: true,
+          actioned_by: user?.id,
+          actioned_at: new Date().toISOString(),
+          ...(notes ? { notes } : {}),
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success('Marked as resolved')
+          setResolveDialogOpen(false)
+          setResolutionNote('')
+        },
+        onError: () => toast.error('Failed to update'),
+      }
+    )
+  }
+
+  const handleSaveAndResolve = () => doResolve(resolutionNote.trim() || null)
+  const handleSkipResolve = () => doResolve(null)
 
   const handleMarkHandled = () => {
     if (!conversation) return
@@ -387,6 +433,45 @@ const ConversationPanel = ({ conversationId, onClose, intentMap = {} }: Conversa
 
         </div>
       )}
+
+      <Dialog open={resolveDialogOpen} onOpenChange={open => {
+        if (!open) { setResolveDialogOpen(false); setResolutionNote('') }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark this conversation resolved?</DialogTitle>
+            <DialogDescription>
+              What did you do to resolve it? This gets saved as a note on the conversation.
+              Optional — you can skip it.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={resolutionNote}
+            onChange={e => setResolutionNote(e.target.value)}
+            placeholder="e.g. Called the customer and confirmed the unit is still available…"
+            rows={4}
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-[hsl(var(--text-tertiary))] resize-none outline-none focus:border-primary transition-colors duration-150"
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleSkipResolve}
+              disabled={isPending}
+              className="border-border text-[hsl(var(--text-secondary))]"
+            >
+              Skip
+            </Button>
+            <Button
+              onClick={handleSaveAndResolve}
+              disabled={isPending}
+              className="bg-primary hover:bg-primary-hover text-primary-foreground"
+            >
+              Save &amp; resolve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

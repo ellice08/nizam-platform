@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { conversationService } from '../services/conversation.service.js';
+import { claudeService } from '../services/claude.service.js';
 import { supabase } from '../lib/supabase.js';
 import { ApiResponse } from '../utils/response.js';
 
@@ -96,11 +97,13 @@ router.patch('/:id', authenticate, validate(updateConversationSchema), async (re
 
   if (branchIds.length === 1 && branchIds[0]) {
     const conversation = await conversationService.updateConversation(req.params['id'] as string, branchIds[0], updateData);
+    if (updateData.resolved) void claudeService.summarizeConversation(req.params['id'] as string);
     res.json(ApiResponse.success(conversation, 'Conversation updated'));
     return;
   }
 
   const conversation = await conversationService.updateConversationForBranches(req.params['id'] as string, branchIds, updateData);
+  if (updateData.resolved) void claudeService.summarizeConversation(req.params['id'] as string);
   res.json(ApiResponse.success(conversation, 'Conversation updated'));
 });
 

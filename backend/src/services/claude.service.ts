@@ -575,6 +575,110 @@ class ClaudeService {
       .eq('id', conversationId);
   }
 
+  // System-generated summary for chat/WhatsApp conversations — parity with
+  // voice, which gets its summary from Retell's call_analysis.call_summary
+  // at call_ended/call_analyzed (see voice.routes.ts). Chat/WhatsApp have no
+  // equivalent provider-side analysis, so we generate one ourselves. Callers:
+  // the resolve path (conversation.routes.ts PATCH) and chatSummarySweeper's
+  // 30-min inactivity sweep. Both can call this freely — the atomic claim
+  // below (same pattern as lead_announced_at in finalizeTurn) guarantees the
+  // note is only ever appended once, however many times/paths call in.
+  async summarizeConversation(conversationId: string): Promise<void> {
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('id, channel, messages, summarized_at')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (!conv) return;
+    if (conv.channel === 'voice') return; // voice already summarizes via Retell
+    if (conv.summarized_at) return; // already summarized — cheap pre-check before the claim
+
+    const msgs = Array.isArray(conv.messages) ? conv.messages as Message[] : [];
+    if (msgs.length === 0) return;
+
+    // ATOMIC CLAIM — exactly one caller ever wins this UPDATE (Postgres
+    // serializes concurrent writes to the same row), so the sweeper and a
+    // resolve-triggered call racing on the same conversation can never both
+    // append a summary note.
+    const { data: claimed } = await supabase
+      .from('conversations')
+      .update({ summarized_at: new Date().toISOString() })
+      .eq('id', conversationId)
+      .is('summarized_at', null)
+      .select('id');
+
+    if (!claimed || claimed.length === 0) return; // lost the race
+
+    let summary: string;
+    try {
+      summary = await this.generateSummary(msgs);
+    } catch (err) {
+      logger.error(`summarizeConversation: generation failed for ${conversationId}: ${err instanceof Error ? err.message : String(err)}`);
+      // Release the claim so a later sweep/resolve can retry — a transient
+      // LLM failure should never permanently block this conversation from
+      // ever getting a summary.
+      await supabase.from('conversations').update({ summarized_at: null }).eq('id', conversationId);
+      return;
+    }
+
+    if (!summary.trim()) {
+      await supabase.from('conversations').update({ summarized_at: null }).eq('id', conversationId);
+      return;
+    }
+
+    // Re-fetch notes right before writing — minimizes (does not fully
+    // eliminate) the window where a concurrently-added human note could be
+    // overwritten. Same read-then-write tolerance the frontend's manual
+    // add-note flow already has; not unique to this feature.
+    const { data: fresh } = await supabase
+      .from('conversations')
+      .select('notes')
+      .eq('id', conversationId)
+      .maybeSingle();
+    const existingNotes = Array.isArray(fresh?.notes) ? fresh.notes as unknown[] : [];
+    const summaryNote = {
+      text: `Conversation summary: ${summary.trim()}`,
+      added_by: 'system',
+      added_at: new Date().toISOString(),
+    };
+
+    const { error: updateErr } = await supabase
+      .from('conversations')
+      .update({ notes: [...existingNotes, summaryNote] })
+      .eq('id', conversationId);
+
+    if (updateErr) {
+      logger.error(`summarizeConversation: failed to save summary note for ${conversationId}: ${updateErr.message}`);
+    } else {
+      logger.info(`summarizeConversation: added summary note for conversation ${conversationId}`);
+    }
+  }
+
+  private async generateSummary(messages: Message[]): Promise<string> {
+    const transcript = messages
+      .map(m => `${m.role === 'user' ? 'Customer' : 'Agent'}: ${m.content}`)
+      .join('\n');
+
+    const completion = await openaiClient.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      max_tokens: 200,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Summarize this customer-service conversation in 2-3 concise sentences: ' +
+            'what the customer wanted, what happened, and what (if anything) is still ' +
+            'outstanding. Plain prose, no markdown, no preamble like "Summary:".',
+        },
+        { role: 'user', content: transcript },
+      ],
+    });
+
+    return completion.choices[0]?.message?.content ?? '';
+  }
+
   // Shared setup path for chat() and chatStream(): agent config, intents, RAG
   // context, system prompt construction, and conversation get/create. Both
   // callers get an identical PreparedTurn — no room for the two paths to drift.
