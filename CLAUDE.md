@@ -369,24 +369,44 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 ### TIER 2 — polish that makes it feel like a finished product
 
 **[5] Nav badges (DONE) + chat auto-summary (DONE) + human resolution note (DONE) — all shipped**
-- *Nav badges — DONE:* Conversations and Support nav items show a count badge, dashboard-only
-  (`AppSidebar.tsx` + `MobileTopBar.tsx`, both driven by `navConfig.ts`). Exactly mirrors
-  `NotificationBell`'s badge: same pill markup (`<span className="relative shrink-0">{Icon}
-  {badge}</span>`, badge absolute-positioned top-right of the icon, "9+" cap), same data-fetch
-  shape (react-query, `refetchInterval: 25000`, `refetchOnWindowFocus: true`). Shared via
-  `useNavBadgeCounts(variant)` so both nav surfaces read one hook.
-  - Conversations count = `requires_human:true AND resolved:false`, scoped via the existing
-    `getBranchIds` helper. `GET /api/conversations/needs-attention-count` (count-only query — no
-    row data fetched; registered BEFORE `/:id` so it isn't shadowed by that param route).
-  - Support count = tickets not yet resolved/closed (`status IN ('open','in_progress')`) for the
-    tenant's `organisation_id`. **Chosen over "unread" because `support_tickets` has no per-ticket
-    read/unread state** — the only tenant-facing signal the Support page tracks is `status`. Tying
-    the badge to notification `read_by` instead was considered and rejected: a notification goes
-    "read" the moment someone opens the bell dropdown, which would clear the nav badge without the
-    underlying ticket having been addressed — misleading for a persistent count.
-    `GET /api/support/tickets/open-count`, same param-route-shadowing guard.
-  - Both underlying queries pass `enabled:false` on the admin console variant (no single tenant to
-    scope the counts to) — never fetched there, not just visually hidden.
+- *Nav badges — DONE.* Conversations and Support nav items show a count badge
+  (`AppSidebar.tsx` + `MobileTopBar.tsx`, both driven by `navConfig.ts`, on BOTH the tenant
+  dashboard and the operator/admin console). Exactly mirrors `NotificationBell`'s badge: same pill
+  markup (`<span className="relative shrink-0">{Icon}{badge}</span>`, badge absolute-positioned
+  top-right of the icon, "9+" cap), same data-fetch shape (react-query, `refetchInterval: 25000`,
+  `refetchOnWindowFocus: true`). Shared via `useNavBadgeCounts(variant)` so all nav surfaces read
+  one hook.
+  - **Both counts are work-queue counts, not historical tallies — self-clearing by design.**
+    Conversations = `requires_human:true AND resolved:false AND actioned_by IS NULL`
+    (`GET /api/conversations/needs-attention-count`, scoped via the existing `getBranchIds`
+    helper, count-only query, registered BEFORE `/:id` so it isn't shadowed by that param route).
+    `actioned_by` is set by ANY `PATCH /api/conversations/:id` (note added, marked handled,
+    resolved — conversation.routes.ts always stamps it, not just on resolve), so the badge clears
+    the moment an operator touches the conversation at all, not only on resolve. **Known tradeoff:**
+    `actioned_by` is never reset back to null anywhere — a conversation that gets re-escalated
+    after already being actioned once will NOT reappear in this count. Verified live: actioning one
+    of ~70 real unactioned test-escalations (accumulated from this session's testing) dropped the
+    count by exactly 1.
+  - Support = `status = 'open'` only (NOT `in_progress` — that means someone already picked it up,
+    so it's off the queue) for the relevant org. **Chosen over "unread" because `support_tickets`
+    has no per-ticket read/unread state** — status is the only tenant-facing signal the Support
+    page tracks. Tying the badge to notification `read_by` instead was considered and rejected: a
+    notification goes "read" the moment someone opens the bell dropdown, clearing the nav badge
+    without the ticket itself being addressed.
+  - **Support badge also exists on `/admin` (operator/super-admin console).** Investigated first
+    whether there's an operator-side Conversations equivalent to match — there isn't:
+    `/admin/leads` is sales leads for onboarding NEW Nizam clients (prospects), not a cross-tenant
+    customer-conversation queue, so Conversations stays dashboard-only (its query passes
+    `enabled:false` on the admin variant — never fetched there, not just hidden). Support's
+    `GET /api/support/tickets/open-count` is role-aware, mirroring `GET /tickets`'s own scoping
+    exactly: non-super-admin always org-scoped; super-admin org-scoped only while impersonating a
+    tenant (`organisation_id` set), otherwise counts open tickets across every organisation — the
+    operator's real cross-tenant queue. Same endpoint, same hook, serves both surfaces; only the
+    path key (`/dashboard/support` vs `/admin/support`) differs. **Not click-verified on `/admin`
+    itself** (no super-admin login available this session) — verified instead by directly comparing
+    the cross-tenant-scoped query against the single-org-scoped query against live data, confirming
+    the branching logic executes correctly; worth a quick manual check next time you're in the
+    operator console.
 - *Human resolution note — DONE:* `ConversationPanel.tsx`'s "Mark resolved" now opens a skippable
   dialog asking what was done, before resolving (see §6a). Un-resolving stays a one-click toggle.
 - *Chat auto-summary — DONE, and taken further than the original scope:* originally scoped as
