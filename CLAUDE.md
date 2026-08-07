@@ -76,7 +76,9 @@ threads (WhatsApp number, Retell Nigerian number), and **billing (the deliberate
   lead_name, lead_phone, lead_email, messages (jsonb `[{role,content}]`), recording_url,
   resolved, requires_human, sentiment, notes (jsonb `[{text,added_by,added_at}]` —
   ConversationNote[], NOT a string!), intent, booking_details, actioned_by/at, created_at,
-  updated_at, **escalated_at**, **lead_announced_at**, **escalation_pending_since**.
+  updated_at, **escalated_at**, **lead_announced_at**, **escalation_pending_since**,
+  **summarized_at** (last-summarized-at, not summarized-once — see §6a), **summary_regenerations**
+  (sweeper-driven regen count, capped — see §6a).
   (schema.sql is STALE — it references a `tenant_id` model that isn't live. Trust the live table.)
 - **document_chunks** — RAG chunks (pgvector embeddings). Retrieved via the `match_documents`
   RPC (params: query_embedding, p_branch_id, match_count, match_threshold).
@@ -230,6 +232,52 @@ atomic claim or the pending flag.**
 
 ---
 
+## 6a. Resolution notes & chat summaries
+
+Two related, separately-triggered features layered onto notes/resolve — not part of the
+escalation ledger above, but touch the same `conversations.notes` array so the same "never
+write a string, never duplicate" discipline applies.
+
+- **Human resolution note (frontend-only, skippable):** `ConversationPanel.tsx`'s "Mark
+  resolved" button, when going from unresolved→resolved (NOT when un-resolving), opens a Dialog
+  asking what was done. "Save & resolve" appends a note (`added_by` = acting user's email, same
+  as manual notes) then resolves in one PATCH; "Skip" resolves with no note. No backend change —
+  the existing `notes` field on `PATCH /api/conversations/:id` already accepts an arbitrary array.
+- **System chat/WhatsApp summary (`claudeService.summarizeConversation`)** — voice gets its
+  summary for free from Retell's `call_analysis.call_summary` at call end (voice.routes.ts); chat
+  and WhatsApp have no equivalent provider-side analysis, so we generate one ourselves
+  (gpt-4o-mini, 2-3 sentences: what the customer wanted / what happened / what's outstanding).
+  Voice is excluded from both triggers below (already covered).
+  - **Triggers:** (1) resolve path (`conversation.routes.ts` PATCH, fires whenever `resolved:true`
+    is in the request body) — calls with `{ bypassCap: true }`. (2) **chatSummarySweeper.ts** — 1min
+    interval, 3min inactivity threshold (mirrors escalationSweeper's shape/logging, not its
+    timing — summaries aren't escalation-urgent, they're just meant to feel near-live).
+  - **`summarized_at` means "last summarized at", not "summarized once".** If a conversation gets
+    new messages after being summarized and then goes quiet again, the summary REGENERATES and
+    REPLACES the existing `added_by:'system'` note in place (found by `added_by==='system'`) —
+    never appends a second one. The panel only ever shows one system summary.
+  - **Atomic claim is a compare-and-swap**, not the simpler `WHERE IS NULL` pattern used elsewhere
+    in §6: `UPDATE conversations SET summarized_at=now() WHERE id=? AND summarized_at = <value just
+    read> RETURNING id` — `.is('summarized_at', null)` for the first summary (previous value was
+    null), `.eq('summarized_at', previousValue)` for a refresh (previous value was a real
+    timestamp). This still guarantees exactly one winner when the sweeper and a resolve-triggered
+    call race on the same conversation, but — unlike `lead_announced_at`/`escalated_at`, which are
+    "claim once, forever set" — this claim is reusable because the compared-against value changes
+    every time.
+  - **Churn cap:** sweeper-driven regenerations capped at `MAX_SWEEPER_REGENERATIONS = 2`
+    (`conversations.summary_regenerations`, exported from claude.service.ts) — so 3
+    sweeper-generated summaries total per conversation. The resolve path's `bypassCap:true` call
+    always runs regardless of the cap AND never increments the counter, so it can never itself get
+    capped out. On a generation failure or empty completion, `summarized_at` rolls back to its
+    pre-claim value (not hardcoded to null) so a later attempt can retry without corrupting
+    already-summarized state.
+  - **Why the sweeper does a broad DB prefilter + per-row refine, not one query:** "has this
+    conversation had activity since its last summary" is `summarized_at < updated_at` — a
+    column-to-column comparison PostgREST can't filter on directly. Same broad-prefilter-then-
+    per-row-check shape escalationSweeper already uses for its own per-channel refinement.
+
+---
+
 ## 7. Conventions & gotchas
 
 - **`/api/version`** (see §8 status) returns the deployed commit — use it to end stale-deploy
@@ -320,13 +368,17 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 
 ### TIER 2 — polish that makes it feel like a finished product
 
-**[5] Nav badges + chat auto-summary**
-- *Nav badges:* Conversations and Support nav items should show a count/indicator for new/unread
-  items, like Notifications already does. Data-driven, small UI+query feature.
-- *Chat auto-summary:* generate an AI summary into conversation Notes for CHAT conversations
-  (parity with voice, which summarizes at call-end). **Trigger decision (user's call): ON RESOLUTION
-  first** — when a client marks resolved. Rationale from the user: the client should add how it was
-  resolved; the summary anchors that. Inactivity/both can be added later by the system.
+**[5] Nav badges (open) + chat auto-summary (DONE) + human resolution note (DONE)**
+- *Nav badges:* still open. Conversations and Support nav items should show a count/indicator for
+  new/unread items, like Notifications already does. Data-driven, small UI+query feature.
+- *Human resolution note — DONE:* `ConversationPanel.tsx`'s "Mark resolved" now opens a skippable
+  dialog asking what was done, before resolving (see §6a). Un-resolving stays a one-click toggle.
+- *Chat auto-summary — DONE, and taken further than the original scope:* originally scoped as
+  resolve-only; shipped as a refreshable system summary with BOTH triggers (resolve AND a 3-min
+  inactivity sweeper), because a resolve-only summary would never update if the conversation
+  reopened with more messages after being summarized once. See §6a for the full design
+  (`claudeService.summarizeConversation`, `chatSummarySweeper.ts`, the `summarized_at` /
+  `summary_regenerations` columns, the compare-and-swap claim, the 2-regeneration cap).
 - *NOTE — distinct from [8b] below:* the user ALSO wants a bigger idea — resolved conversations +
   resolution notes become RETRIEVABLE KNOWLEDGE so recurring issues get handled from past resolutions.
   That's the "resolution-learning loop" — a separate Tier-3 design, NOT this simple summary. Don't
