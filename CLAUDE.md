@@ -407,6 +407,19 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
     the cross-tenant-scoped query against the single-org-scoped query against live data, confirming
     the branching logic executes correctly; worth a quick manual check next time you're in the
     operator console.
+  - **View-tracked on top of the work-queue filters, so the badge is a clean slate on open, not a
+    permanent backlog counter.** `user_section_views(user_id, section, last_viewed_at)` — opening
+    Conversations or Support (`Conversations.tsx`/`Support.tsx`/`AdminSupport.tsx`, on mount) POSTs
+    `/api/nav-views/mark-viewed {section}`, which upserts `last_viewed_at=now()` for that user+
+    section. Both count endpoints then add `updated_at > last_viewed_at` on top of their existing
+    filters (`lib/navViews.ts`'s `getLastViewedAt`) — so a user's first-ever visit still shows the
+    true backlog (matches original behavior, `last_viewed_at` row doesn't exist yet → no filter
+    applied), but every visit after that resets to zero, climbing again only as things change
+    post-visit. The mark-viewed mutation also invalidates the badge-count query client-side so the
+    nav badge updates immediately, not on the next 25s poll. Verified live end-to-end: badge showed
+    the real backlog → visiting the page dropped it to 0 immediately → inserting a fresh escalated
+    conversation directly (simulating new activity) made the Conversations badge climb back to 1
+    without a page visit, while Support stayed at 0 (independent per-section tracking, confirmed).
 - *Human resolution note — DONE:* `ConversationPanel.tsx`'s "Mark resolved" now opens a skippable
   dialog asking what was done, before resolving (see §6a). Un-resolving stays a one-click toggle.
 - *Chat auto-summary — DONE, and taken further than the original scope:* originally scoped as
