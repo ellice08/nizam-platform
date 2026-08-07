@@ -124,24 +124,34 @@ router.get('/tickets', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/support/tickets/open-count — for the Support nav badge. Must be
-// registered before /tickets/:id so it isn't shadowed by that param route.
-// "Open" = not yet resolved/closed (status is the only tenant-facing signal
-// support_tickets tracks — there's no per-ticket read/unread state).
+// GET /api/support/tickets/open-count — for the Support nav badge, on BOTH
+// the tenant dashboard and the operator/admin console. Must be registered
+// before /tickets/:id so it isn't shadowed by that param route. A work-queue
+// count: status 'open' only, not 'in_progress' — in_progress means someone
+// has already picked the ticket up, so it's off the queue.
+// Scoping mirrors GET /tickets exactly: non-super-admin (tenant users) are
+// always org-scoped; super-admin is org-scoped only while impersonating a
+// tenant (organisation_id set), otherwise counts open tickets across every
+// organisation — the operator's real cross-tenant queue.
 router.get('/tickets/open-count', authenticate, async (req, res, next) => {
   try {
-    const orgId = req.tenant.organisation_id;
-    if (!orgId) {
+    const isSuperAdmin = req.tenant.role === 'super_admin';
+
+    if (!isSuperAdmin && !req.tenant.organisation_id) {
       res.json(ApiResponse.success({ count: 0 }));
       return;
     }
 
-    const { count, error } = await supabase
+    let query = supabase
       .from('support_tickets')
       .select('id', { count: 'exact', head: true })
-      .eq('organisation_id', orgId)
-      .in('status', ['open', 'in_progress']);
+      .eq('status', 'open');
 
+    if (!isSuperAdmin || req.tenant.organisation_id) {
+      query = query.eq('organisation_id', req.tenant.organisation_id as string);
+    }
+
+    const { count, error } = await query;
     if (error) throw new AppError(error.message, 500);
     res.json(ApiResponse.success({ count: count ?? 0 }));
   } catch (err) { next(err); }

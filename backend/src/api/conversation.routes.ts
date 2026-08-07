@@ -68,6 +68,11 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
 // GET /api/conversations/needs-attention-count — for the Conversations nav
 // badge. Must be registered before /:id so it isn't shadowed by that param
 // route. Count-only query (no row data) since the badge only needs a number.
+// A work-queue count, not a historical tally: actioned_by IS NULL excludes
+// anything an operator has already touched via PATCH (note added, marked
+// handled, resolved/un-resolved), so the badge self-clears. Known tradeoff —
+// actioned_by is never reset, so a conversation that gets re-escalated after
+// already being actioned once won't reappear in this count.
 router.get('/needs-attention-count', authenticate, async (req: Request, res: Response): Promise<void> => {
   const branchIds = await getBranchIds(req);
   if (branchIds.length === 0) {
@@ -80,7 +85,8 @@ router.get('/needs-attention-count', authenticate, async (req: Request, res: Res
     .select('id', { count: 'exact', head: true })
     .in('branch_id', branchIds)
     .eq('requires_human', true)
-    .eq('resolved', false);
+    .eq('resolved', false)
+    .is('actioned_by', null);
 
   if (error) throw new AppError(error.message, 500);
   res.json(ApiResponse.success({ count: count ?? 0 }));
