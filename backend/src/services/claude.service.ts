@@ -11,6 +11,11 @@ import logger from '../utils/logger.js';
 const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 const openaiClient = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
+// Max sweeper-driven summary regenerations after the initial summary (so up
+// to 3 sweeper-generated summaries total per conversation). The resolve
+// path's final regeneration is exempt — see summarizeConversation.
+export const MAX_SWEEPER_REGENERATIONS = 2;
+
 const RAG_BEFORE = `CONVERSATION STYLE:
 - You are a calm, warm professional having a real
   conversation. Not a search engine. Not a brochure.
@@ -578,35 +583,54 @@ class ClaudeService {
   // System-generated summary for chat/WhatsApp conversations — parity with
   // voice, which gets its summary from Retell's call_analysis.call_summary
   // at call_ended/call_analyzed (see voice.routes.ts). Chat/WhatsApp have no
-  // equivalent provider-side analysis, so we generate one ourselves. Callers:
-  // the resolve path (conversation.routes.ts PATCH) and chatSummarySweeper's
-  // 30-min inactivity sweep. Both can call this freely — the atomic claim
-  // below (same pattern as lead_announced_at in finalizeTurn) guarantees the
-  // note is only ever appended once, however many times/paths call in.
-  async summarizeConversation(conversationId: string): Promise<void> {
+  // equivalent provider-side analysis, so we generate one ourselves.
+  //
+  // `summarized_at` means "last summarized at", not "summarized once" — a
+  // conversation that picks up new messages after being summarized and then
+  // goes quiet again gets a fresh summary that REPLACES the existing
+  // `added_by: 'system'` note in place (never a second one). Sweeper-driven
+  // refreshes are capped at MAX_SWEEPER_REGENERATIONS; the resolve path
+  // (conversation.routes.ts PATCH, via { bypassCap: true }) always gets one
+  // final regeneration beyond that cap and never counts against it.
+  //
+  // Callers: the resolve path and chatSummarySweeper's 3-min inactivity
+  // sweep. Both can call this freely — the atomic claim below is a
+  // compare-and-swap on summarized_at (generalizing the old "WHERE IS NULL"
+  // claim, used back when this column only ever went null->set-once, to also
+  // cover refreshes where it legitimately changes every time) — Postgres
+  // serializes concurrent writes to the same row, so exactly one racing
+  // caller ever wins, however many times/paths call in.
+  async summarizeConversation(conversationId: string, options: { bypassCap?: boolean } = {}): Promise<void> {
+    const bypassCap = options.bypassCap ?? false;
+
     const { data: conv } = await supabase
       .from('conversations')
-      .select('id, channel, messages, summarized_at')
+      .select('id, channel, messages, summarized_at, summary_regenerations')
       .eq('id', conversationId)
       .maybeSingle();
 
     if (!conv) return;
     if (conv.channel === 'voice') return; // voice already summarizes via Retell
-    if (conv.summarized_at) return; // already summarized — cheap pre-check before the claim
 
     const msgs = Array.isArray(conv.messages) ? conv.messages as Message[] : [];
     if (msgs.length === 0) return;
 
-    // ATOMIC CLAIM — exactly one caller ever wins this UPDATE (Postgres
-    // serializes concurrent writes to the same row), so the sweeper and a
-    // resolve-triggered call racing on the same conversation can never both
-    // append a summary note.
-    const { data: claimed } = await supabase
+    const previousSummarizedAt = conv.summarized_at as string | null;
+    const alreadySummarized = !!previousSummarizedAt;
+    const regenCount = (conv.summary_regenerations as number | null) ?? 0;
+
+    if (alreadySummarized && !bypassCap && regenCount >= MAX_SWEEPER_REGENERATIONS) return;
+
+    // ATOMIC CLAIM (compare-and-swap) — succeeds only if summarized_at still
+    // equals what we just read; a loser's WHERE clause matches nothing.
+    let claimQuery = supabase
       .from('conversations')
       .update({ summarized_at: new Date().toISOString() })
-      .eq('id', conversationId)
-      .is('summarized_at', null)
-      .select('id');
+      .eq('id', conversationId);
+    claimQuery = previousSummarizedAt
+      ? claimQuery.eq('summarized_at', previousSummarizedAt)
+      : claimQuery.is('summarized_at', null);
+    const { data: claimed } = await claimQuery.select('id');
 
     if (!claimed || claimed.length === 0) return; // lost the race
 
@@ -615,15 +639,15 @@ class ClaudeService {
       summary = await this.generateSummary(msgs);
     } catch (err) {
       logger.error(`summarizeConversation: generation failed for ${conversationId}: ${err instanceof Error ? err.message : String(err)}`);
-      // Release the claim so a later sweep/resolve can retry — a transient
-      // LLM failure should never permanently block this conversation from
-      // ever getting a summary.
-      await supabase.from('conversations').update({ summarized_at: null }).eq('id', conversationId);
+      // Roll back to the pre-claim value (not always null now) so a later
+      // sweep/resolve can retry — a transient LLM failure should never
+      // permanently block this conversation from ever getting a summary.
+      await supabase.from('conversations').update({ summarized_at: previousSummarizedAt }).eq('id', conversationId);
       return;
     }
 
     if (!summary.trim()) {
-      await supabase.from('conversations').update({ summarized_at: null }).eq('id', conversationId);
+      await supabase.from('conversations').update({ summarized_at: previousSummarizedAt }).eq('id', conversationId);
       return;
     }
 
@@ -636,22 +660,44 @@ class ClaudeService {
       .select('notes')
       .eq('id', conversationId)
       .maybeSingle();
-    const existingNotes = Array.isArray(fresh?.notes) ? fresh.notes as unknown[] : [];
+    const existingNotes = Array.isArray(fresh?.notes) ? fresh.notes as Array<Record<string, unknown>> : [];
     const summaryNote = {
       text: `Conversation summary: ${summary.trim()}`,
       added_by: 'system',
       added_at: new Date().toISOString(),
     };
 
+    let notes: Array<Record<string, unknown>>;
+    let newRegenCount = regenCount;
+    if (alreadySummarized) {
+      // Refresh — replace the existing system note in place so the panel
+      // never shows more than one. Falls back to appending if an earlier
+      // system note isn't found (shouldn't happen in practice).
+      const idx = existingNotes.findIndex(n => n['added_by'] === 'system');
+      if (idx >= 0) {
+        notes = [...existingNotes];
+        notes[idx] = summaryNote;
+      } else {
+        notes = [...existingNotes, summaryNote];
+      }
+      // Only sweeper-driven (capped) regenerations count against the cap —
+      // bypassCap regenerations never increment it, so the resolve path
+      // truly always runs no matter how many sweeper refreshes happened.
+      if (!bypassCap) newRegenCount = regenCount + 1;
+    } else {
+      notes = [...existingNotes, summaryNote];
+      newRegenCount = 0;
+    }
+
     const { error: updateErr } = await supabase
       .from('conversations')
-      .update({ notes: [...existingNotes, summaryNote] })
+      .update({ notes, summary_regenerations: newRegenCount })
       .eq('id', conversationId);
 
     if (updateErr) {
       logger.error(`summarizeConversation: failed to save summary note for ${conversationId}: ${updateErr.message}`);
     } else {
-      logger.info(`summarizeConversation: added summary note for conversation ${conversationId}`);
+      logger.info(`summarizeConversation: ${alreadySummarized ? 'refreshed' : 'added'} summary note for conversation ${conversationId}`);
     }
   }
 

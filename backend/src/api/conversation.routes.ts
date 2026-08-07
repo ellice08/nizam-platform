@@ -97,13 +97,13 @@ router.patch('/:id', authenticate, validate(updateConversationSchema), async (re
 
   if (branchIds.length === 1 && branchIds[0]) {
     const conversation = await conversationService.updateConversation(req.params['id'] as string, branchIds[0], updateData);
-    if (updateData.resolved) void claudeService.summarizeConversation(req.params['id'] as string);
+    if (updateData.resolved) void claudeService.summarizeConversation(req.params['id'] as string, { bypassCap: true });
     res.json(ApiResponse.success(conversation, 'Conversation updated'));
     return;
   }
 
   const conversation = await conversationService.updateConversationForBranches(req.params['id'] as string, branchIds, updateData);
-  if (updateData.resolved) void claudeService.summarizeConversation(req.params['id'] as string);
+  if (updateData.resolved) void claudeService.summarizeConversation(req.params['id'] as string, { bypassCap: true });
   res.json(ApiResponse.success(conversation, 'Conversation updated'));
 });
 
