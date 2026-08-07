@@ -7,6 +7,7 @@ import { notificationService } from '../services/notification.service.js';
 import { ApiResponse } from '../utils/response.js';
 import { AppError } from '../utils/errors.js';
 import { env } from '../config/env.js';
+import { getLastViewedAt } from '../lib/navViews.js';
 
 const router = Router();
 
@@ -128,7 +129,10 @@ router.get('/tickets', authenticate, async (req, res, next) => {
 // the tenant dashboard and the operator/admin console. Must be registered
 // before /tickets/:id so it isn't shadowed by that param route. A work-queue
 // count: status 'open' only, not 'in_progress' — in_progress means someone
-// has already picked the ticket up, so it's off the queue.
+// has already picked the ticket up, so it's off the queue. View-tracked like
+// the Conversations badge (see conversation.routes.ts): opening the Support
+// page marks it viewed, and this only counts tickets updated since — clean
+// slate on open, climbs again only as new activity happens.
 // Scoping mirrors GET /tickets exactly: non-super-admin (tenant users) are
 // always org-scoped; super-admin is org-scoped only while impersonating a
 // tenant (organisation_id set), otherwise counts open tickets across every
@@ -142,6 +146,8 @@ router.get('/tickets/open-count', authenticate, async (req, res, next) => {
       return;
     }
 
+    const lastViewedAt = await getLastViewedAt(req.user.id, 'support');
+
     let query = supabase
       .from('support_tickets')
       .select('id', { count: 'exact', head: true })
@@ -150,6 +156,7 @@ router.get('/tickets/open-count', authenticate, async (req, res, next) => {
     if (!isSuperAdmin || req.tenant.organisation_id) {
       query = query.eq('organisation_id', req.tenant.organisation_id as string);
     }
+    if (lastViewedAt) query = query.gt('updated_at', lastViewedAt);
 
     const { count, error } = await query;
     if (error) throw new AppError(error.message, 500);

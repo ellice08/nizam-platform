@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Plus, X, Phone, Mail, ArrowLeft, Send, LifeBuoy } from "lucide-react"
 import { apiClient } from "@/lib/axios"
-import { useHighlightOnArrival } from "@/hooks"
+import { useHighlightOnArrival, useMarkSectionViewed } from "@/hooks"
 import { useAuthStore } from "@/store"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -100,7 +100,8 @@ const Support = () => {
     } catch { /* non-critical */ }
   }
 
-  useEffect(() => { void fetchTickets(); void fetchContact() }, [])
+  const { mutate: markViewed } = useMarkSectionViewed()
+  useEffect(() => { void fetchTickets(); void fetchContact(); markViewed('support') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openTicket = async (id: string) => {
     setSelectedId(id)

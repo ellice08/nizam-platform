@@ -7,7 +7,7 @@ import { Send, ArrowLeft, Settings2, X } from "lucide-react"
 import { apiClient } from "@/lib/axios"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { useHighlightOnArrival } from "@/hooks"
+import { useHighlightOnArrival, useMarkSectionViewed } from "@/hooks"
 
 type Ticket = {
   id: string
@@ -97,7 +97,8 @@ const AdminSupport = () => {
     }
   }
 
-  useEffect(() => { void fetchTickets() }, [])
+  const { mutate: markViewed } = useMarkSectionViewed()
+  useEffect(() => { void fetchTickets(); markViewed('support') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = filter === 'all' ? tickets : tickets.filter(t => t.status === filter)
   const selectedTicket = tickets.find(t => t.id === selectedId) ?? null

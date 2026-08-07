@@ -1,5 +1,8 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useConversationsNeedingAttentionCount } from './useConversations'
 import { useOpenSupportTicketCount } from './useSupport'
+import { navViewsApi } from '@/api'
+import type { NavBadgeSection } from '@/api'
 
 // Nav-item badge counts, keyed by path — same shape AppSidebar/MobileTopBar
 // already use to look up NavItems.
@@ -29,4 +32,19 @@ export function useNavBadgeCounts(variant: 'admin' | 'dashboard'): Record<string
   return {
     '/admin/support': supportCount ?? 0,
   }
+}
+
+// Call on mount from the page that "is" a badged section (Conversations,
+// Support) — records that the user just opened it (POST
+// /api/nav-views/mark-viewed) and immediately invalidates that section's
+// badge-count query so the nav badge clears right away, not on the next
+// 25s poll. This is what makes the badges self-clear on open, per section.
+export function useMarkSectionViewed() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (section: NavBadgeSection) => navViewsApi.markViewed(section),
+    onSuccess: (_data, section) => {
+      void queryClient.invalidateQueries({ queryKey: [section === 'conversations' ? 'conversations' : 'support'] })
+    },
+  })
 }

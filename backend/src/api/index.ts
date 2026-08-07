@@ -15,6 +15,7 @@ import analyticsRoutes from './analytics.routes.js';
 import whatsappRoutes from './whatsapp.routes.js';
 import voiceRoutes from './voice.routes.js';
 import versionRoutes from './version.routes.js';
+import navViewsRoutes from './navViews.routes.js';
 
 export function registerRoutes(app: Express): void {
   app.use('/api/version', versionRoutes);
@@ -33,4 +34,5 @@ export function registerRoutes(app: Express): void {
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/whatsapp', whatsappRoutes);
   app.use('/api/voice', voiceRoutes);
+  app.use('/api/nav-views', navViewsRoutes);
 }

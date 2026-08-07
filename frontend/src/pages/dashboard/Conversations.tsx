@@ -5,7 +5,7 @@ import { Badge } from "@/components/nizam/Badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageSquare, MessageCircle, Phone, Search, Inbox, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useConversations, useHighlightOnArrival, useOrgIntents } from '@/hooks'
+import { useConversations, useHighlightOnArrival, useOrgIntents, useMarkSectionViewed } from '@/hooks'
 import { useAuthStore } from '@/store'
 import { buildIntentLabelMap, intentLabel } from '@/lib/intentLabels'
 import type { Conversation } from '@/types/api.types'
@@ -50,6 +50,9 @@ const Conversations = () => {
     resolved: resolvedFilter,
     limit: 50,
   });
+
+  const { mutate: markViewed } = useMarkSectionViewed()
+  useEffect(() => { markViewed('conversations') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = (conversations ?? []).filter((r) => {
     if (!query) return true;

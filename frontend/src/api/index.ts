@@ -1,5 +1,7 @@
 export { organisationApi } from './organisation.api'
 export { supportApi } from './support.api'
+export { navViewsApi } from './navViews.api'
+export type { NavBadgeSection } from './navViews.api'
 export { conversationApi } from './conversation.api'
 export { notificationApi } from './notification.api'
 export type { AppNotification, NotificationType, NotificationListResponse } from './notification.api'

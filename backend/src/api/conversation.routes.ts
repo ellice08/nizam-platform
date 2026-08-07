@@ -8,6 +8,7 @@ import { claudeService } from '../services/claude.service.js';
 import { supabase } from '../lib/supabase.js';
 import { ApiResponse } from '../utils/response.js';
 import { AppError } from '../utils/errors.js';
+import { getLastViewedAt } from '../lib/navViews.js';
 
 const router = express.Router();
 
@@ -70,9 +71,13 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
 // route. Count-only query (no row data) since the badge only needs a number.
 // A work-queue count, not a historical tally: actioned_by IS NULL excludes
 // anything an operator has already touched via PATCH (note added, marked
-// handled, resolved/un-resolved), so the badge self-clears. Known tradeoff —
-// actioned_by is never reset, so a conversation that gets re-escalated after
-// already being actioned once won't reappear in this count.
+// handled, resolved/un-resolved). ON TOP of that, view-tracked: opening the
+// Conversations page (POST /api/nav-views/mark-viewed) records last_viewed_at
+// for this user, and this query only counts rows updated since — so the
+// badge resets to a clean slate the moment the section is opened, and only
+// climbs again as NEW things change after that. Known tradeoff — actioned_by
+// is never reset, so a conversation re-escalated after already being
+// actioned once won't reappear in this count.
 router.get('/needs-attention-count', authenticate, async (req: Request, res: Response): Promise<void> => {
   const branchIds = await getBranchIds(req);
   if (branchIds.length === 0) {
@@ -80,13 +85,19 @@ router.get('/needs-attention-count', authenticate, async (req: Request, res: Res
     return;
   }
 
-  const { count, error } = await supabase
+  const lastViewedAt = await getLastViewedAt(req.user.id, 'conversations');
+
+  let query = supabase
     .from('conversations')
     .select('id', { count: 'exact', head: true })
     .in('branch_id', branchIds)
     .eq('requires_human', true)
     .eq('resolved', false)
     .is('actioned_by', null);
+
+  if (lastViewedAt) query = query.gt('updated_at', lastViewedAt);
+
+  const { count, error } = await query;
 
   if (error) throw new AppError(error.message, 500);
   res.json(ApiResponse.success({ count: count ?? 0 }));
