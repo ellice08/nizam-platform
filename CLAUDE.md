@@ -368,9 +368,25 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 
 ### TIER 2 — polish that makes it feel like a finished product
 
-**[5] Nav badges (open) + chat auto-summary (DONE) + human resolution note (DONE)**
-- *Nav badges:* still open. Conversations and Support nav items should show a count/indicator for
-  new/unread items, like Notifications already does. Data-driven, small UI+query feature.
+**[5] Nav badges (DONE) + chat auto-summary (DONE) + human resolution note (DONE) — all shipped**
+- *Nav badges — DONE:* Conversations and Support nav items show a count badge, dashboard-only
+  (`AppSidebar.tsx` + `MobileTopBar.tsx`, both driven by `navConfig.ts`). Exactly mirrors
+  `NotificationBell`'s badge: same pill markup (`<span className="relative shrink-0">{Icon}
+  {badge}</span>`, badge absolute-positioned top-right of the icon, "9+" cap), same data-fetch
+  shape (react-query, `refetchInterval: 25000`, `refetchOnWindowFocus: true`). Shared via
+  `useNavBadgeCounts(variant)` so both nav surfaces read one hook.
+  - Conversations count = `requires_human:true AND resolved:false`, scoped via the existing
+    `getBranchIds` helper. `GET /api/conversations/needs-attention-count` (count-only query — no
+    row data fetched; registered BEFORE `/:id` so it isn't shadowed by that param route).
+  - Support count = tickets not yet resolved/closed (`status IN ('open','in_progress')`) for the
+    tenant's `organisation_id`. **Chosen over "unread" because `support_tickets` has no per-ticket
+    read/unread state** — the only tenant-facing signal the Support page tracks is `status`. Tying
+    the badge to notification `read_by` instead was considered and rejected: a notification goes
+    "read" the moment someone opens the bell dropdown, which would clear the nav badge without the
+    underlying ticket having been addressed — misleading for a persistent count.
+    `GET /api/support/tickets/open-count`, same param-route-shadowing guard.
+  - Both underlying queries pass `enabled:false` on the admin console variant (no single tenant to
+    scope the counts to) — never fetched there, not just visually hidden.
 - *Human resolution note — DONE:* `ConversationPanel.tsx`'s "Mark resolved" now opens a skippable
   dialog asking what was done, before resolving (see §6a). Un-resolving stays a one-click toggle.
 - *Chat auto-summary — DONE, and taken further than the original scope:* originally scoped as
