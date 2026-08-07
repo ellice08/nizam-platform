@@ -13,6 +13,11 @@ const getConversationById = async (id: string): Promise<Conversation> => {
   return response.data.data
 }
 
+const getNeedsAttentionCount = async (): Promise<number> => {
+  const response = await apiClient.get<ApiSuccess<{ count: number }>>('/api/conversations/needs-attention-count')
+  return response.data.data.count
+}
+
 const updateConversation = async (
   id: string,
   data: {
@@ -32,5 +37,6 @@ const updateConversation = async (
 export const conversationApi = {
   getConversations,
   getConversationById,
+  getNeedsAttentionCount,
   updateConversation,
 }

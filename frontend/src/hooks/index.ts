@@ -18,6 +18,7 @@ export {
 export {
   useConversations,
   useConversation,
+  useConversationsNeedingAttentionCount,
   useUpdateConversation,
 } from './useConversations'
 export {
@@ -26,6 +27,8 @@ export {
   useMarkAllNotificationsRead,
 } from './useNotifications'
 export { useHighlightOnArrival } from './useHighlightOnArrival'
+export { useOpenSupportTicketCount } from './useSupport'
+export { useNavBadgeCounts } from './useNavBadgeCounts'
 export { useOrgIntents } from './useOrgIntents'
 export { useAnalyticsOverview, useAnalyticsVolume } from './useAnalytics'
 export { useWhatsappAccounts, useConnectWhatsapp, useDisconnectWhatsapp } from './useWhatsapp'

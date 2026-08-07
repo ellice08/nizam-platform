@@ -14,6 +14,17 @@ export const useConversations = (filters?: ConversationFilters) => {
   })
 }
 
+export const useConversationsNeedingAttentionCount = (enabled = true) => {
+  const { tenantOrgId } = useAuthStore()
+  return useQuery({
+    queryKey: ['conversations', tenantOrgId, 'needs-attention-count'],
+    queryFn: () => conversationApi.getNeedsAttentionCount(),
+    enabled,
+    refetchInterval: 25000,
+    refetchOnWindowFocus: true,
+  })
+}
+
 export const useConversation = (id: string) => {
   const { tenantOrgId } = useAuthStore()
   return useQuery({

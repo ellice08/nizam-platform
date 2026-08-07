@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import type { OrganisationWithDetails } from "@/types/api.types";
 import { useThemeStore } from "@/store";
 import { NotificationBell } from "@/components/NotificationBell";
+import { useNavBadgeCounts } from "@/hooks";
 
 
 type Props = { variant: "admin" | "dashboard"; org?: OrganisationWithDetails | null };
@@ -19,6 +20,7 @@ export function MobileTopBar({ variant, org }: Props) {
   const { clear, role } = useAuthStore();
   const { theme } = useThemeStore();
   const items = navFor(variant, role);
+  const badgeCounts = useNavBadgeCounts(variant);
 
   const brandingLogo =
     variant === "dashboard" && org?.branding_config.logo_url
@@ -93,6 +95,7 @@ export function MobileTopBar({ variant, org }: Props) {
               {items.map((item) => {
                 const active = item.end ? pathname === item.to : pathname.startsWith(item.to);
                 const Icon = item.icon;
+                const badgeCount = badgeCounts[item.to] ?? 0;
                 return (
                   <NavLink
                     key={item.to}
@@ -107,7 +110,14 @@ export function MobileTopBar({ variant, org }: Props) {
                     )}
                     style={active ? { backgroundColor: "hsl(var(--primary) / 0.12)" } : undefined}
                   >
-                    <Icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                    <span className="relative shrink-0">
+                      <Icon className="h-4 w-4" strokeWidth={1.5} />
+                      {badgeCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[1rem] px-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold flex items-center justify-center leading-none pointer-events-none">
+                          {badgeCount > 9 ? "9+" : badgeCount}
+                        </span>
+                      )}
+                    </span>
                     <span className="truncate">{item.label}</span>
                   </NavLink>
                 );

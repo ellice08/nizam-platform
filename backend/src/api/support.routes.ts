@@ -124,6 +124,29 @@ router.get('/tickets', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/support/tickets/open-count — for the Support nav badge. Must be
+// registered before /tickets/:id so it isn't shadowed by that param route.
+// "Open" = not yet resolved/closed (status is the only tenant-facing signal
+// support_tickets tracks — there's no per-ticket read/unread state).
+router.get('/tickets/open-count', authenticate, async (req, res, next) => {
+  try {
+    const orgId = req.tenant.organisation_id;
+    if (!orgId) {
+      res.json(ApiResponse.success({ count: 0 }));
+      return;
+    }
+
+    const { count, error } = await supabase
+      .from('support_tickets')
+      .select('id', { count: 'exact', head: true })
+      .eq('organisation_id', orgId)
+      .in('status', ['open', 'in_progress']);
+
+    if (error) throw new AppError(error.message, 500);
+    res.json(ApiResponse.success({ count: count ?? 0 }));
+  } catch (err) { next(err); }
+});
+
 // GET /api/support/tickets/:id
 router.get('/tickets/:id', authenticate, async (req, res, next) => {
   try {

@@ -7,6 +7,7 @@ import { conversationService } from '../services/conversation.service.js';
 import { claudeService } from '../services/claude.service.js';
 import { supabase } from '../lib/supabase.js';
 import { ApiResponse } from '../utils/response.js';
+import { AppError } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -62,6 +63,27 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
   const branchIds = await getBranchIds(req);
   const conversations = await conversationService.getConversationsByBranches(branchIds, filters);
   res.json(ApiResponse.success(conversations));
+});
+
+// GET /api/conversations/needs-attention-count — for the Conversations nav
+// badge. Must be registered before /:id so it isn't shadowed by that param
+// route. Count-only query (no row data) since the badge only needs a number.
+router.get('/needs-attention-count', authenticate, async (req: Request, res: Response): Promise<void> => {
+  const branchIds = await getBranchIds(req);
+  if (branchIds.length === 0) {
+    res.json(ApiResponse.success({ count: 0 }));
+    return;
+  }
+
+  const { count, error } = await supabase
+    .from('conversations')
+    .select('id', { count: 'exact', head: true })
+    .in('branch_id', branchIds)
+    .eq('requires_human', true)
+    .eq('resolved', false);
+
+  if (error) throw new AppError(error.message, 500);
+  res.json(ApiResponse.success({ count: count ?? 0 }));
 });
 
 // GET /api/conversations/:id
