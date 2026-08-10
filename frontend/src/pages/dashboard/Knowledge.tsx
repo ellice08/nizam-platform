@@ -19,14 +19,15 @@ import { useBranches, useKnowledgeSources, useDeleteKnowledgeSource } from '@/ho
 import { organisationApi } from '@/api'
 
 const Knowledge = () => {
-  const { organisationId, tenantOrgId, branchId: storeBranchId } = useAuthStore()
+  const { organisationId, tenantOrgId, tenantBranchId, branchId: storeBranchId } = useAuthStore()
   const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const pinnedBranchId = tenantBranchId ?? storeBranchId
 
   // Org-level users have null branchId — fetch branches and use the first
   const { data: branches } = useBranches(
-    storeBranchId ? '' : activeOrgId
+    pinnedBranchId ? '' : activeOrgId
   )
-  const resolvedBranchId = storeBranchId ?? branches?.[0]?.id ?? null
+  const resolvedBranchId = pinnedBranchId ?? branches?.[0]?.id ?? null
 
   const { data: sources, isLoading: sourcesLoading, refetch } =
     useKnowledgeSources(resolvedBranchId)

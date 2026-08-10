@@ -15,18 +15,23 @@ const tones = ["professional", "friendly", "formal"] as const;
 type Tone = typeof tones[number];
 
 const Agent = () => {
-  const { organisationId, tenantOrgId, branchId: storeBranchId } = useAuthStore()
+  const { organisationId, tenantOrgId, tenantBranchId, branchId: storeBranchId } = useAuthStore()
   const activeOrgId = tenantOrgId ?? organisationId ?? ''
+  const pinnedBranchId = tenantBranchId ?? storeBranchId
   const { data: agents, isLoading } = useAgentsByOrg(activeOrgId)
   const { mutate: updateAgent, isPending: saving } = useUpdateAgent()
 
   // Resolve branch_id for org-level users
   const { data: branches } = useBranches(
-    storeBranchId ? '' : activeOrgId
+    pinnedBranchId ? '' : activeOrgId
   )
-  const resolvedBranchId = storeBranchId ?? branches?.[0]?.id ?? null
+  const resolvedBranchId = pinnedBranchId ?? branches?.[0]?.id ?? null
 
-  const agent = agents?.[0]
+  // useAgentsByOrg returns every agent across the org's branches — filter to
+  // the resolved branch first. No-op for every single-branch org (today's
+  // norm), but matters once an org has >1 branch (e.g. Ellice Systems'
+  // Platform Support branch) where agents[0] could be the wrong branch's agent.
+  const agent = agents?.find(a => a.branch_id === resolvedBranchId) ?? agents?.[0]
 
   const defaultBusinessHours: BusinessHours = {
     enabled: false,

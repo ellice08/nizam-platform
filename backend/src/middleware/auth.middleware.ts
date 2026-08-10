@@ -21,11 +21,15 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   // Super admin is determined by app_metadata set via Supabase admin API
   if ((user.app_metadata as Record<string, unknown>)?.role === 'super_admin') {
-    // Check if super admin is acting as a client org
+    // Check if super admin is acting as a client org (tenant-mode) or has a
+    // specific branch pinned (e.g. the Platform Assistant section — every
+    // real tenant so far has exactly one branch, so tenant-mode alone never
+    // needed to pin a branch; Ellice Systems now has two, so this exists).
     const tenantOrgId = req.headers['x-tenant-org-id'] as string | undefined
+    const tenantBranchId = req.headers['x-tenant-branch-id'] as string | undefined
     req.tenant = {
       organisation_id: tenantOrgId ?? '',
-      branch_id: null,
+      branch_id: tenantBranchId ?? null,
       role: 'super_admin'
     }
     next()

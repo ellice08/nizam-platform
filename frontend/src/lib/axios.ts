@@ -16,9 +16,12 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${session.access_token}`
       }
       const { useAuthStore } = await import('@/store')
-      const { tenantOrgId } = useAuthStore.getState()
+      const { tenantOrgId, tenantBranchId } = useAuthStore.getState()
       if (tenantOrgId) {
         config.headers['X-Tenant-Org-Id'] = tenantOrgId
+      }
+      if (tenantBranchId) {
+        config.headers['X-Tenant-Branch-Id'] = tenantBranchId
       }
     } catch (err) {
       console.error('Session fetch error:', err)

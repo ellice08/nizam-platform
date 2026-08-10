@@ -51,6 +51,14 @@ export const adminSections: NavSection[] = [
     ],
   },
   {
+    label: "Platform Assistant",
+    items: [
+      { to: "/admin/assistant/agent", label: "Agent", icon: Bot },
+      { to: "/admin/assistant/knowledge", label: "Knowledge", icon: BookOpen },
+      { to: "/admin/assistant/conversations", label: "Conversations", icon: MessagesSquare },
+    ],
+  },
+  {
     label: "Account",
     items: [
       { to: "/admin/settings", label: "Settings", icon: Settings },

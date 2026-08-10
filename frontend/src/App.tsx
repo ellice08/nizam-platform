@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { PlatformAssistantScope } from "@/components/layout/PlatformAssistantScope";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -64,6 +65,15 @@ const App = () => (
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="/admin/leads" element={<AdminLeads />} />
           <Route path="/admin/support" element={<AdminSupport />} />
+
+          {/* Platform Assistant — reuses the tenant Agent/Knowledge/Conversations
+              pages, pinned to Ellice Systems' "Platform Support" branch via
+              PlatformAssistantScope (see that file for why). */}
+          <Route element={<PlatformAssistantScope />}>
+            <Route path="/admin/assistant/agent" element={<Agent />} />
+            <Route path="/admin/assistant/knowledge" element={<Knowledge />} />
+            <Route path="/admin/assistant/conversations" element={<Conversations />} />
+          </Route>
         </Route>
 
         {/* Dashboard — requires authenticated user */}
