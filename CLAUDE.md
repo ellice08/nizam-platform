@@ -474,9 +474,9 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   client-facing public sites). Reuses `public/widget.js` unchanged, plus a new OPTIONAL
   auth-token config field — public/anonymous widget usage on client sites is unaffected.
 - *Build order:* (1) setup script — DONE, see below; (2) operator-nav mounting — DONE, see below;
-  (3) KB upload — human step, upload `nizam-product-kb.md` — NOT STARTED; (4) `<<TICKET>>` tag —
-  shared finalize handling + intent gating — NOT STARTED; (5) embed — widget.js mounted in the
-  tenant dashboard shell with the auth-token config — NOT STARTED.
+  (3) KB upload — DONE, see below; (4) `<<TICKET>>` tag — shared finalize handling + intent
+  gating — NOT STARTED; (5) embed — widget.js mounted in the tenant dashboard shell with the
+  auth-token config — NOT STARTED.
 - *(1) Setup script — DONE.* `backend/scripts/setupPlatformAssistant.ts` (same shape as
   `connectTestVoice.ts`: dotenv-first, idempotent — reuses an existing branch/agent/intent by
   name/key instead of duplicating, safe to re-run). Creates branch **"Platform Support"**
@@ -541,6 +541,32 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   this session): both desktop and mobile nav show the new section; Agent page shows "Nizam
   Assistant" (tone friendly); Knowledge and Conversations both load scoped to the Platform Support
   branch.
+- *(3) KB upload — DONE.* Uploaded via a one-off backend script (not the UI — the Claude Browser
+  sandbox can't inject files into a native OS file picker; the script does exactly what
+  `POST /api/ingest/upload`'s `extractText` + `ragService.ingestText` do, just invoked directly),
+  scoped to the Platform Support branch. Final state: 33 chunks under one document, "Nizam
+  Platform — Product Knowledge Base.pdf".
+  **Found and fixed a real CORS bug while verifying this live** (not a data problem, despite
+  first appearing as one): the backend's `Access-Control-Allow-Headers` allowlist
+  (`backend/src/index.ts`) explicitly listed `x-tenant-org-id` but not the new
+  `x-tenant-branch-id` from (2) above — so EVERY request made while scoped to Platform Assistant
+  was silently blocked by the browser's CORS preflight before ever reaching the backend, which is
+  why Knowledge/Agent/Conversations all looked empty despite the upload having worked
+  server-side. Fixed by adding `x-tenant-branch-id` to the allowlist. Gotcha hit while diagnosing:
+  browsers cache CORS preflight (`OPTIONS`) responses, so after deploying the fix, stale-cached
+  rejections kept showing in the console for a bit even though fresh requests were already
+  succeeding — don't trust lingering console errors without confirming against a fresh
+  request/reload.
+  **Also found (and cleaned up) duplicate/mangled ingestion batches** on this branch: 3 near-
+  identical ingestion runs of the same PDF existed by the time this was caught (only one was
+  knowingly run via this session's script — the other two are unexplained, possibly a
+  pre-CORS-fix browser attempt), two of them under a mojibake-corrupted `source_url` (`â` in place
+  of the em dash, likely a `multer`/multipart filename-encoding issue on whichever path produced
+  them — not reproduced or fixed at the code level, just cleaned up in data). Deduped with the
+  existing `cleanupDuplicateChunks.ts` (scoped via `BRANCH_ID` env var) down to one copy per
+  unique chunk, then normalized every surviving row's `source_url` to one consistent
+  (correctly-encoded) value so the Knowledge page displays a clean filename instead of the
+  mangled one.
 - *v2 (LATER, needs its own design session) — scoped read-tools diagnosis:* agent-callable
   functions that inspect the CLIENT'S OWN live state (KB document/chunk counts, channel
   connection statuses, agent config) — each function hard-scoped SERVER-SIDE to the
