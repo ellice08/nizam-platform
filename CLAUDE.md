@@ -473,11 +473,37 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - *Widget embedding:* the assistant widget embeds in the TENANT dashboard shell ONLY (not on
   client-facing public sites). Reuses `public/widget.js` unchanged, plus a new OPTIONAL
   auth-token config field — public/anonymous widget usage on client sites is unaffected.
-- *Build order:* (1) setup script — create the Platform Support branch + agent under Ellice
-  Systems; (2) operator-nav mounting — reuse tenant Agent/Knowledge/Conversations components,
-  scoped to that branch, surfaced from `/admin`; (3) KB upload — human step, upload
-  `nizam-product-kb.md`; (4) `<<TICKET>>` tag — shared finalize handling + intent gating;
-  (5) embed — widget.js mounted in the tenant dashboard shell with the auth-token config.
+- *Build order:* (1) setup script — DONE, see below; (2) operator-nav mounting — reuse tenant
+  Agent/Knowledge/Conversations components, scoped to that branch, surfaced from `/admin` — NOT
+  STARTED; (3) KB upload — human step, upload `nizam-product-kb.md` — NOT STARTED; (4)
+  `<<TICKET>>` tag — shared finalize handling + intent gating — NOT STARTED; (5) embed —
+  widget.js mounted in the tenant dashboard shell with the auth-token config — NOT STARTED.
+- *(1) Setup script — DONE.* `backend/scripts/setupPlatformAssistant.ts` (same shape as
+  `connectTestVoice.ts`: dotenv-first, idempotent — reuses an existing branch/agent/intent by
+  name/key instead of duplicating, safe to re-run). Creates branch **"Platform Support"**
+  (`cd61745b-fab5-4297-a0d9-59c27c30fa34`) under Ellice Systems — `location` and `business_hours`
+  left at their DB defaults (empirically confirmed nullable/defaulted, not copied from
+  Headquarters; only `timezone` is copied, per the original ask) — and agent **"Nizam Assistant"**
+  (`c85e1bc2-cc33-47b8-81ab-25fb10cbbbfe`, tone `friendly`, `llm_provider`/`llm_model` set
+  explicitly to `openai`/`gpt-4o` matching every other agent row even though those columns turned
+  out to have matching DB defaults) with the `support_request` intent
+  (`75ce9422-6481-49d5-8191-3c53e46efb05`). `system_prompt` is the full REPLACE-the-default prompt
+  agreed in this session (anti-internals/anti-other-customers/anti-invention rules, ticket-raising
+  instruction, plain-text-short-replies). Verified idempotent by running it twice.
+- *Org exclusion — DONE, done alongside the setup script since the new branch made it visible
+  immediately.* Ellice Systems (`PLATFORM_ORG_ID`, new `backend/src/config/constants.ts`) was NOT
+  previously excluded from tenant-facing operator surfaces — `organisationService
+  .getAllOrganisations()` (backs `/admin/clients` AND the `/admin/tenant-mode` impersonation
+  switcher AND `AdminOverview.tsx`'s client count) and `analyticsService.getAllBranchIds()` /
+  `getCrossClientOverview()` (cross-client `/api/analytics/overview` + `/volume` when a
+  super-admin isn't impersonating anyone) all queried every org/branch with no filter. Now all
+  three add `.neq('id'|'organisation_id', PLATFORM_ORG_ID)`. Deliberately also removes Ellice
+  Systems from the tenant-mode switcher — correct per the architecture decision above: the
+  operator manages Platform Support directly from `/admin`, never by impersonating Ellice Systems
+  as if it were a client. Verified live: all three now return the platform org's data/branches
+  filtered out (confirmed against the real DB — `getAllOrganisations` 1 org, not 2;
+  `getAllBranchIds` excludes both of Ellice's branches; `getCrossClientOverview` breakdown has no
+  Ellice Systems row).
 - *v2 (LATER, needs its own design session) — scoped read-tools diagnosis:* agent-callable
   functions that inspect the CLIENT'S OWN live state (KB document/chunk counts, channel
   connection statuses, agent config) — each function hard-scoped SERVER-SIDE to the

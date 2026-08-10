@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js';
 import logger from '../utils/logger.js';
+import { PLATFORM_ORG_ID } from '../config/constants.js';
 
 interface DateRange { from?: string; to?: string }
 
@@ -94,8 +95,10 @@ class AnalyticsService {
     return (data ?? []).map(b => (b as Record<string, unknown>)['id'] as string);
   }
 
+  // Excludes Ellice Systems (PLATFORM_ORG_ID, e.g. the Platform Support branch)
+  // — cross-client analytics should reflect real customers, not the platform.
   async getAllBranchIds(): Promise<string[]> {
-    const { data, error } = await supabase.from('branches').select('id');
+    const { data, error } = await supabase.from('branches').select('id').neq('organisation_id', PLATFORM_ORG_ID);
     if (error) logger.error(`analytics: getAllBranchIds failed: ${error.message}`);
     return (data ?? []).map(b => (b as Record<string, unknown>)['id'] as string);
   }
@@ -112,11 +115,13 @@ class AnalyticsService {
     return { volume: aggregateVolume(rows, range.from, range.to), from: range.from, to: range.to };
   }
 
+  // Excludes Ellice Systems (PLATFORM_ORG_ID) from both the org list and the
+  // branch→org map — same rationale as getAllBranchIds above.
   async getCrossClientOverview(rangeInput?: DateRange) {
     const range: DateRange = { from: rangeInput?.from, to: rangeInput?.to };
 
-    const { data: orgs } = await supabase.from('organisations').select('id, name');
-    const { data: branches } = await supabase.from('branches').select('id, organisation_id');
+    const { data: orgs } = await supabase.from('organisations').select('id, name').neq('id', PLATFORM_ORG_ID);
+    const { data: branches } = await supabase.from('branches').select('id, organisation_id').neq('organisation_id', PLATFORM_ORG_ID);
 
     const orgMap: Record<string, string> = {};
     for (const o of (orgs ?? []) as Array<{ id: string; name: string }>) {

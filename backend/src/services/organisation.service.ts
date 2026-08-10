@@ -1,12 +1,16 @@
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../utils/errors.js';
 import { agentService } from './agent.service.js';
+import { PLATFORM_ORG_ID } from '../config/constants.js';
 
 class OrganisationService {
+  // Excludes Ellice Systems (the operator's own org, PLATFORM_ORG_ID) — it's
+  // the platform, not a client, and shouldn't show up in the client list.
   async getAllOrganisations() {
     const { data, error } = await supabase
       .from('organisations')
       .select('*')
+      .neq('id', PLATFORM_ORG_ID)
       .order('created_at', { ascending: false });
 
     if (error) throw new AppError(error.message);
