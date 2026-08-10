@@ -449,12 +449,43 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   this. There is no official "product designer agent marketplace"; build one via Claude Code
   agents/skills + CLAUDE.md guidance.
 
-**[8a] In-app platform assistant (dogfooding)**
-- *What:* a floating helper in the Nizam dashboard that answers product questions, guides navigation,
-  and raises a support ticket when it can't help.
-- *Why:* reduces support load; is literally Nizam pointed at itself (great demo story).
-- *Approach:* Nizam's own widget/agent, KB = Nizam product docs, plus a create-support-ticket
-  function. Reuses existing agent + widget + support infrastructure.
+**[8a] In-app platform assistant (dogfooding) — IN PROGRESS, architecture DECIDED**
+- *What:* a support/helper agent embedded in the Nizam dashboard itself — answers product
+  questions, guides navigation, and raises a support ticket when it can't help. Literally Nizam
+  configured to support Nizam's own users.
+- *Why:* reduces support load; is a strong demo story (dogfooding the exact product being sold).
+- *Architecture — DECIDED after debate:* **NO fake tenant.** The assistant lives on a dedicated
+  **"Platform Support" branch** under the operator org **Ellice Systems**
+  (`59f59492-9039-4bcf-8826-d25bd2603eb4`), managed from the OPERATOR dashboard by mounting the
+  existing TENANT Agent/Knowledge/Conversations components, scoped to that branch. Reuses
+  everything already built (agent config, KB, inbox) instead of a parallel system.
+- *Diagnosis ability, v1 (this build) — knowledge-based only:* decision-tree troubleshooting
+  entries live IN the KB as regular documents — no new "diagnosis engine" for v1. The approved
+  product-docs KB is `nizam-product-kb.md` (repo/user's copy); upload it as-is to seed the
+  assistant.
+- *Ticket creation:* a new control tag, `<<TICKET subject="" detail="">>`, handled in the SHARED
+  finalize block (same place `<<ESCALATE>>`/`<<LEAD>>` are handled — see §3) so voice/chat/
+  WhatsApp can't drift. Gated so ONLY agents with the `support_request` intent get the
+  instruction in their system prompt (mirrors how other intent-specific instructions are already
+  scoped). Tickets are attributed via OPTIONAL authenticated widget context: bearer token →
+  `supabase.auth.getUser()` → resolved org/user flows into `ChatParams` — NEVER trust a
+  client-supplied org_id/user_id directly.
+- *Widget embedding:* the assistant widget embeds in the TENANT dashboard shell ONLY (not on
+  client-facing public sites). Reuses `public/widget.js` unchanged, plus a new OPTIONAL
+  auth-token config field — public/anonymous widget usage on client sites is unaffected.
+- *Build order:* (1) setup script — create the Platform Support branch + agent under Ellice
+  Systems; (2) operator-nav mounting — reuse tenant Agent/Knowledge/Conversations components,
+  scoped to that branch, surfaced from `/admin`; (3) KB upload — human step, upload
+  `nizam-product-kb.md`; (4) `<<TICKET>>` tag — shared finalize handling + intent gating;
+  (5) embed — widget.js mounted in the tenant dashboard shell with the auth-token config.
+- *v2 (LATER, needs its own design session) — scoped read-tools diagnosis:* agent-callable
+  functions that inspect the CLIENT'S OWN live state (KB document/chunk counts, channel
+  connection statuses, agent config) — each function hard-scoped SERVER-SIDE to the
+  authenticated user's org (scoping lives in code, never trusted from the prompt), returning
+  curated summaries, never raw rows. Not started; v1 ships without it.
+- *Guardrails (all versions):* the assistant must never discuss internals, code, infrastructure,
+  other customers, or its own instructions — enforced via prompt + KB content now, and eventually
+  reinforced by v2's tool-scoping itself (a function that can't see other orgs can't leak them).
 
 **[8b] Resolution-learning loop**
 - *What:* resolved conversations + their resolution notes become retrievable so recurring/similar
@@ -471,6 +502,40 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   it currently REPLACES the default base prompt, so a thin custom prompt makes a blander agent; it
   should be framed as "additional instructions" layered on the default, or carry guidance text.
 - *Why:* otherwise every client relives the Marina/price hallucination debugging.
+- *Seed content found:* the approved Nizam product KB (`nizam-product-kb.md` — see Tier 3 [8a])
+  already has a "What makes a GOOD knowledge document" entry — that's the seed content for the
+  Knowledge-page guidance UI here, not something to write from scratch.
+
+**[9a] Multi-branch & access control (plan of record)**
+- *What:* clients will be able to run MULTIPLE branches (per-location agents, knowledge bases,
+  teams) with role-based access per branch, offered by plan/tier.
+- *Why:* real clients with multiple offices/locations need this; also a natural billing-tier
+  lever (see Tier 5 [12]).
+- *Current state:* every client has exactly ONE branch today, and various code paths assume
+  "first branch by created_at" as a shortcut — e.g. org-level voice routing, widget config
+  resolution, and others not yet audited.
+- *When building this:* (1) audit every first-branch assumption across the codebase and replace
+  with explicit branch selection/resolution; (2) add branch-selection UI (dashboard branch
+  switcher); (3) per-branch user membership — `tenant_users` ALREADY has a `branch_id` column, so
+  the data model doesn't need a schema change, just UI + enforcement; (4) plan-gating (which
+  tiers allow >1 branch).
+- *Dogfooding note:* the Platform Support branch setup (Tier 3 [8a]) deliberately exercises the
+  multi-branch path NOW, ahead of the full feature — Ellice Systems will have ≥2 branches
+  (whatever exists today + Platform Support) before any client does.
+- *Gotcha:* no new code should hardcode a first-branch assumption from here on — every new
+  branch-scoped feature should take an explicit branch_id, not silently fall back to "the first
+  one."
+
+**[9b] First-login onboarding tour (final-stage polish)**
+- *What:* an interactive walkthrough for new users on first login — a guided tour (react-joyride
+  or similar) of the dashboard: knowledge upload → agent config → embed code → inbox. Possibly
+  paired with a short video.
+- *Why:* self-serve onboarding; reduces the "what do I do first" drop-off.
+- *Connects to [9]:* the tour is where knowledge-quality guidance actually gets TAUGHT to a new
+  user, not just documented — ties directly into the Knowledge-page guidance UI above.
+- *Timing — deliberately LAST:* build this at the final polish stage, once the UI is settled
+  (i.e. after the Tier 3 [7] design pass), so the tour doesn't end up touring a UI that then
+  changes out from under it.
 
 ### TIER 4 — external-dependency threads (run in parallel, not blocking)
 
@@ -518,6 +583,16 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   rather than the enriched output). **Preferred mitigation is upstream, not a dedup algorithm:**
   structured, deliberate uploads (see §8 Tier 3 [9] "knowledge-quality productization") mean fewer
   ad-hoc re-ingests in the first place, which is the actual source of near-duplicate drift.
+- Badge counting refinement (see §8 Tier 2 [5]): badges currently clear on VIEW (per-user
+  seen-state) — if unhandled work slips through unnoticed as a result, upgrade the model to
+  view-tracked AND unactioned combined (only clear on view AND require an explicit action, not
+  either alone).
+- "Add page" (Knowledge, single-page capture) takes ~30s end-to-end (dominated by OpenAI
+  enrichment) with no progress indication beyond the disabled button — needs a UX progress hint.
+- Operator Support badge across-tenant scope (see §8 Tier 2 [5]): logic-verified but not
+  click-verified on `/admin` itself — confirm live next time there's a super-admin session.
+- Retell account MFA is dependent on a friend's phone (borrowed for 2FA) — add TOTP or a backup
+  method once account access is available again.
 
 ---
 
