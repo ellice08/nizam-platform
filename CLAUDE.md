@@ -473,11 +473,10 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - *Widget embedding:* the assistant widget embeds in the TENANT dashboard shell ONLY (not on
   client-facing public sites). Reuses `public/widget.js` unchanged, plus a new OPTIONAL
   auth-token config field — public/anonymous widget usage on client sites is unaffected.
-- *Build order:* (1) setup script — DONE, see below; (2) operator-nav mounting — reuse tenant
-  Agent/Knowledge/Conversations components, scoped to that branch, surfaced from `/admin` — NOT
-  STARTED; (3) KB upload — human step, upload `nizam-product-kb.md` — NOT STARTED; (4)
-  `<<TICKET>>` tag — shared finalize handling + intent gating — NOT STARTED; (5) embed —
-  widget.js mounted in the tenant dashboard shell with the auth-token config — NOT STARTED.
+- *Build order:* (1) setup script — DONE, see below; (2) operator-nav mounting — DONE, see below;
+  (3) KB upload — human step, upload `nizam-product-kb.md` — NOT STARTED; (4) `<<TICKET>>` tag —
+  shared finalize handling + intent gating — NOT STARTED; (5) embed — widget.js mounted in the
+  tenant dashboard shell with the auth-token config — NOT STARTED.
 - *(1) Setup script — DONE.* `backend/scripts/setupPlatformAssistant.ts` (same shape as
   `connectTestVoice.ts`: dotenv-first, idempotent — reuses an existing branch/agent/intent by
   name/key instead of duplicating, safe to re-run). Creates branch **"Platform Support"**
@@ -504,6 +503,44 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   filtered out (confirmed against the real DB — `getAllOrganisations` 1 org, not 2;
   `getAllBranchIds` excludes both of Ellice's branches; `getCrossClientOverview` breakdown has no
   Ellice Systems row).
+- *(2) Operator-nav mounting — DONE.* New routes `/admin/assistant/agent|knowledge|conversations`
+  reuse `Agent.tsx`/`Knowledge.tsx`/`Conversations.tsx` UNCHANGED IN CONTENT — no parallel
+  operator-side pages built. Super-admin-gated for free (nested inside the existing admin
+  `ProtectedRoute`+`AppLayout` wrapper in `App.tsx`, same as every other `/admin/*` route).
+  **Pinning mechanism — extended tenant-mode's existing scoping machinery rather than inventing a
+  new one:** every dashboard page already resolves its org via `tenantOrgId ?? organisationId`
+  (the `auth.store.ts` field tenant-mode sets); reusing it meant ZERO changes to org-resolution
+  logic in the three pages. That mechanism only ever pinned ORG though — fine while every real
+  tenant had exactly one branch (so "first branch of org" was always correct), wrong now that
+  Ellice Systems has two (Headquarters + Platform Support). Extended with a parallel
+  `tenantBranchId` field + `X-Tenant-Branch-Id` header + `req.tenant.branch_id` (was hardcoded
+  null for super-admin in `auth.middleware.ts`) — same shape as the existing org pin, just for
+  branch. `Knowledge.tsx`/`Agent.tsx`'s branch-resolution fallback chain now prefers
+  `tenantBranchId` first; `Conversations.tsx` needed no client-side change (entirely server-driven
+  via `req.tenant`/`getBranchIds`). New `PlatformAssistantScope.tsx` sets this pin on mount,
+  restores whatever was there before on unmount (can't clobber a real tenant-mode session active
+  elsewhere) — deliberately NOT real tenant-mode's flow (which navigates to `/dashboard` and shows
+  a "Viewing as" banner): these routes stay under the admin `AppLayout`, where that banner is
+  hard-gated to `variant === 'dashboard'`, so it reads as a native operator section for free, no
+  extra flag needed.
+  **Backend scope handling needed — less than expected.** Agent/branch/knowledge routes already
+  had a super-admin bypass on their ownership checks (`isSuperAdmin || isOwnOrg`-style, ignoring
+  `req.tenant` entirely for super-admin), and Knowledge's own API calls already pass `branch_id`
+  explicitly rather than relying on server-side derivation — both already worked before this
+  change. Only the conversations family actually needed the new header, since `getBranchIds()`
+  derives branch scope from `req.tenant.branch_id`.
+  **Bug found and fixed along the way:** `Agent.tsx` picked `agents?.[0]` (first agent across the
+  WHOLE org, `useAgentsByOrg`, no branch filter) — harmless for every existing single-branch
+  tenant, wrong now that Ellice Systems has two agents. Fixed to filter by the resolved branch
+  first. A concrete instance of the first-branch-assumption debt tracked in §8 Tier 3 [9a].
+  **Nav:** new admin nav section "Platform Assistant" (Agent/Knowledge/Conversations) in
+  `navConfig.ts`. Also fixed while verifying this live: the desktop sidebar's nav container had
+  `overflow-hidden` (clipping instead of scrolling once the list grew) — the mobile drawer nav
+  already scrolled correctly; desktop now matches.
+  **Verified live** by the user as a real super-admin (no super-admin login available to Claude
+  this session): both desktop and mobile nav show the new section; Agent page shows "Nizam
+  Assistant" (tone friendly); Knowledge and Conversations both load scoped to the Platform Support
+  branch.
 - *v2 (LATER, needs its own design session) — scoped read-tools diagnosis:* agent-callable
   functions that inspect the CLIENT'S OWN live state (KB document/chunk counts, channel
   connection statuses, agent config) — each function hard-scoped SERVER-SIDE to the
