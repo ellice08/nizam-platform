@@ -227,6 +227,26 @@ hand-off, append an intent tag as the VERY LAST thing in your reply, right after
 
   block += ` Use exactly one intent tag. Example ending: "... could I take your name and a phone number? <<ESCALATE>> <<INTENT:general>>". Like <<ESCALATE>>, never mention or explain these tags; they are removed before the customer sees your reply.`;
 
+  // Gated: only agents with a configured `support_request` intent ever see
+  // this instruction — a client-facing property agent has no such intent, so
+  // it never learns the TICKET tag exists. Currently this means only the
+  // in-app Platform Assistant (see CLAUDE.md §8 Tier 3 [8a]).
+  if (intents.some(i => i.key === 'support_request')) {
+    block += `
+
+TICKET CREATION: Collecting the customer's name and contact details is NOT enough
+on its own — the support team only finds out about the issue if a ticket exists.
+So: every single time you append <<INTENT:support_request>> in a reply, you MUST
+ALSO append a ticket tag in that SAME reply — as the true VERY LAST thing, after
+<<ESCALATE>>, <<INTENT:...>>, and <<LEAD ...>> if present — in this EXACT format
+with double quotes:
+<<TICKET subject="one-line issue summary" detail="brief description of what the customer needs and any context gathered so far">>
+Do this on EVERY reply where you append <<INTENT:support_request>>, not just the
+first — never skip it, and never append it for any other intent. Never mention
+this tag or ticket mechanics to the customer; just let them know naturally that
+the team will follow up, per your other instructions.`;
+  }
+
   return block;
 }
 
@@ -311,6 +331,12 @@ interface ChatParams {
   channel: 'chat' | 'voice' | 'whatsapp';
   leadName?: string;
   leadPhone?: string;
+  // OPTIONAL authenticated context for ticket attribution (see raiseSupportTicket).
+  // Callers must only ever pass values resolved from a VERIFIED bearer token
+  // (auth.middleware's supabase.auth.getUser pattern, or the equivalent for
+  // already-authenticated routes) — never a client-supplied org/user id.
+  authenticatedUserId?: string;
+  authenticatedOrgId?: string;
 }
 
 interface ChatResult {
@@ -339,6 +365,8 @@ interface PreparedTurn {
   existingConversation: Record<string, unknown>;
   conversationId: string;
   afterHours: boolean;
+  authenticatedUserId?: string;
+  authenticatedOrgId?: string;
 }
 
 class ClaudeService {
@@ -580,6 +608,137 @@ class ClaudeService {
       .eq('id', conversationId);
   }
 
+  // Best-effort lookup of a user's email/display name for ticket attribution
+  // — same shape as support.routes.ts's local getUserInfo, duplicated here
+  // rather than imported since it's a 5-line helper and this is a service,
+  // not a route.
+  private async getUserInfo(userId: string): Promise<{ email: string | null; name: string | null }> {
+    try {
+      const { data } = await supabase.auth.admin.getUserById(userId);
+      return {
+        email: data?.user?.email ?? null,
+        name: (data?.user?.user_metadata?.['full_name'] as string) ?? null,
+      };
+    } catch {
+      return { email: null, name: null };
+    }
+  }
+
+  // Raises a support_tickets row from the <<TICKET subject="" detail="">> tag
+  // (see buildIntentHandling's support_request gate + finalizeTurn's parsing).
+  // Fire-and-forget from finalizeTurn — never let a ticket-creation failure
+  // break the chat reply, same posture as sendEscalationNotification.
+  //
+  // Idempotency: one open/in_progress ticket per conversation. This is a
+  // check-then-insert, not an atomic claim like lead_announced_at/
+  // escalated_at (§6) — deliberately: the model only ever emits one TICKET
+  // tag per reply, and replies for a given conversation are processed one at
+  // a time (unlike voice's overlapping-transcript races), so the concurrent-
+  // write window this would need to guard against doesn't arise in practice
+  // for this trigger. If that ever changes (e.g. a second raising path is
+  // added), promote this to an atomic claim column the same way.
+  private async raiseSupportTicket(params: {
+    conversationId: string;
+    branchId: string;
+    subject: string;
+    detail: string;
+    authenticatedUserId?: string;
+    authenticatedOrgId?: string;
+  }): Promise<void> {
+    const { conversationId, branchId, subject, detail, authenticatedUserId, authenticatedOrgId } = params;
+    try {
+      // The assistant that raises tickets lives ONLY inside the authenticated
+      // tenant dashboard shell (see CLAUDE.md §8 Tier 3 [8a]) — a public,
+      // unauthenticated widget visitor is never a legitimate ticket-raiser
+      // (that surface is for enquiries/lead capture, handled by the existing
+      // ESCALATE/LEAD path already). So `support_tickets.created_by` (NOT
+      // NULL in the live schema, FK to a real user) is a hard requirement
+      // here, not an optional nicety: without a verified authenticatedUserId
+      // there is no ticket to create. This does NOT drop the customer's
+      // request on the floor — the standard escalation notification (email +
+      // in-app bell, see CLAUDE.md §6) still fires from finalizeTurn
+      // regardless of whether a structured ticket exists.
+      if (!authenticatedUserId || !authenticatedOrgId) {
+        logger.info(`raiseSupportTicket: no authenticated user for conversation ${conversationId} — skipping (standard escalation notification still applies)`);
+        return;
+      }
+
+      const { data: existing } = await supabase
+        .from('support_tickets')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .in('status', ['open', 'in_progress'])
+        .maybeSingle();
+
+      if (existing) {
+        logger.info(`raiseSupportTicket: open ticket ${existing.id as string} already exists for conversation ${conversationId} — skipping`);
+        return;
+      }
+
+      const info = await this.getUserInfo(authenticatedUserId);
+      const createdByEmail = info.email;
+      const createdByName = info.name;
+
+      const { data: ticket, error } = await supabase
+        .from('support_tickets')
+        .insert({
+          organisation_id: authenticatedOrgId,
+          conversation_id: conversationId,
+          created_by: authenticatedUserId,
+          created_by_email: createdByEmail,
+          created_by_name: createdByName,
+          subject,
+          priority: 'normal',
+          status: 'open',
+        })
+        .select()
+        .single();
+
+      if (error || !ticket) {
+        logger.error(`raiseSupportTicket: insert failed for conversation ${conversationId}: ${error?.message}`);
+        return;
+      }
+
+      const ticketId = ticket.id as string;
+
+      await supabase.from('support_messages').insert({
+        ticket_id: ticketId,
+        author_role: 'client',
+        author_name: createdByName ?? createdByEmail ?? 'Nizam Assistant user',
+        body: `${detail || subject}\n\n(Raised automatically by the Nizam Assistant on behalf of ${createdByName ?? createdByEmail ?? 'the user'}.)`,
+      });
+
+      // Same notification shape as support.routes.ts's POST /tickets (email +
+      // in-app bell) so an assistant-raised ticket looks and behaves like any
+      // other to the operator.
+      const { data: org } = await supabase
+        .from('organisations').select('name').eq('id', authenticatedOrgId).maybeSingle();
+      const organisationName = (org as { name?: string } | null)?.name ?? 'Unknown';
+
+      void notificationService.sendSupportTicketAlert({
+        to: env.SUPPORT_DEFAULT_EMAIL,
+        ticketSubject: subject,
+        clientName: createdByName ?? createdByEmail ?? 'Unknown user',
+        organisationName,
+        priority: 'normal',
+        message: detail || subject,
+      });
+
+      void notificationService.createNotification({
+        organisationId: authenticatedOrgId, branchId: null,
+        type: 'support_ticket', title: 'New support ticket',
+        body: `${subject} — ${organisationName}`,
+        link: `/admin/support?t=${ticketId}`,
+        entityType: 'support_ticket', entityId: ticketId, minRole: null,
+        audience: 'operator',
+      });
+
+      logger.info(`raiseSupportTicket: created ticket ${ticketId} for conversation ${conversationId}`);
+    } catch (err) {
+      logger.error(`raiseSupportTicket: failed for conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   // System-generated summary for chat/WhatsApp conversations — parity with
   // voice, which gets its summary from Retell's call_analysis.call_summary
   // at call_ended/call_analyzed (see voice.routes.ts). Chat/WhatsApp have no
@@ -729,7 +888,7 @@ class ClaudeService {
   // context, system prompt construction, and conversation get/create. Both
   // callers get an identical PreparedTurn — no room for the two paths to drift.
   private async prepareTurn(params: ChatParams): Promise<PreparedTurn> {
-    const { branchId, message, sessionId, channel, leadName, leadPhone } = params;
+    const { branchId, message, sessionId, channel, leadName, leadPhone, authenticatedUserId, authenticatedOrgId } = params;
 
     // 1. Fetch agent config for this branch
     const agent = await agentService.getOrCreateAgent(branchId);
@@ -914,6 +1073,8 @@ class ClaudeService {
       existingConversation,
       conversationId,
       afterHours,
+      authenticatedUserId,
+      authenticatedOrgId,
     };
   }
 
@@ -981,6 +1142,7 @@ class ClaudeService {
       branchId, message, sessionId, channel, leadPhone, provider,
       updatedMessages, previousMessages, agentRecord, activeIntents,
       existingConversation, conversationId, afterHours,
+      authenticatedUserId, authenticatedOrgId,
     } = turn;
 
     let reply = rawReply;
@@ -1041,6 +1203,29 @@ class ClaudeService {
     }
     // Strip the LEAD block (bulletproof) before reply is used/stored anywhere.
     reply = reply.replace(/<<\s*LEAD\b[^>]*>>/gi, '').replace(/\s+$/, '').trim();
+
+    // Model-based ticket request — only ever appended by agents with the
+    // support_request intent (see buildIntentHandling's gate); a client-facing
+    // agent never emits this, but we still parse defensively rather than
+    // trusting the prompt gate alone. Same attribute-parsing shape as LEAD.
+    let ticketSubject: string | null = null;
+    let ticketDetail: string | null = null;
+    const ticketBlockMatch = reply.match(/<<\s*TICKET\b([^>]*)>>/i);
+    if (ticketBlockMatch) {
+      const attrs = ticketBlockMatch[1];
+      const getAttr = (key: string): string | null => {
+        const m = attrs.match(new RegExp(`${key}\\s*=\\s*"([^"]*)"`, 'i'));
+        const v = m ? m[1].trim() : '';
+        return v.length > 0 ? v : null;
+      };
+      const rawSubject = getAttr('subject');
+      const rawDetail = getAttr('detail');
+      if (rawSubject) ticketSubject = rawSubject.slice(0, 200);
+      if (rawDetail) ticketDetail = rawDetail.slice(0, 1000);
+    }
+    // Strip the TICKET block before reply is used/stored anywhere.
+    reply = reply.replace(/<<\s*TICKET\b[^>]*>>/gi, '').replace(/\s+$/, '').trim();
+
     // Final safety net: remove ANY leftover <<...>> sentinel that may have slipped.
     reply = reply.replace(/<<[^>]*>>/g, '').replace(/\s+$/, '').trim();
     if (modelLeadDate) {
@@ -1359,6 +1544,17 @@ class ClaudeService {
           audience: 'tenant',
         });
       }
+    }
+
+    if (ticketSubject) {
+      void this.raiseSupportTicket({
+        conversationId,
+        branchId,
+        subject: ticketSubject,
+        detail: ticketDetail ?? '',
+        authenticatedUserId,
+        authenticatedOrgId,
+      });
     }
 
     logger.info(

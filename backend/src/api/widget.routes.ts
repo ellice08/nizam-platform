@@ -7,6 +7,7 @@ import { ragService } from '../services/rag.service.js'
 import { ApiResponse } from '../utils/response.js'
 import { AppError } from '../utils/errors.js'
 import logger from '../utils/logger.js'
+import { resolveOptionalAuth } from '../lib/optionalAuth.js'
 
 const router = Router()
 
@@ -98,12 +99,23 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction): Pr
 
     const sessionId = session_id ?? randomUUID()
 
+    // OPTIONAL — this route is public (no JWT required), but the embedded
+    // Platform Assistant widget (tenant dashboard shell only — see CLAUDE.md
+    // §8 Tier 3 [8a]) can voluntarily send the logged-in user's bearer token
+    // for ticket attribution. Verified the same way auth.middleware does
+    // (supabase.auth.getUser); a missing/invalid token just degrades to
+    // unattributed rather than failing the request — public widget usage on
+    // client sites is completely unaffected.
+    const authContext = await resolveOptionalAuth(req.headers.authorization)
+
     const result = await claudeService.chat({
       branchId: branch.id,
       message: message.trim(),
       sessionId,
       channel: 'chat',
       leadName: 'Website visitor',
+      authenticatedUserId: authContext?.userId,
+      authenticatedOrgId: authContext?.organisationId,
     })
 
     res.json(ApiResponse.success({

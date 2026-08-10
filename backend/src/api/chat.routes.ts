@@ -44,6 +44,13 @@ router.post('/', authenticate, validate(chatSchema), async (req: Request, res: R
       channel: channel ?? 'chat',
       leadName: resolvedLeadName ?? undefined,
       leadPhone: lead_phone,
+      // This route already ran through `authenticate` — req.user/req.tenant
+      // are already verified, no need to re-resolve (see lib/optionalAuth.ts,
+      // used instead by the public widget route). For ticket attribution only
+      // (claudeService.raiseSupportTicket); harmless no-op for any agent
+      // without a support_request intent, since the tag is never emitted.
+      authenticatedUserId: req.user.id,
+      authenticatedOrgId: req.tenant.organisation_id || undefined,
     });
 
     res.json(ApiResponse.success(result, 'Message processed'));
