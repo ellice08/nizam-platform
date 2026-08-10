@@ -99,7 +99,7 @@ export function AppSidebar({ variant, org }: AppSidebarProps) {
         )}
       </div>
 
-      <nav className="flex-1 overflow-hidden px-3 py-6 space-y-8">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-6 space-y-8">
         <div>
           <NotificationBell variant="sidebar" collapsed={collapsed} />
         </div>
