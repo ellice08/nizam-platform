@@ -475,7 +475,7 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   auth-token config field — public/anonymous widget usage on client sites is unaffected.
 - *Build order:* (1) setup script — DONE, see below; (2) operator-nav mounting — DONE, see below;
   (3) KB upload — DONE, see below; (4) `<<TICKET>>` tag — shared finalize handling + intent
-  gating — NOT STARTED; (5) embed — widget.js mounted in the tenant dashboard shell with the
+  gating — DONE, see below; (5) embed — widget.js mounted in the tenant dashboard shell with the
   auth-token config — NOT STARTED.
 - *(1) Setup script — DONE.* `backend/scripts/setupPlatformAssistant.ts` (same shape as
   `connectTestVoice.ts`: dotenv-first, idempotent — reuses an existing branch/agent/intent by
@@ -567,6 +567,58 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   unique chunk, then normalized every surviving row's `source_url` to one consistent
   (correctly-encoded) value so the Knowledge page displays a clean filename instead of the
   mangled one.
+- *(4) `<<TICKET>>` tag — DONE.* A new control tag (`backend/src/services/claude.service.ts`) lets
+  the assistant raise a real `support_tickets` row mid-conversation, not just hand off via the
+  existing ESCALATE/LEAD path.
+  **Gating:** the TICKET instruction is appended in `buildIntentHandling()` only when
+  `intents.some(i => i.key === 'support_request')` — client-facing agents never see it. Verified
+  live: an equivalent billing scenario against the Maryam Orgaization branch (no `support_request`
+  intent) never emits the tag.
+  **Prompt tuning (a real regression found during live testing):** the first phrasing made TICKET
+  a separate judgment call ("if the issue can't be resolved, raise a ticket") — gpt-4o reliably
+  ignored it, treating `<<INTENT:support_request>>` + `<<LEAD ...>>` as sufficient on their own
+  and never emitting TICKET at all, even mid-escalation. Fixed by tying it 1:1 to the intent tag
+  instead: "every time you append `<<INTENT:support_request>>`, you MUST ALSO append
+  `<<TICKET subject="" detail="">>` in that same reply." This is a concrete trigger the model
+  reliably follows, confirmed across repeated live turns. Over-emission across turns is harmless —
+  `raiseSupportTicket` is idempotent (see below).
+  **Finalize:** parsed/stripped in the shared `finalizeTurn` (between the LEAD strip and the
+  generic `<<...>>` safety net), so `chat()` and `chatStream()` both get it for free. The
+  streaming `TagSafeEmitter`'s generic discard already covered it with no changes needed.
+  **Attribution — architecture decision made mid-build:** the original spec called for an OPTIONAL
+  bearer-token flow (unattributed ticket if absent, matching the LEAD pattern). Built that way
+  first (`backend/src/lib/optionalAuth.ts`, mirrors `auth.middleware.ts`'s `supabase.auth.getUser`
+  but degrades to `null` instead of 401ing), wired into the already-authenticated `POST /api/chat`
+  (free via `req.user`/`req.tenant`) and the public `POST /widget/chat` (verifies its own token).
+  Live testing then hit `support_tickets.created_by` being `NOT NULL` in the live schema — and
+  discussing the fix surfaced that unattributed tickets shouldn't exist in the first place: the
+  assistant only ever lives inside the authenticated tenant dashboard shell (this build's own
+  architecture decision, top of this section), so a legitimate ticket-raiser is always a real
+  logged-in user; a public, unauthenticated widget visitor asking for help is an enquiry/lead-
+  capture case (the existing ESCALATE/LEAD path), never a ticket-raiser. **Decision: raising a
+  ticket now REQUIRES a verified `authenticatedUserId`+`authenticatedOrgId`; if absent,
+  `raiseSupportTicket` logs and skips creating a ticket** — nothing is silently lost, since the
+  standard escalation notification (email + in-app bell, §6) still fires regardless of whether a
+  structured ticket exists. `lib/optionalAuth.ts` and the widget-route wiring stay in place
+  unchanged (still correct infrastructure for step 5's dashboard-embedded widget, which will carry
+  a real bearer token) — only `raiseSupportTicket`'s handling of the "no attribution" case changed.
+  **Idempotency:** plain check-then-insert keyed on `(conversation_id, status IN
+  ('open','in_progress'))` — deliberately NOT an atomic claim column like `lead_announced_at`/
+  `escalated_at`/`summarized_at` (§6), because TICKET emission is single-threaded per conversation
+  turn (no overlapping-transcript race like voice's lead capture). Comment in code notes it should
+  be promoted to an atomic claim if a second raising path is ever added.
+  **Ticket shape:** `conversation_id` (new column — `ALTER TABLE support_tickets ADD COLUMN
+  IF NOT EXISTS conversation_id uuid REFERENCES conversations(id);`, run directly against
+  Supabase) so the team can open the source transcript; `organisation_id`/`created_by`/
+  `created_by_email`/`created_by_name` from the verified auth context; `status: 'open'`,
+  `priority: 'normal'`; a `support_messages` row with the model's `detail` text so the ticket
+  reads the same as a human-submitted one; notification emission (email to
+  `SUPPORT_DEFAULT_EMAIL` + in-app bell) mirrors `support.routes.ts`'s existing manual-ticket
+  route exactly.
+  **Live-verified** (direct `claudeService.chat()` calls against the Platform Support branch,
+  simulating a billing/plan-change conversation with a real authenticated user id): tag never
+  leaks into the visible reply; exactly one ticket created once name+contact are collected; a
+  repeat qualifying message in the same conversation does not create a duplicate.
 - *v2 (LATER, needs its own design session) — scoped read-tools diagnosis:* agent-callable
   functions that inspect the CLIENT'S OWN live state (KB document/chunk counts, channel
   connection statuses, agent config) — each function hard-scoped SERVER-SIDE to the
