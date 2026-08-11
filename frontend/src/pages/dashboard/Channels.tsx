@@ -15,6 +15,7 @@ import {
 import { organisationApi } from '@/api'
 import type { WhatsAppAccount, VoiceAccount } from '@/api'
 import type { Branch } from '@/types/api.types'
+import { buildEmbedCode } from '@/lib/widgetEmbed'
 
 // ── Shared status bits ──────────────────────────────────────────────────────
 
@@ -78,9 +79,9 @@ const ChannelSection = ({ name, description, icon: Icon, iconWrapClass, iconClas
 
 const WebChatBody = () => {
   const { organisationId } = useAuthStore()
-  const widgetHost = import.meta.env.VITE_WIDGET_URL ?? window.location.origin
-  const apiBase = import.meta.env.VITE_API_URL ?? 'https://nizam-platform-production.up.railway.app'
-  const embedCode = `<script src="${widgetHost}/widget.js"\n  data-org-id="${organisationId ?? ''}"\n  data-api="${apiBase}"></script>`
+  // See lib/widgetEmbed.ts (shared with the Agent page) for why the script
+  // host is the frontend origin, not the API base.
+  const embedCode = buildEmbedCode(organisationId)
 
   const handleCopy = async () => {
     try {

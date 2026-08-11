@@ -25,18 +25,11 @@ export function PlatformAssistantEmbed() {
       const { data: { session } } = await supabase.auth.getSession()
       if (cancelled) return
 
-      // Deliberately NOT VITE_WIDGET_URL (used by Channels.tsx/Agent.tsx's
-      // PUBLIC embed snippet for external tenant sites, where it points at
-      // the Railway backend). This embed is always same-origin with the
-      // dashboard itself, which already serves its own copy of widget.js as
-      // a static asset — loading from window.location.origin sidesteps a
-      // real, pre-existing issue found while building this: the backend's
-      // helmet() default Cross-Origin-Resource-Policy: same-origin header
-      // blocks that Railway-hosted widget.js from loading cross-origin at
-      // all (confirmed live: ERR_BLOCKED_BY_RESPONSE.NotSameOrigin), and it
-      // doesn't even serve the real file there (returns a JSON 404). That
-      // affects the PUBLIC embed on tenant sites too — flagged separately,
-      // out of scope for this dashboard-only embed to fix.
+      // Always same-origin: this embed runs inside the dashboard, which
+      // serves widget.js as its own static asset, so there is no host to
+      // resolve. The PUBLIC snippet for external tenant sites goes through
+      // lib/widgetEmbed.ts instead (it has a host to pick, and honours
+      // VITE_WIDGET_URL for a custom domain/CDN).
       const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "https://nizam-platform-production.up.railway.app"
 
       const script = document.createElement("script")

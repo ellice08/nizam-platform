@@ -791,18 +791,36 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   click-verified on `/admin` itself — confirm live next time there's a super-admin session.
 - Retell account MFA is dependent on a friend's phone (borrowed for 2FA) — add TOTP or a backup
   method once account access is available again.
-- **PUBLIC widget embed snippet points at a URL that can't serve it** (found while building §8
-  Tier 3 [8a] step 5, deliberately not fixed there — needs a product decision). The snippet in
-  `Channels.tsx`/`Agent.tsx` builds `src="${VITE_WIDGET_URL}/widget.js"`, and `VITE_WIDGET_URL` is
-  set to the Railway BACKEND, which (a) doesn't serve `widget.js` at all — the SPA route returns a
-  JSON 404 — and (b) sends `helmet()`'s default `Cross-Origin-Resource-Policy: same-origin`, which
-  blocks a cross-origin `<script>` load outright (`ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`, confirmed
-  live). So the copy-paste embed a tenant puts on their own site would not load. Two options:
-  point `VITE_WIDGET_URL` at the Vercel FRONTEND origin (which does serve `public/widget.js`, and
-  needs a permissive CORP/CORS for that asset), or make the backend serve the file itself with
-  `Cross-Origin-Resource-Policy: cross-origin`. **Worth verifying against a real tenant site
-  before the next demo** — the dashboard embed sidesteps this entirely by loading same-origin, so
-  this bug is invisible from inside the dashboard.
+- ~~**PUBLIC widget embed snippet points at a URL that can't serve it**~~ — **FIXED.** The snippet
+  in `Channels.tsx`/`Agent.tsx` built `src="${VITE_WIDGET_URL}/widget.js"` with `VITE_WIDGET_URL`
+  set to the Railway BACKEND, which (a) 404s `/widget.js` (JSON, from the SPA catch-all) and
+  (b) sends `helmet()`'s default `Cross-Origin-Resource-Policy: same-origin`, blocking a
+  cross-origin `<script>` load outright — so the copy-paste embed a tenant put on their own site
+  never loaded. Invisible from inside the dashboard, whose own embed loads same-origin.
+  **Decision: serve it from the Vercel FRONTEND origin** — `widget.js` is `frontend/public/`, a
+  static asset of the frontend; the backend has no business serving it and its security headers
+  were NOT loosened. Vercel already serves it correctly with no changes needed (verified:
+  `200`, `content-type: application/javascript`, `access-control-allow-origin: *`, and no
+  restrictive CORP header).
+  - Both inline copies of the builder are gone; there is now ONE source of truth,
+    `frontend/src/lib/widgetEmbed.ts` (`buildEmbedCode`). Duplication is why the wrong host
+    survived in two places.
+  - **`VITE_WIDGET_URL` is now OPTIONAL and only means "override the host" (custom domain/CDN);
+    the default is the frontend's own origin**, which is correct in production without any env
+    var at all. Because the deployment env may still carry the old backend value, `resolveWidgetHost()`
+    treats a configured value EQUAL TO the API base as that stale misconfiguration and ignores it —
+    so production is correct even if Vercel's project settings were never updated. `.env` /
+    `.env.example` updated (the old `.env.example` comment actively asserted the wrong thing:
+    "widget.js is served by the Railway backend, not this Vercel deployment").
+  - **Verified cross-origin for real**, not just by reading headers: a scratch page served from a
+    third origin (`localhost:9876`, distinct from both vercel.app and railway.app) loaded the
+    script, rendered, auto-themed to the host page, and chatted against the Maryam tenant, getting
+    a correct KB answer about Hutu Orchards.
+  - **GOTCHA worth knowing (bit me during that test):** a bare test page WILL have its own content
+    auto-ingested into the tenant's live KB — `capturePage()`/`runSiteSweep()` fire on any embed
+    without `data-disable-capture="true"`. The first run put 12 junk chunks into Maryam's KB
+    (removed). On a REAL tenant site that behavior is wanted; on a throwaway test page always add
+    `data-disable-capture="true"`.
 - Sidebar dark/light toggle did not respond to synthetic clicks at its own reported coordinates
   during browser-automation testing (the same button worked when clicked via `element.click()`) —
   most likely a browser-pane coordinate/scaling artifact rather than a product bug, but it was

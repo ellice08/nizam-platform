@@ -10,6 +10,7 @@ import { useAgentsByOrg, useUpdateAgent, useBranches } from '@/hooks'
 import { organisationApi, intentApi, type AgentIntent } from '@/api'
 import { BusinessHoursEditor, type BusinessHours } from '@/components/BusinessHoursEditor'
 import { IntentsEditor } from '@/components/IntentsEditor'
+import { buildEmbedCode } from '@/lib/widgetEmbed'
 
 const tones = ["professional", "friendly", "formal"] as const;
 type Tone = typeof tones[number];
@@ -220,10 +221,9 @@ const Agent = () => {
     }
   }
 
-  // Embed code
-  const widgetHost = import.meta.env.VITE_WIDGET_URL ?? window.location.origin
-  const apiBase = import.meta.env.VITE_API_URL ?? 'https://nizam-platform-production.up.railway.app'
-  const embedCode = `<script src="${widgetHost}/widget.js"\n  data-org-id="${organisationId ?? ''}"\n  data-api="${apiBase}"></script>`
+  // Embed code — see lib/widgetEmbed.ts (shared with the Channels web-chat
+  // card) for why the script host is the frontend origin, not the API base.
+  const embedCode = buildEmbedCode(organisationId)
 
   const handleCopy = async () => {
     try {
