@@ -33,7 +33,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (isWidgetPath) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    // Authorization is allowed here too — the dashboard's own Platform
+    // Assistant embed (CLAUDE.md §8 Tier 3 [8a] step 5) sends the logged-in
+    // user's bearer token on this same public /api/widget/chat endpoint for
+    // ticket attribution (see lib/optionalAuth.ts). Safe to allow from any
+    // origin: this route never uses cookies/credentials, and an unverifiable
+    // or absent token just degrades to unattributed, same as today.
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     if (req.method === "OPTIONS") {
       res.status(204).end();
       return;

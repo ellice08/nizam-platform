@@ -5,6 +5,7 @@ import { AppSidebar } from "./AppSidebar"
 import { MobileTopBar } from "./MobileTopBar"
 import { useAuthStore } from "@/store"
 import { useOrganisation } from "@/hooks"
+import { PlatformAssistantEmbed } from "@/components/PlatformAssistantEmbed"
 
 type AppLayoutProps = {
   variant: "admin" | "dashboard"
@@ -126,6 +127,7 @@ export function AppLayout({ variant }: AppLayoutProps) {
           <Outlet />
         </main>
       </div>
+      {variant === "dashboard" && <PlatformAssistantEmbed />}
     </div>
   )
 }

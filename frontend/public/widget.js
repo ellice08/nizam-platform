@@ -27,6 +27,58 @@
     console.warn('[Nizam Widget] Missing data-api attribute — API calls disabled');
   }
 
+  // Optional embed-time flags/overrides — used by the Nizam dashboard's own
+  // in-app embed (Platform Assistant, see CLAUDE.md §8 Tier 3 [8a] step 5),
+  // never set by the public-site embed snippet. Read once at load, same
+  // pattern as API_BASE above.
+  //
+  // - data-disable-capture: skip the page-capture/site-sweep KB-ingestion
+  //   flow entirely — those are for crawling a TENANT's public marketing
+  //   site, and would otherwise try to ingest the dashboard's own React UI
+  //   as "content" into the assistant's knowledge base.
+  // - data-theme-mode / data-primary-color / data-font-family /
+  //   data-corner-radius: force the widget's appearance for THIS embed only,
+  //   applied on top of the org's fetched /api/widget/config (which backs
+  //   organisations.branding_config) without ever writing to it — a host
+  //   page that already knows its own theme (like the dashboard) shouldn't
+  //   have to fight this widget's best-effort host-page detection.
+  var DISABLE_CAPTURE = (function () {
+    try {
+      var tag = document.currentScript || document.querySelector('script[data-org-id]');
+      return !!(tag && tag.getAttribute('data-disable-capture') === 'true');
+    } catch (e) { return false; }
+  })();
+
+  var EMBED_OVERRIDES = (function () {
+    try {
+      var tag = document.currentScript || document.querySelector('script[data-org-id]');
+      if (!tag) return {};
+      var overrides = {};
+      var themeMode = tag.getAttribute('data-theme-mode');
+      var primaryColor = tag.getAttribute('data-primary-color');
+      var fontFamily = tag.getAttribute('data-font-family');
+      var cornerRadius = tag.getAttribute('data-corner-radius');
+      if (themeMode) overrides.themeMode = themeMode;
+      if (primaryColor) overrides.primaryColor = primaryColor;
+      if (fontFamily) overrides.fontFamily = fontFamily;
+      if (cornerRadius) overrides.cornerRadius = cornerRadius;
+      return overrides;
+    } catch (e) { return {}; }
+  })();
+
+  // Optional auth bearer token for ticket attribution (see
+  // claude.service.ts's raiseSupportTicket + lib/optionalAuth.ts). Read
+  // fresh on every call (not cached like API_BASE) because the embedding
+  // page may rotate the token in place on the script tag as the user's
+  // session refreshes — plain public-site embeds never set this attribute,
+  // so this is always null there and the request is sent exactly as before.
+  function getAuthToken() {
+    try {
+      var tag = document.querySelector('script[data-org-id]');
+      return (tag && tag.getAttribute('data-token')) || null;
+    } catch (e) { return null; }
+  }
+
   // Session persistence — 30-minute idle expiry
   const SESSION_KEY = `nizam_session_${ORG_ID}`;
   const SESSION_TS_KEY = `nizam_session_ts_${ORG_ID}`;
@@ -444,9 +496,20 @@
 
   // ─── HTML ────────────────────────────────────────────────────
   function buildWidget() {
-    const styleEl = document.createElement('style');
-    styleEl.textContent = styles;
-    document.head.appendChild(styleEl);
+    // Defensive idempotency guard — irrelevant for a normal multi-page site
+    // (the page fully reloads, so init() only ever runs once), but the
+    // dashboard's Platform Assistant embed (CLAUDE.md §8 Tier 3 [8a] step 5)
+    // mounts/unmounts this script inside a single-page app; if the host page
+    // ever re-injects the script before cleanup finished, don't build a
+    // second widget on top of the first.
+    if (document.getElementById('nizam-widget-root')) return;
+
+    if (!document.getElementById('nizam-widget-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'nizam-widget-styles';
+      styleEl.textContent = styles;
+      document.head.appendChild(styleEl);
+    }
 
     // Scoped root — the ONLY element theming CSS variables are set on (see
     // applyTheme below). Everything lives inside it so the variables cascade
@@ -840,9 +903,13 @@
     showTyping();
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const authToken = getAuthToken();
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+
       const res = await fetch(`${API_BASE}/api/widget/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({
           org_id: ORG_ID,
           message: text,
@@ -1122,7 +1189,14 @@
   // ─── Init ────────────────────────────────────────────────────
   async function init() {
     try {
-      const res = await fetch(`${API_BASE}/api/widget/config/${ORG_ID}`);
+      // Bounded so a slow/unreachable backend can never block the widget
+      // from appearing at all — without this, an unresolved (not merely
+      // rejected) fetch would leave buildWidget() below waiting forever,
+      // since it only runs after this try/catch settles.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(function () { controller.abort(); }, 4000);
+      const res = await fetch(`${API_BASE}/api/widget/config/${ORG_ID}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         if (data.data) {
@@ -1130,8 +1204,12 @@
         }
       }
     } catch {
-      // Use defaults if config fetch fails
+      // Use defaults if config fetch fails or times out
     }
+
+    // Embed-time overrides always win over the fetched org config — see
+    // EMBED_OVERRIDES above. No-op (empty object) for the public-site embed.
+    config = { ...config, ...EMBED_OVERRIDES };
 
     buildWidget();
 
@@ -1142,6 +1220,22 @@
       // reproduce the built-in dark palette if this fails entirely.
     }
     watchAutoTheme();
+
+    // Lets the embedding host page (the Nizam dashboard's Platform Assistant
+    // embed) push explicit theme-mode changes after init — e.g. when the
+    // user flips the dashboard's own light/dark toggle, which is a manual
+    // in-app state change, not a `prefers-color-scheme` media-query change,
+    // so watchAutoTheme()'s listener above never fires for it. No-op for the
+    // public-site embed, which never calls this.
+    window.NizamAssistantWidget = window.NizamAssistantWidget || {};
+    window.NizamAssistantWidget.setThemeMode = function (mode) {
+      try {
+        config = { ...config, themeMode: mode };
+        applyTheme(config, detectHostTheme());
+      } catch (e) { /* never let a host-driven theme push break the widget */ }
+    };
+
+    if (DISABLE_CAPTURE) return;
 
     // Defer page capture so it never competes with page load or widget render
     if ('requestIdleCallback' in window) {
