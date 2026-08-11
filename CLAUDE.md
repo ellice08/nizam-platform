@@ -143,6 +143,41 @@ then appended: tone block, KNOWLEDGE BASE context, contact/afterHours/confirmati
   agent quoted was HALLUCINATED. Fix = structured per-unit documents (one self-contained chunk
   per unit: name + project + cluster + type + price + size + features, every block repeating the
   project name, plus explicit disambiguation lines). See §8 "knowledge-quality productization".
+- **Ingestion normalisation (`normaliseExtractedText`, exported from rag.service.ts).** Runs once
+  at the top of `ingestText`, so it covers EVERY path (upload, single-page capture, widget
+  auto-capture) — they all funnel through there. Repairs document-extraction artefacts: strips
+  zero-width chars, converts non-breaking/figure spaces to real spaces, collapses justified-text
+  runs (`villa··250··SQM`), and caps blank-line runs while PRESERVING `\n\n` because `chunkText`
+  splits paragraphs on it. Deliberately conservative — whitespace and invisible characters only,
+  never word content.
+  **Calibration, so nobody over-invests here later:** this was investigated on a real complaint
+  that PDF extraction had FUSED words ("standalonevilla", "HutuOrchards"). It had not — a search
+  of all 177 chunks found zero instances, and a character audit found only U+0020/U+000A. The real
+  artefact was the OPPOSITE: *extra* spaces, in 69% of chunks. And measured against live queries,
+  fusion barely matters anyway with BPE-tokenised embeddings: clean text scored 0.8621 vs 0.8599
+  for deliberately heavily-fused text — a 0.0022 gap, noise against the 0.6 threshold, because
+  subword tokens recover the meaning. Normalisation earns +0.003–0.013 cosine and ~5% fewer tokens.
+  Worth having as cheap hygiene; **it is not a retrieval fix**. The things that actually moved
+  retrieval were deleting crawl noise and fixing chunk sizing (below).
+- **`chunkText` hard-splits oversized blocks.** It splits on `\n\n`, but a PDF table extracts as
+  ONE giant paragraph with no blank lines, and the old code never split a single oversized
+  paragraph — the Maryam KB had 22/36 chunks over target, max 3805 chars, one chunk holding SIX
+  distinct units, which is precisely the cross-unit conflation behind the Marina hallucination.
+  `splitOversized` now breaks such blocks at the most structural boundary available, trying line
+  breaks FIRST (listing tables and spec sheets are line-oriented, so a per-line split keeps one
+  unit's fields together), then sentences, then words, then a hard slice that backs off to the
+  last space.
+  **Also fixed: overlap was unbounded in characters.** It took a fixed 40 trailing words
+  (`overlapChars / 5`, assuming 5 chars/word), so 40 words of URLs carried ~500 chars instead of
+  200 — that produced a real 2561-char chunk from the social-links section. `tailOverlap` is now
+  character-bounded (still word-granular, so overlap never starts mid-word), which makes the chunk
+  ceiling provable: `chunkChars + overlapChars` = 2200. Verified on the real corpus: max 2180,
+  zero chunks over ceiling, and no listing has its ID separated from its Price.
+  **Known remaining limit:** the accumulator still merges consecutive paragraphs up to the budget,
+  so ~700-char unit entries pack 2–3 per chunk (5 such chunks in the Maryam KB). Blank lines
+  between units do NOT currently force a chunk boundary. If the structured re-upload (§8 [9])
+  needs strictly one unit per chunk, that merge policy is the thing to change — it is a deliberate
+  open decision, not an oversight.
 
 ---
 
@@ -282,6 +317,31 @@ write a string, never duplicate" discipline applies.
 
 - **`/api/version`** (see §8 status) returns the deployed commit — use it to end stale-deploy
   confusion. `RAILWAY_GIT_COMMIT_SHA` is the source.
+- **MIXED EMBEDDING MODELS FAIL SILENTLY, NOT LOUDLY — the most dangerous failure mode in the
+  RAG stack.** Embeddings from different models are not comparable, but they are also **not
+  detectably incomparable**: `text-embedding-3-small` defaults to 1536 dimensions, the SAME as the
+  older `ada-002`, so a branch holding a mix does not error. `match_documents` still runs, still
+  returns rows, and still reports plausible-looking similarity scores — the stale chunks just
+  quietly sink out of reach. **It presents exactly like "the agent forgot things", which is the
+  same signature as a KB gap or a wrong-branch bug** (both already misdiagnosed once each in this
+  codebase — see §4's Marina hallucination and §8 [8a] step 5's Headquarters bug). Rules:
+  - `EMBEDDING_MODEL` is ONE global env var but embeddings are stored PER BRANCH, so changing it
+    strands **every** branch not re-indexed — including Platform Support, which powers the in-app
+    assistant. A model change is a **platform-wide re-index in one maintenance window**, never a
+    single-tenant task.
+  - A partial re-upload is the trap: anything the new source doesn't cover stays on the old model
+    and becomes unreachable. Re-index a branch **wholesale**, never incrementally.
+  - `ragService` reads `env.EMBEDDING_MODEL` at call time, so what matters is the model the
+    **deployed** backend uses. A local `.env` change proves nothing — verify against the deployed
+    environment before re-indexing.
+  - Tooling: `backend/scripts/reindexBranch.ts`. `--audit` reports the model distribution per
+    branch and flags any mixed branch; `--branch <id>` re-embeds one branch from STORED CONTENT
+    (no source file needed, so it works for branches whose upload is long gone); `--all-branches`
+    runs sequentially so a problem surfaces on one branch, not all. Dry-run by default, `--apply`
+    to write. Every chunk it writes is stamped `metadata.embedding_model`, which is what makes a
+    mixed corpus visible to `--audit` instead of silent — chunks predating the stamp read as
+    "unstamped" and can only be made certain by re-indexing. Note it re-embeds, it does NOT
+    re-chunk: picking up `chunkText` changes requires re-ingesting from source.
 - notifications carry entity_type/entity_id = conversation for supersede + deep-linking.
 - `notes` on conversations is `ConversationNote[]` = `{text, added_by, added_at}` — NEVER write a
   string there (crashed the panel once: "notes.map is not a function"). Voice summary is stored as
@@ -354,6 +414,21 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   unsolved — tracked in §9.
 - *Why:* demo integrity (don't delete knowledge on stage) + RAG quality (dupes/crawl noise dilute
   retrieval).
+- *(d) Crawl noise re-accumulated and was re-cleaned — RAG quality, measured.* Local dev-site
+  testing had put **108 `localhost:8081` chunks** back onto the Maryam branch: 75% of that
+  branch's 144 chunks were dev noise competing with the real KB. Measured with the production
+  `match_documents` RPC, they took **6 of 8 retrieval slots** — the actual uploaded knowledge base
+  was mostly crowded out. Deleted (scoped by a local/private-host pattern applied DB-wide so
+  nothing hid on another branch; it matched only that branch), plus the 10 corresponding
+  `captured_pages` rows and one stray `iana.org` placeholder row from a site sweep. Final state:
+  69 chunks total — 36 Maryam KB + 33 Platform Support — 0 `captured_pages`, and **8/8 retrieval
+  slots now come from the real KB**. Both PDFs untouched.
+  **Gotcha this reinforces:** any widget embed without `data-disable-capture="true"` auto-ingests
+  the host page (§9), which is exactly how dev-site content keeps landing in a real tenant's KB.
+  **Verification gotcha worth remembering:** the first retrieval measurement reported 0/8 and was
+  WRONG — `match_documents` returns only `id, content, metadata, similarity`, with NO `source_url`,
+  so classifying results by `source_url` silently marked everything as noise. Join returned ids
+  back to the chunk table to attribute results; don't assume the RPC's column set.
 
 **[4] ASR / accent swap (Retell dashboard)**
 - *What:* switch the Retell agent's Realtime Transcription provider/model to something accent-robust

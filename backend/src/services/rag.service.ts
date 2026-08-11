@@ -11,24 +11,117 @@ const CHUNK_SIZE = 500;
 const CHUNK_OVERLAP = 50;
 const CHARS_PER_TOKEN = 4;
 
+// Repairs the text-layer artefacts that document extraction (mainly PDF)
+// leaves behind, BEFORE chunking and embedding. Clients will keep uploading
+// PDFs, so this protects every future tenant rather than one document.
+//
+// Deliberately conservative — it only touches whitespace and invisible
+// characters, never word content, and it PRESERVES blank lines because
+// chunkText() splits paragraphs on \n\n. Measured effect on retrieval is
+// small (+0.003–0.013 cosine on real queries); the real wins are that
+// zero-width characters can genuinely fuse words for downstream consumers,
+// and that collapsing justified-text runs trims ~6% of tokens per chunk.
+export function normaliseExtractedText(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')                    // CRLF/CR → LF
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')      // zero-width chars — the only
+                                                // artefact that truly fuses words
+    .replace(/[\u00A0\u2007\u202F]/g, ' ')      // non-breaking/figure spaces → real space
+    .replace(/[ \t]{2,}/g, ' ')                 // justified-text runs ("villa  250  SQM")
+    .replace(/[ \t]+\n/g, '\n')                 // trailing spaces before a newline
+    .replace(/\n{3,}/g, '\n\n')                 // cap blank-line runs, keep paragraph breaks
+    .trim();
+}
+
 class RagService {
+
+  // Splits a single oversized block at the most structural boundary
+  // available, so a hard split never lands mid-entry when a softer boundary
+  // exists. Order matters: line breaks first, because listing tables and
+  // spec sheets are line-oriented and a per-line split keeps one unit's
+  // fields together.
+  private splitIntoUnits(text: string): string[] {
+    if (/\n/.test(text)) return text.split(/(?<=\n)/);
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    if (sentences.length > 1) {
+      return sentences.map((s, i, arr) => (i < arr.length - 1 ? `${s} ` : s));
+    }
+    return text.split(/(?<=\s)/);
+  }
+
+  // Last resort for a single unbroken run with no whitespace at all (rare —
+  // e.g. a long URL or base64 blob). Backs off to the last space when there
+  // is one, so we still avoid cutting mid-word where possible.
+  private hardSlice(text: string, maxChars: number): string[] {
+    const out: string[] = [];
+    let rest = text;
+    while (rest.length > maxChars) {
+      const window = rest.slice(0, maxChars);
+      const lastSpace = window.lastIndexOf(' ');
+      const cut = lastSpace > maxChars * 0.6 ? lastSpace : maxChars;
+      out.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut);
+    }
+    if (rest.trim()) out.push(rest.trim());
+    return out;
+  }
+
+  // Trailing context carried into the next chunk, bounded in CHARACTERS.
+  // It used to take a fixed 40 words (overlapChars / 5, assuming 5 chars per
+  // word), which is unbounded in practice: 40 trailing words of URLs carried
+  // ~500 chars instead of 200, so chunks ran well past their budget (a real
+  // 2561-char chunk in the Maryam KB came from the social-links section).
+  // Word-granular, so overlap never starts mid-word.
+  private tailOverlap(text: string, maxChars: number): string {
+    const words = text.split(' ');
+    let out = '';
+    for (let i = words.length - 1; i >= 0; i--) {
+      const next = out ? `${words[i]} ${out}` : words[i];
+      if (next.length > maxChars) break;
+      out = next;
+    }
+    return out;
+  }
+
+  private splitOversized(text: string, maxChars: number): string[] {
+    if (text.length <= maxChars) return [text];
+
+    const pieces: string[] = [];
+    let current = '';
+    for (const unit of this.splitIntoUnits(text)) {
+      if (current && (current + unit).length > maxChars) {
+        pieces.push(current.trim());
+        current = unit;
+      } else {
+        current += unit;
+      }
+    }
+    if (current.trim()) pieces.push(current.trim());
+
+    return pieces.flatMap(p => (p.length <= maxChars ? [p] : this.hardSlice(p, maxChars)));
+  }
 
   private chunkText(text: string): string[] {
     const chunkChars = CHUNK_SIZE * CHARS_PER_TOKEN;
     const overlapChars = CHUNK_OVERLAP * CHARS_PER_TOKEN;
     const chunks: string[] = [];
 
-    const paragraphs = text.split(/\n\n+/);
+    // Hard-split any paragraph that alone blows the budget BEFORE
+    // accumulating. Without this a PDF table — which extracts as one giant
+    // paragraph with no blank lines — became a single oversized chunk: the
+    // Maryam KB had 22/36 chunks over target (max 3805 chars) and one chunk
+    // holding SIX distinct units, which is exactly the cross-unit conflation
+    // that causes the agent to blend facts between properties (see §4).
+    const paragraphs = text
+      .split(/\n\n+/)
+      .flatMap(para => this.splitOversized(para, chunkChars));
+
     let current = '';
 
     for (const para of paragraphs) {
       if ((current + para).length > chunkChars && current.length > 0) {
         chunks.push(current.trim());
-        const words = current.split(' ');
-        const overlapWords = words.slice(
-          Math.max(0, words.length - Math.floor(overlapChars / 5))
-        );
-        current = overlapWords.join(' ') + ' ' + para;
+        current = this.tailOverlap(current, overlapChars) + ' ' + para;
       } else {
         current = current ? current + '\n\n' + para : para;
       }
@@ -62,11 +155,17 @@ class RagService {
     sourceUrl?: string;
     metadata?: Record<string, unknown>;
   }): Promise<{ chunksCreated: number }> {
-    const { text, branchId, sourceType, sourceUrl, metadata = {} } = params;
+    const { text: rawText, branchId, sourceType, sourceUrl, metadata = {} } = params;
 
-    if (!text || text.trim().length < 10) {
+    if (!rawText || rawText.trim().length < 10) {
       throw new AppError('Document text is too short to index', 400);
     }
+
+    // Repair extraction artefacts once, here — every ingestion path (upload,
+    // single-page capture, widget auto-capture) funnels through this method,
+    // so this is the one place that covers them all. Everything downstream
+    // (chunking, embedding, enrichment) sees the cleaned text.
+    const text = normaliseExtractedText(rawText);
 
     const chunks = this.chunkText(text);
 
