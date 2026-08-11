@@ -476,7 +476,7 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - *Build order:* (1) setup script — DONE, see below; (2) operator-nav mounting — DONE, see below;
   (3) KB upload — DONE, see below; (4) `<<TICKET>>` tag — shared finalize handling + intent
   gating — DONE, see below; (5) embed — widget.js mounted in the tenant dashboard shell with the
-  auth-token config — NOT STARTED.
+  auth-token config — DONE, see below. **[8a] is COMPLETE for v1.**
 - *(1) Setup script — DONE.* `backend/scripts/setupPlatformAssistant.ts` (same shape as
   `connectTestVoice.ts`: dotenv-first, idempotent — reuses an existing branch/agent/intent by
   name/key instead of duplicating, safe to re-run). Creates branch **"Platform Support"**
@@ -619,6 +619,63 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   simulating a billing/plan-change conversation with a real authenticated user id): tag never
   leaks into the visible reply; exactly one ticket created once name+contact are collected; a
   repeat qualifying message in the same conversation does not create a duplicate.
+- *(5) Dashboard embed — DONE.* `frontend/src/components/PlatformAssistantEmbed.tsx` injects
+  `public/widget.js` (REUSED, not forked) into the tenant dashboard shell, mounted from
+  `AppLayout.tsx` behind `variant === "dashboard"` — so it can never appear on `/admin/*`
+  (which renders `AppLayout variant="admin"`) or on `PublicLayout` marketing pages.
+  **All widget.js changes are opt-in `data-*` attributes that no-op when absent, so the public
+  embed on tenant sites is byte-for-byte unchanged in behavior:**
+  - `data-token` → sent as `Authorization: Bearer` on `POST /api/widget/chat`, which is what lets
+    `finalizeTurn`/`raiseSupportTicket` resolve `authenticatedUserId`/`authenticatedOrgId` (step 4).
+    Read FRESH on every send (not captured at init) because the React wrapper rewrites the
+    attribute from `supabase.auth.onAuthStateChange` as the session auto-refreshes — a
+    long-open dashboard tab would otherwise fall back to no ticket once the original token expired.
+  - `data-disable-capture` → skips `capturePage()`/`runSiteSweep()` entirely. Those exist to crawl a
+    TENANT's public marketing site; without this the dashboard's own React UI would be ingested as
+    "knowledge" into the assistant's KB.
+  - `data-branch-id` → see the branch-resolution bug below.
+  - `data-theme-mode`/`-primary-color`/`-font-family`/`-corner-radius` → embed-time appearance
+    overrides applied on top of the fetched `/api/widget/config`, WITHOUT touching
+    `organisations.branding_config` (which would change the assistant's look everywhere else too).
+  **Theme:** the dashboard's light/dark toggle is in-app state, NOT a `prefers-color-scheme`
+  change, so widget.js's `watchAutoTheme()` media-query listener never fires for it. Rather than
+  make detection cleverer, widget.js now exposes `window.NizamAssistantWidget.setThemeMode(mode)`
+  and the React wrapper pushes the dashboard's real `resolvedTheme` on mount and on every change.
+  Verified live in both modes (light `--nzw-bg #FFFFFF`/text `#1A1A16`; dark `#0E0E0C`/`#FAFAFA`),
+  including a mid-session toggle re-theming the already-open panel.
+  **No collision:** the only other fixed bottom-right element in the dashboard is the React Query
+  Devtools button, which is `import.meta.env.DEV`-gated and never ships — default widget position
+  kept as-is.
+  **SPA-lifecycle hardening (no-ops for the traditional multi-page public embed):** `buildWidget()`
+  bails if `#nizam-widget-root` already exists and the injected `<style>` is deduped by id; the
+  React wrapper removes both the widget DOM (appended to `document.body`, outside React's tree)
+  and the script tag on unmount. Verified live: leaving the dashboard removes both, returning
+  re-mounts exactly one root and one style tag.
+  **BUG FOUND AND FIXED — wrong branch (the big one).** `widget.routes.ts` resolved an org's branch
+  with a bare `.limit(1)` and NO `.order()`, so for a multi-branch org it picked an arbitrary
+  branch — for Ellice Systems that was **Headquarters** (an unrelated pre-existing "Aria" agent
+  with ZERO KB chunks) instead of **Platform Support** (Nizam Assistant, the 33 chunks from step 3).
+  Every product question therefore escalated as unanswerable, which looked like a KB/RAG failure
+  but wasn't. Fixed per §8 Tier 3 [9a]'s own guidance: new `resolveBranchId(orgId, explicitBranchId?)`
+  shared by `/config` and `/chat` — an explicit `branch_id` is **verified to belong to `orgId`
+  before use** (a caller can never target another org's branch; live-tested with a foreign branch
+  id, which correctly falls back rather than being honored), and the org default is now
+  deterministic (`ORDER BY created_at`), which also de-risks every future multi-branch tenant.
+  **BUG FOUND (pre-existing, NOT fixed — see §9):** the public embed snippet points `widget.js` at
+  `VITE_WIDGET_URL` = the Railway backend, which does NOT serve the file (JSON 404) and whose
+  `helmet()` default `Cross-Origin-Resource-Policy: same-origin` blocks cross-origin script loads
+  outright (`ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`). This dashboard embed sidesteps it by loading
+  same-origin from `window.location.origin`; the public snippet in `Channels.tsx`/`Agent.tsx` still
+  needs a product decision.
+  **Also fixed:** the widget-path CORS branch in `backend/src/index.ts` allowed only `Content-Type`
+  in preflight, so the new `Authorization` header was rejected before reaching the route.
+  **Live-verified end-to-end** as a real tenant user (Maryam Orgaization) in the dashboard: KB
+  question answered correctly from the 33-chunk KB in plain text with no escalation → billing issue
+  escalated → name+email collected → exactly ONE `support_tickets` row created (`#1015`), attributed
+  to `organisation_id` = Maryam Orgaization with the real `created_by`/email/name, `conversation_id`
+  linking to the transcript, a `support_messages` body, visible in the tenant Support page AND in
+  the operator's cross-tenant query; a further qualifying message created NO duplicate; no control
+  tag ever leaked into the visible reply or the stored transcript.
 - *v2 (LATER, needs its own design session) — scoped read-tools diagnosis:* agent-callable
   functions that inspect the CLIENT'S OWN live state (KB document/chunk counts, channel
   connection statuses, agent config) — each function hard-scoped SERVER-SIDE to the
@@ -734,6 +791,22 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   click-verified on `/admin` itself — confirm live next time there's a super-admin session.
 - Retell account MFA is dependent on a friend's phone (borrowed for 2FA) — add TOTP or a backup
   method once account access is available again.
+- **PUBLIC widget embed snippet points at a URL that can't serve it** (found while building §8
+  Tier 3 [8a] step 5, deliberately not fixed there — needs a product decision). The snippet in
+  `Channels.tsx`/`Agent.tsx` builds `src="${VITE_WIDGET_URL}/widget.js"`, and `VITE_WIDGET_URL` is
+  set to the Railway BACKEND, which (a) doesn't serve `widget.js` at all — the SPA route returns a
+  JSON 404 — and (b) sends `helmet()`'s default `Cross-Origin-Resource-Policy: same-origin`, which
+  blocks a cross-origin `<script>` load outright (`ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`, confirmed
+  live). So the copy-paste embed a tenant puts on their own site would not load. Two options:
+  point `VITE_WIDGET_URL` at the Vercel FRONTEND origin (which does serve `public/widget.js`, and
+  needs a permissive CORP/CORS for that asset), or make the backend serve the file itself with
+  `Cross-Origin-Resource-Policy: cross-origin`. **Worth verifying against a real tenant site
+  before the next demo** — the dashboard embed sidesteps this entirely by loading same-origin, so
+  this bug is invisible from inside the dashboard.
+- Sidebar dark/light toggle did not respond to synthetic clicks at its own reported coordinates
+  during browser-automation testing (the same button worked when clicked via `element.click()`) —
+  most likely a browser-pane coordinate/scaling artifact rather than a product bug, but it was
+  never fully explained. Worth a real human click-check on desktop before assuming it's fine.
 
 ---
 
