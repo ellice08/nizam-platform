@@ -11,11 +11,60 @@ import { resolveOptionalAuth } from '../lib/optionalAuth.js'
 
 const router = Router()
 
+// Resolves which branch a widget request targets. Most tenants have exactly
+// one branch, so the org-level default (first by created_at — matches the
+// convention documented in CLAUDE.md §2) is fine and is what every existing
+// public-site embed relies on implicitly. But that "first branch" fallback
+// is genuinely ambiguous for a multi-branch org — Ellice Systems now has two
+// (Headquarters + Platform Support, see CLAUDE.md §8 Tier 3 [8a]), and
+// Headquarters happens to be the older/first one, so the unqualified
+// fallback was silently routing the Platform Assistant's dashboard embed to
+// the WRONG branch (a different, unrelated "Aria" agent with zero KB
+// content) — found live while verifying the embed. Callers that know their
+// exact target branch (like this dashboard embed) can now pass branchId
+// explicitly; it's verified to actually belong to orgId before use, so a
+// caller can never point a request at another org's branch.
+async function resolveBranchId(orgId: string, explicitBranchId?: string): Promise<string | null> {
+  if (explicitBranchId) {
+    const { data: branch } = await supabase
+      .from('branches')
+      .select('id')
+      .eq('id', explicitBranchId)
+      .eq('organisation_id', orgId)
+      .maybeSingle()
+    if (branch) return branch.id as string
+    // Explicit id didn't actually belong to this org — fall through to the
+    // default rather than trusting it.
+  }
+
+  const { data: branch } = await supabase
+    .from('branches')
+    .select('id')
+    .eq('organisation_id', orgId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return branch ? (branch.id as string) : null
+}
+
 // GET /api/widget/config/:orgId
 // Public — returns org branding and agent name for widget styling
 router.get('/config/:orgId', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { orgId } = req.params
+    // Normalize at the boundary: Express param/query values are honestly
+    // string | string[] | undefined (repeatable route params; and
+    // ?branch_id=a&branch_id=b arrives as an array) — capture into a const
+    // so the union narrows, take the first element for the array case,
+    // never cast.
+    const rawOrgId = req.params.orgId
+    const orgId = typeof rawOrgId === 'string' ? rawOrgId : rawOrgId[0]
+    if (!orgId) throw new AppError('Organisation not found', 404)
+    const rawBranchId = req.query.branch_id
+    const branchIdParam = typeof rawBranchId === 'string'
+      ? rawBranchId
+      : Array.isArray(rawBranchId) && typeof rawBranchId[0] === 'string'
+        ? rawBranchId[0]
+        : undefined
 
     const { data: org, error } = await supabase
       .from('organisations')
@@ -27,20 +76,14 @@ router.get('/config/:orgId', async (req: Request, res: Response, next: NextFunct
       throw new AppError('Organisation not found', 404)
     }
 
-    // Get default branch and agent name
-    const { data: branch } = await supabase
-      .from('branches')
-      .select('id')
-      .eq('organisation_id', orgId)
-      .limit(1)
-      .maybeSingle()
+    const branchId = await resolveBranchId(orgId, branchIdParam)
 
     let agentName = 'Assistant'
-    if (branch) {
+    if (branchId) {
       const { data: agent } = await supabase
         .from('agents')
         .select('name')
-        .eq('branch_id', branch.id)
+        .eq('branch_id', branchId)
         .limit(1)
         .maybeSingle()
       if (agent) agentName = (agent as Record<string, unknown>).name as string
@@ -73,10 +116,11 @@ router.get('/config/:orgId', async (req: Request, res: Response, next: NextFunct
 // Public — no JWT required, identified by org_id
 router.post('/chat', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { org_id, message, session_id } = req.body as {
+    const { org_id, message, session_id, branch_id } = req.body as {
       org_id?: string
       message?: string
       session_id?: string
+      branch_id?: string
     }
 
     if (!org_id) throw new AppError('org_id is required', 400)
@@ -85,15 +129,12 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction): Pr
     // Rate limiting — basic check: max 30 messages per session
     // Full rate limiting is handled by express-rate-limit on the app level
 
-    // Resolve default branch for this org
-    const { data: branch, error: branchError } = await supabase
-      .from('branches')
-      .select('id')
-      .eq('organisation_id', org_id)
-      .limit(1)
-      .maybeSingle()
+    // See resolveBranchId's comment above — branch_id (verified to belong to
+    // org_id) lets a caller that knows its exact target branch skip the
+    // ambiguous "first branch" default.
+    const branchId = await resolveBranchId(org_id, branch_id)
 
-    if (branchError || !branch) {
+    if (!branchId) {
       throw new AppError('Organisation not configured', 404)
     }
 
@@ -109,7 +150,7 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction): Pr
     const authContext = await resolveOptionalAuth(req.headers.authorization)
 
     const result = await claudeService.chat({
-      branchId: branch.id,
+      branchId,
       message: message.trim(),
       sessionId,
       channel: 'chat',

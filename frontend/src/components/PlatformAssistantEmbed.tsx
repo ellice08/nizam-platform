@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useThemeStore } from "@/store"
-import { PLATFORM_ORG_ID } from "@/lib/platformAssistant"
+import { PLATFORM_ORG_ID, PLATFORM_ASSISTANT_BRANCH_ID } from "@/lib/platformAssistant"
 
 // Floating Nizam Assistant widget for the TENANT dashboard shell (CLAUDE.md
 // §8 Tier 3 [8a] step 5) — dogfoods Nizam's own product to support Nizam's
@@ -42,6 +42,12 @@ export function PlatformAssistantEmbed() {
       const script = document.createElement("script")
       script.id = SCRIPT_ID
       script.setAttribute("data-org-id", PLATFORM_ORG_ID)
+      // Ellice Systems has TWO branches (Headquarters + Platform Support) —
+      // without an explicit branch the backend's org-default resolution
+      // (first branch by created_at) lands on Headquarters, a different
+      // agent with no KB. Pin the Platform Support branch explicitly; the
+      // backend verifies it belongs to the org.
+      script.setAttribute("data-branch-id", PLATFORM_ASSISTANT_BRANCH_ID)
       script.setAttribute("data-api", apiBase)
       script.setAttribute("data-disable-capture", "true")
       script.setAttribute("data-theme-mode", resolvedTheme)

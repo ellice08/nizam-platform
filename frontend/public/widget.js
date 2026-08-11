@@ -49,6 +49,19 @@
     } catch (e) { return false; }
   })();
 
+  // Optional explicit branch target. Without it the backend resolves the
+  // org's default branch (first by created_at) — correct for every
+  // single-branch tenant, ambiguous for a multi-branch org. The dashboard's
+  // Platform Assistant embed sets this to pin the Platform Support branch;
+  // public-site embeds omit it and behave exactly as before. The backend
+  // verifies the branch actually belongs to the org before using it.
+  var BRANCH_ID = (function () {
+    try {
+      var tag = document.currentScript || document.querySelector('script[data-org-id]');
+      return (tag && tag.getAttribute('data-branch-id')) || null;
+    } catch (e) { return null; }
+  })();
+
   var EMBED_OVERRIDES = (function () {
     try {
       var tag = document.currentScript || document.querySelector('script[data-org-id]');
@@ -907,14 +920,17 @@
       const authToken = getAuthToken();
       if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
 
+      const payload = {
+        org_id: ORG_ID,
+        message: text,
+        session_id: sessionId,
+      };
+      if (BRANCH_ID) payload.branch_id = BRANCH_ID;
+
       const res = await fetch(`${API_BASE}/api/widget/chat`, {
         method: 'POST',
         headers: headers,
-        body: JSON.stringify({
-          org_id: ORG_ID,
-          message: text,
-          session_id: sessionId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -1195,7 +1211,9 @@
       // since it only runs after this try/catch settles.
       const controller = new AbortController();
       const timeoutId = setTimeout(function () { controller.abort(); }, 4000);
-      const res = await fetch(`${API_BASE}/api/widget/config/${ORG_ID}`, { signal: controller.signal });
+      const configUrl = API_BASE + '/api/widget/config/' + ORG_ID +
+        (BRANCH_ID ? '?branch_id=' + encodeURIComponent(BRANCH_ID) : '');
+      const res = await fetch(configUrl, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
