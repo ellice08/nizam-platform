@@ -255,6 +255,26 @@ then appended: tone block, KNOWLEDGE BASE context, contact/afterHours/confirmati
 - **Why Option A (not function-calling B2):** B2 let Retell's LLM REWORD/garble our answers and
   invent facts — unacceptable for "never mislead clients". Option A = our backend IS the verbatim
   voice. Streaming (chatStream) fixed the latency (time-to-first-token, not completion).
+- **In-app test call (Channels voice card).** `POST /api/voice/test-call` (authenticated,
+  org-scoped) mints a Retell web call server-side and returns ONLY `{accessToken, callId}` —
+  `RETELL_API_KEY` never reaches the browser. Frontend `VoiceTestCall.tsx` uses
+  `retell-client-js-sdk` over WebRTC: no phone number, no telephony leg, and it lands on this same
+  Custom LLM WebSocket brain, so it exercises the real voice path. Two ordering details that
+  matter: the token is fetched ON CLICK (it expires ~30s after creation), and mic permission is
+  requested BEFORE minting it — verified that a denied mic makes zero calls to the endpoint, so a
+  permission prompt never burns a token.
+- **Test calls are labelled 'Voice test' in the inbox** (was "Unknown caller", which is just the
+  Conversations page's fallback for a null `lead_name` — it was never stored). Mirrors the chat
+  side, where `POST /api/chat` labels dashboard-originated conversations 'Dashboard test'.
+  Detection is `isInAppTestCall()` in voice.service.ts, shared by both paths so they can't drift:
+  the websocket reads it at `call_details` and passes `leadName` into `chatStream` (labelled at
+  CREATION, like the chat route), and the webhook is a backstop that fills only a NULL so a real
+  captured lead name is never overwritten. Verified against the live deployed webhook with signed
+  payloads: `web_call` + `metadata.source=in_app_test` → 'Voice test'; `phone_call` → null.
+  **Metadata survives the Retell round-trip** (confirmed by fetching a stored call back), so
+  `call_type === 'web_call'` is only a fallback — and a caveat worth remembering: every web_call
+  today IS an in-app test, so if customer-facing web calls are ever added that fallback must be
+  narrowed to the metadata check alone.
 - **Agent setup is MANUAL per tenant for now:** create a Custom LLM agent in Retell dashboard,
   point its Custom LLM URL at our wss endpoint, set its webhook URL, paste the agent_id into
   Nizam (Channels page). Programmatic creation = a scale-later item.
