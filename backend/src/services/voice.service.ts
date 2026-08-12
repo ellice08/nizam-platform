@@ -141,4 +141,35 @@ function stripWebhookSecret(row: Record<string, unknown>): Record<string, unknow
   return safe;
 }
 
+// Label for calls started from the dashboard's in-app "Test call" rather than
+// by a real customer. Mirrors the chat side, where POST /api/chat labels its
+// dashboard-originated conversations 'Dashboard test' (chat.routes.ts) — same
+// sentence-case convention, named for the channel it came from.
+export const VOICE_TEST_LEAD_NAME = 'Voice test';
+
+// Classifies a Retell call object (from the call-event webhook OR the
+// websocket's call_details — both carry the same shape) as an in-app test.
+//
+// Primary signal is the metadata we attach when minting the web call in
+// POST /api/voice/test-call; verified to survive the round trip — Retell
+// returns metadata {"source":"in_app_test", ...} on the stored call object.
+//
+// call_type is a deliberate fallback for the case where metadata is missing
+// entirely (an older call, or a payload variant that omits it). Today every
+// web_call in this product is an in-app test, because the only browser-side
+// calling path we expose is that button; real customer calls arrive as
+// phone_call. CAVEAT: if customer-facing web calls are ever added (e.g. a
+// "call us" button on a tenant's own site), this fallback would mislabel
+// them and must be narrowed to the metadata check alone.
+export function isInAppTestCall(call: Record<string, unknown> | null | undefined): boolean {
+  if (!call) return false;
+
+  const metadata = call['metadata'];
+  if (metadata && typeof metadata === 'object') {
+    return (metadata as Record<string, unknown>)['source'] === 'in_app_test';
+  }
+
+  return call['call_type'] === 'web_call';
+}
+
 export const voiceService = new VoiceService();

@@ -3,7 +3,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env.js';
 import { supabase } from '../lib/supabase.js';
-import { voiceService } from '../services/voice.service.js';
+import { voiceService, isInAppTestCall, VOICE_TEST_LEAD_NAME } from '../services/voice.service.js';
 import { claudeService } from '../services/claude.service.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { ApiResponse } from '../utils/response.js';
@@ -229,6 +229,7 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
             messages:       [],
             resolved:       false,
             requires_human: false,
+            lead_name:      isInAppTestCall(call) ? VOICE_TEST_LEAD_NAME : null,
           })
           .select()
           .single();
@@ -246,6 +247,14 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
 
       const recordingUrl = call['recording_url'] as string | undefined;
       if (recordingUrl) updateObj['recording_url'] = recordingUrl;
+
+      // Backstop for the label the websocket sets at conversation creation:
+      // covers a conversation created before this shipped, or one created by a
+      // path that never saw call_details. Only fills a NULL — never overwrites
+      // a real captured lead name, which is the whole point of the field.
+      if (!conv['lead_name'] && isInAppTestCall(call)) {
+        updateObj['lead_name'] = VOICE_TEST_LEAD_NAME;
+      }
 
       // Prefer transcript_object (structured); ignore raw transcript string
       const transcriptObject = call['transcript_object'] as Array<Record<string, unknown>> | undefined;

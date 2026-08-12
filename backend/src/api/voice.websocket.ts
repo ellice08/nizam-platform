@@ -2,7 +2,7 @@ import type http from 'http';
 import type { IncomingMessage } from 'http';
 import type { Socket } from 'net';
 import { WebSocketServer, WebSocket } from 'ws';
-import { voiceService } from '../services/voice.service.js';
+import { voiceService, isInAppTestCall, VOICE_TEST_LEAD_NAME } from '../services/voice.service.js';
 import { claudeService } from '../services/claude.service.js';
 import logger from '../utils/logger.js';
 
@@ -20,6 +20,11 @@ interface ConnectionState {
   latestResponseId: number;
   loggedCallDetailsShape: boolean;
   loggedTranscriptShape: boolean;
+  // Set from call_details when the call came from the dashboard's in-app
+  // "Test call". Passed to chatStream so the conversation is labelled AT
+  // CREATION, the same way POST /api/chat labels its dashboard tests — rather
+  // than being patched afterwards.
+  leadName: string | null;
 }
 
 const URL_PATTERN = /^\/llm-websocket\/([^/]+)$/;
@@ -56,6 +61,7 @@ export function attachVoiceWebSocket(server: http.Server): void {
       latestResponseId: 0,
       loggedCallDetailsShape: false,
       loggedTranscriptShape: false,
+      leadName: null,
     };
 
     logger.info(`voice ws connected (call ${callId})`);
@@ -111,6 +117,15 @@ function handleMessage(ws: WebSocket, state: ConnectionState, msg: Record<string
           callKeys: call ? Object.keys(call) : null,
         });
         state.loggedCallDetailsShape = true;
+      }
+
+      // Label in-app test calls so they are distinguishable in the inbox
+      // instead of showing as "Unknown caller" (the frontend's fallback for a
+      // null lead_name). Read here, at call_details, so it is available before
+      // the first chatStream turn creates the conversation.
+      if (isInAppTestCall(call)) {
+        state.leadName = VOICE_TEST_LEAD_NAME;
+        logger.info(`voice ws: in-app test call (${state.callId}) — labelling as "${VOICE_TEST_LEAD_NAME}"`);
       }
 
       const agentId = call?.['agent_id'] as string | undefined;
@@ -202,6 +217,7 @@ function handleMessage(ws: WebSocket, state: ConnectionState, msg: Record<string
         message: lastUserUtterance ?? '',
         sessionId: state.callId,
         channel: 'voice',
+        ...(state.leadName ? { leadName: state.leadName } : {}),
         onToken: (chunk: string) => {
           if (stopForwarding) return;
           if (responseId !== state.latestResponseId || ws.readyState !== WebSocket.OPEN) {
