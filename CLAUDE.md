@@ -406,6 +406,13 @@ write a string, never duplicate" discipline applies.
     mixed corpus visible to `--audit` instead of silent — chunks predating the stamp read as
     "unstamped" and can only be made certain by re-indexing. Note it re-embeds, it does NOT
     re-chunk: picking up `chunkText` changes requires re-ingesting from source.
+- **The dev frontend MUST run on `http://localhost:8080`.** The deployed backend's CORS allowlist
+  pins that exact origin — verified: `:8090` and `:5173` both get `403` on preflight, so every API
+  call from a dev dashboard on any other port fails. `.claude/launch.json` therefore sets
+  `autoPort: false` (with the reason recorded in a `comment` field) and `vite.config.ts` hardcodes
+  8080 to match. If you genuinely need another port, add it to `CORS_EXTRA_ORIGINS` on Railway
+  FIRST. Symptom if you get this wrong: the dashboard loads but every request 403s, which looks
+  like an auth bug rather than a port problem.
 - notifications carry entity_type/entity_id = conversation for supersede + deep-linking.
 - `notes` on conversations is `ConversationNote[]` = `{text, added_by, added_at}` — NEVER write a
   string there (crashed the panel once: "notes.map is not a function"). Voice summary is stored as
