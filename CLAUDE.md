@@ -136,8 +136,30 @@ then appended: tone block, KNOWLEDGE BASE context, contact/afterHours/confirmati
   contextualized query (last ~6 turns + message), merges/dedupes (bare-first). This fixes:
   (a) subject-less follow-ups ("how many sqm is it") retrieving blind, AND (b) fresh-subject
   or topic-switch queries being diluted by conversation context. Don't revert to single-query.
-- **Threshold history:** was 0.7 (too strict → empty context → confident false negatives),
-  dropped to 0.45 (too loose → conflation/hallucination), settled at 0.6 with structured data.
+- **THE MATCH THRESHOLD IS CALIBRATED TO ONE EMBEDDING MODEL AND DOES NOT TRANSFER.** It lives in
+  ONE place — `MATCH_THRESHOLD` in rag.service.ts (previously hardcoded in three: the
+  `getContextChunks` default plus both `prepareTurn` call sites).
+  - *ada-002 history:* 0.7 (too strict → empty context → confident false negatives) → 0.45 (too
+    loose → conflation/hallucination) → settled 0.6 with structured data.
+  - *text-embedding-3-small (current): **0.30**.* The two scales are NOT comparable. Carrying 0.6
+    across the model switch would have dropped **11 of 16** legitimate queries — measured, not
+    estimated: "Who is the CEO?" scored 0.493, "Do you have a WhatsApp number?" 0.351, "What is the
+    price of Creek?" 0.516. Genuinely off-domain questions (capital of France, baking bread,
+    renting a helicopter, mortgage rates) topped out at 0.264, so 0.30 keeps 16/16 legitimate and
+    admits none of them. **This was caught only because the post-switch spot-check tested real
+    questions rather than assuming the number carried over** — the symptom would have been the
+    agent escalating everything, i.e. "the agent forgot things" again (§7).
+  - *Erring LOW is now the safer direction, which was not true before.* 0.45 was once "too loose"
+    because unstructured chunks let a weak match supply raw material for blending facts across
+    properties. Chunks are now one self-contained unit per block, and the prompt refuses to state
+    anything not explicit in context — so a weak extra chunk is largely inert, whereas a missed
+    chunk makes the agent escalate something it could have answered.
+  - **If `EMBEDDING_MODEL` changes again, RE-RUN THE CALIBRATION.** Score a set of known-good and
+    known-off-domain questions and pick a floor between them; do not assume the number transfers.
+    Careful with the "off-domain" set: "Do you have properties in Dubai?" scored 0.355, above some
+    legitimate queries — but that is CORRECT retrieval (it pulls the "projects that are NOT ours"
+    chunk so the agent can answer accurately), not a false positive. Classify by whether context
+    *helps*, not by whether the answer is yes.
 - **THE BIG LESSON:** the agent can only be as good as the KB. Website-crawl + FAQ chunks gave
   estate-level marketing copy with NO per-unit prices ("PRICE CHUNKS: 0") — every price the old
   agent quoted was HALLUCINATED. Fix = structured per-unit documents (one self-contained chunk
@@ -193,11 +215,19 @@ then appended: tone block, KNOWLEDGE BASE context, contact/afterHours/confirmati
     boundaries would **silently delete** such a line. A heading labels the block that follows, so
     attaching it is not the cross-unit merging this policy bans. A trailing fragment with nothing
     after it attaches to the previous chunk instead.
-  - **This does NOT retroactively fix an existing corpus.** The Maryam PDF still yields 5 chunks
-    holding 2–3 listings each — unchanged by this policy — because that PDF has no blank lines
-    between listings; the boundaries simply aren't in the source. The policy creates the
-    *guarantee*; the restructured re-upload (§8 [9]) is what realises it. Verified on synthetic
-    authored input: 6 units → 6 chunks, exactly one listing each.
+  - **This does NOT retroactively fix an existing corpus** — it needs a source authored to it.
+    The old Maryam PDF still yielded 5 chunks holding 2–3 listings each, because that PDF had no
+    blank lines between listings; the boundaries simply weren't there.
+  - **PROVEN END TO END on the real re-upload (12 Aug 2026).** `sites-and-lifestyle-kb.txt`
+    (43,353 chars, 73 blank-line-separated blocks) produced **exactly 73 document chunks — 15
+    listings, ZERO chunks holding more than one listing** (was 5), min 253 / median 587 / max 1069
+    chars, none over ceiling. The `nizam-product-kb.md` re-upload behaved the same way: 40 blocks →
+    33 chunks, the 7 `## HEADING` lines being sub-50-char fragments correctly carried onto the
+    block that follows.
+  - *Live behaviour this bought:* "What is the price of Creek?" now DISAMBIGUATES correctly ("At
+    Hutu Orchards ₦12,967,000… at Monrovia Orchards ₦19,950,000. Which one are you interested
+    in?"), Marina answers with the Hutu price and invents no Lagos location, and Harbour Villa
+    correctly refuses to quote an unpublished price and offers a follow-up instead.
 
 ---
 
@@ -354,6 +384,20 @@ write a string, never duplicate" discipline applies.
   - `ragService` reads `env.EMBEDDING_MODEL` at call time, so what matters is the model the
     **deployed** backend uses. A local `.env` change proves nothing — verify against the deployed
     environment before re-indexing.
+  - **A model change also invalidates the retrieval THRESHOLD** — different models produce
+    different similarity distributions, so the floor must be recalibrated in the same maintenance
+    window. See §4's `MATCH_THRESHOLD` entry: carrying 0.6 across the ada-002 → 3-small switch
+    would have dropped 11 of 16 legitimate queries while erroring on nothing. Same silent
+    signature as the corpus hazard; it is the second half of the same trap.
+  - **STATUS: the switch to `text-embedding-3-small` is DONE** (12 Aug 2026). Both branches were
+    rebuilt from restructured sources in one window and are uniform and stamped: Maryam Orgaization
+    84 chunks (73 document + 11 enrichment), Platform Support 44 (33 + 11). Verified by probing the
+    DEPLOYED backend, not a local `.env`: a sentinel document was ingested through the live
+    `/api/widget/ingest`, its stored vector compared against locally-computed candidates —
+    cos 1.000000 against 3-small, −0.016 against ada-002 (near-orthogonal, which is exactly why a
+    mixed corpus ranks plausibly instead of erroring). `--audit` now reports both branches uniform.
+  - Every chunk is stamped `metadata.embedding_model` **at ingest** (rag.service.ts), not only on
+    re-index, so newly uploaded client documents are self-describing and `--audit` can verify them.
   - Tooling: `backend/scripts/reindexBranch.ts`. `--audit` reports the model distribution per
     branch and flags any mixed branch; `--branch <id>` re-embeds one branch from STORED CONTENT
     (no source file needed, so it works for branches whose upload is long gone); `--all-branches`

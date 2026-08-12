@@ -14,6 +14,38 @@ const CHARS_PER_TOKEN = 4;
 // onto the next block rather than indexed alone — see chunkText.
 const MIN_CHUNK_CHARS = 50;
 
+/**
+ * Minimum cosine similarity for a chunk to be considered a match.
+ *
+ * THIS NUMBER IS CALIBRATED TO A SPECIFIC EMBEDDING MODEL AND IS MEANINGLESS
+ * WITHOUT ONE. Different models produce different similarity distributions, so
+ * a threshold carried across a model change silently breaks retrieval in the
+ * same "looks fine, returns nothing" way a mixed corpus does (§7).
+ *
+ * History — note the values are NOT comparable across the model change:
+ *   ada-002:              0.7 too strict -> 0.45 too loose -> settled 0.6
+ *   text-embedding-3-small: 0.6 would drop 11 of 16 legitimate queries
+ *                           -> recalibrated to 0.30
+ *
+ * Measured on the real Sites & Lifestyle corpus after the 3-small switch:
+ * legitimate questions scored 0.304–0.779 (e.g. "Who is the CEO?" 0.493,
+ * "Do you have a WhatsApp number?" 0.351), while genuinely off-domain
+ * questions (capital of France, baking bread, renting a helicopter, mortgage
+ * rates) topped out at 0.264. 0.30 keeps 16/16 legitimate queries and admits
+ * none of those.
+ *
+ * Erring low is the safer direction NOW, which was not true before: the old
+ * 0.45 was "too loose" because unstructured chunks let a weak match supply
+ * raw material to blend facts across properties. Chunks are now one
+ * self-contained unit per block (§4), and the prompt already refuses to state
+ * anything not explicit in context — so a weak extra chunk is largely inert,
+ * whereas a missed chunk makes the agent escalate a question it could answer.
+ *
+ * If EMBEDDING_MODEL changes again, RE-RUN THIS CALIBRATION. Do not assume
+ * the number transfers.
+ */
+export const MATCH_THRESHOLD = 0.30;
+
 // Repairs the text-layer artefacts that document extraction (mainly PDF)
 // leaves behind, BEFORE chunking and embedding. Clients will keep uploading
 // PDFs, so this protects every future tenant rather than one document.
@@ -224,6 +256,11 @@ class RagService {
               chunk_index: i,
               total_chunks: chunks.length,
               source_url: sourceUrl ?? null,
+              // Self-describing: records which model produced this vector, so
+              // scripts/reindexBranch.ts --audit can SEE a mixed corpus rather
+              // than it failing silently (§7). Stamped at ingest, not only on
+              // re-index, so every chunk written from now on is verifiable.
+              embedding_model: env.EMBEDDING_MODEL,
             },
             source_type: sourceType,
             source_url: sourceUrl ?? null,
@@ -260,6 +297,7 @@ class RagService {
                 enriched: true,
                 enrichment_index: j,
                 source_url: sourceUrl ?? null,
+                embedding_model: env.EMBEDDING_MODEL,
               },
               source_type: sourceType,
               source_url: sourceUrl ?? null,
@@ -467,13 +505,9 @@ class RagService {
     matchCount?: number;
     matchThreshold?: number;
   }): Promise<string[]> {
-    // Default tightened 0.45 -> 0.6: with per-unit structured chunks now in
-    // the knowledge base, correct matches score high, so the looser floor was
-    // only admitting conflation-fodder (thin, tangential chunks that gave the
-    // model raw material to blend facts across properties). The contextualized
-    // retrieval query (see prepareTurn) also means legitimate follow-ups score
-    // higher on their own, reducing the need for a lenient floor.
-    const { query, branchId, matchCount = 8, matchThreshold = 0.6 } = params;
+    // Threshold lives in ONE place — see MATCH_THRESHOLD's comment for the
+    // calibration and why the number is model-specific.
+    const { query, branchId, matchCount = 8, matchThreshold = MATCH_THRESHOLD } = params;
 
     try {
       const embedding = await this.embedText(query);

@@ -951,13 +951,13 @@ class ClaudeService {
       : rawRetrievalQuery;
 
     const searches = [
-      ragService.getContextChunks({ query: message, branchId, matchCount: 8, matchThreshold: 0.6 }),
+      ragService.getContextChunks({ query: message, branchId, matchCount: 8 }),
     ];
     // Only run the contextualized search separately if it actually differs
     // from the bare message (i.e. there was prior history to add).
     if (retrievalQuery !== message) {
       searches.push(
-        ragService.getContextChunks({ query: retrievalQuery, branchId, matchCount: 8, matchThreshold: 0.6 })
+        ragService.getContextChunks({ query: retrievalQuery, branchId, matchCount: 8 })
       );
     }
     const [bareChunks, contextualChunks = []] = await Promise.all(searches);
