@@ -25,3 +25,6 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 .claude/
+
+# Local IA/planning scratch — not part of the repo
+INFORMATION-ARCHITECTURE.md
