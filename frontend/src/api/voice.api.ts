@@ -30,4 +30,13 @@ export const voiceApi = {
   disconnect: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/voice/accounts/${id}`)
   },
+
+  // Mints a Retell web-call access token for an in-app test call. The token
+  // is short-lived (~30s to start the call), so call this ON CLICK — never
+  // on page load, or the token will have expired by the time the user acts.
+  // The Retell API key stays server-side; only this token reaches the browser.
+  createTestCall: async (retellAgentId: string): Promise<{ accessToken: string; callId: string | null }> => {
+    const { data } = await apiClient.post('/api/voice/test-call', { retellAgentId })
+    return data?.data ?? data
+  },
 }

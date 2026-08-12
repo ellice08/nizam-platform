@@ -16,6 +16,7 @@ import { organisationApi } from '@/api'
 import type { WhatsAppAccount, VoiceAccount } from '@/api'
 import type { Branch } from '@/types/api.types'
 import { buildEmbedCode } from '@/lib/widgetEmbed'
+import { VoiceTestCall } from '@/components/dashboard/VoiceTestCall'
 
 // ── Shared status bits ──────────────────────────────────────────────────────
 
@@ -706,44 +707,52 @@ const VoiceBody = ({
           {(accounts ?? []).map(acc => (
             <div
               key={acc.id}
-              className="flex items-start justify-between gap-4 rounded-lg border border-border bg-background px-4 py-3"
+              className="rounded-lg border border-border bg-background px-4 py-3"
             >
-              <div className="flex items-start gap-3 min-w-0">
-                <StatusIcon status={acc.status} />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {acc.agent_name || acc.retell_agent_id}
-                  </p>
-                  <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">
-                    {acc.branch_id
-                      ? `Branch: ${branches?.find(b => b.id === acc.branch_id)?.name ?? acc.branch_id}`
-                      : 'Whole organisation'}
-                  </p>
-                  {acc.last_error && (
-                    <p className="text-xs text-rose-400 mt-1 truncate">{acc.last_error}</p>
-                  )}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <StatusIcon status={acc.status} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {acc.agent_name || acc.retell_agent_id}
+                    </p>
+                    <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">
+                      {acc.branch_id
+                        ? `Branch: ${branches?.find(b => b.id === acc.branch_id)?.name ?? acc.branch_id}`
+                        : 'Whole organisation'}
+                    </p>
+                    {acc.last_error && (
+                      <p className="text-xs text-rose-400 mt-1 truncate">{acc.last_error}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <StatusBadge status={acc.status} />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDisconnect(acc)}
+                    disabled={disconnecting}
+                    className={
+                      confirmDelete === acc.id
+                        ? 'border-rose-400 text-rose-400 hover:bg-rose-400/10'
+                        : 'border-border text-[hsl(var(--text-secondary))]'
+                    }
+                    title="Disconnect this agent"
+                  >
+                    {confirmDelete === acc.id ? (
+                      'Confirm?'
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    )}
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <StatusBadge status={acc.status} />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleDisconnect(acc)}
-                  disabled={disconnecting}
-                  className={
-                    confirmDelete === acc.id
-                      ? 'border-rose-400 text-rose-400 hover:bg-rose-400/10'
-                      : 'border-border text-[hsl(var(--text-secondary))]'
-                  }
-                  title="Disconnect this agent"
-                >
-                  {confirmDelete === acc.id ? (
-                    'Confirm?'
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  )}
-                </Button>
+              <div className="mt-3 pt-3 border-t border-border">
+                <VoiceTestCall
+                  retellAgentId={acc.retell_agent_id}
+                  label={acc.agent_name || acc.retell_agent_id}
+                />
               </div>
             </div>
           ))}

@@ -347,6 +347,73 @@ router.post('/accounts', authenticate, validate(connectSchema), async (req: Requ
   } catch (err) { next(err); }
 });
 
+// POST /api/voice/test-call
+// Mints a short-lived Retell web-call token so the tenant can talk to their
+// own voice agent from the dashboard — WebRTC in the browser, no phone
+// number and no telephony leg. The call still lands on the SAME Custom LLM
+// WebSocket brain (§5.2), so there is nothing voice-specific to change
+// server-side; Retell dials our wss endpoint exactly as it does for a phone
+// call, and the call-event webhook stores transcript/recording as usual.
+//
+// RETELL_API_KEY MUST NEVER REACH THE BROWSER. The key is used here only,
+// server-side, and the response carries just the access token and call id.
+// The token is short-lived by design (~30s to start the call), which is why
+// the client fetches it on click rather than on page load.
+router.post('/test-call', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { retellAgentId } = req.body as { retellAgentId?: string };
+    if (!retellAgentId) throw new AppError('retellAgentId is required', 400);
+
+    if (!env.RETELL_API_KEY) {
+      throw new AppError('Voice is not configured on this server (missing RETELL_API_KEY)', 503);
+    }
+
+    // Ownership check — same shape as DELETE /accounts/:id: list the caller's
+    // org accounts and require the requested agent to be among them, so a
+    // tenant can never mint a call token for another tenant's voice agent.
+    const accounts = await voiceService.listByOrg(req.tenant.organisation_id);
+    const account = accounts.find(a => a.retell_agent_id === retellAgentId);
+    if (!account) throw new AppError('Voice account not found', 404);
+
+    const retellRes = await fetch('https://api.retellai.com/v2/create-web-call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RETELL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        agent_id: retellAgentId,
+        // Tags these calls so in-app tests are separable from real customer
+        // calls later (analytics, billing questions, debugging).
+        metadata: { source: 'in_app_test', organisation_id: req.tenant.organisation_id },
+      }),
+    });
+
+    if (!retellRes.ok) {
+      const detail = await retellRes.text();
+      logger.error(`voice test-call: Retell create-web-call failed (${retellRes.status}): ${detail}`);
+      throw new AppError(
+        retellRes.status === 404
+          ? 'Retell could not find this agent. Check the Agent ID on this account.'
+          : 'Could not start a test call. Please try again.',
+        502,
+      );
+    }
+
+    const call = await retellRes.json() as { access_token?: string; call_id?: string };
+    if (!call.access_token) {
+      logger.error('voice test-call: Retell response had no access_token');
+      throw new AppError('Could not start a test call. Please try again.', 502);
+    }
+
+    logger.info(`voice test-call: minted web-call token for agent ${retellAgentId} (call ${call.call_id ?? 'unknown'})`);
+
+    // Deliberately narrow: token + call id only, never the API key or the
+    // full Retell payload.
+    res.json(ApiResponse.success({ accessToken: call.access_token, callId: call.call_id ?? null }));
+  } catch (err) { next(err); }
+});
+
 // DELETE /api/voice/accounts/:id
 router.delete('/accounts/:id', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
