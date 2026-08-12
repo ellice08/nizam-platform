@@ -10,6 +10,9 @@ const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 const CHUNK_SIZE = 500;
 const CHUNK_OVERLAP = 50;
 const CHARS_PER_TOKEN = 4;
+// Below this a block is treated as a fragment (a bare heading) and carried
+// onto the next block rather than indexed alone — see chunkText.
+const MIN_CHUNK_CHARS = 50;
 
 // Repairs the text-layer artefacts that document extraction (mainly PDF)
 // leaves behind, BEFORE chunking and embedding. Clients will keep uploading
@@ -101,43 +104,71 @@ class RagService {
     return pieces.flatMap(p => (p.length <= maxChars ? [p] : this.hardSlice(p, maxChars)));
   }
 
+  // A BLANK LINE IS A HARD CHUNK BOUNDARY. Consecutive blocks are never
+  // merged, even when both would fit the size budget — so a source authored
+  // one-unit-per-block yields exactly one chunk per unit.
+  //
+  // This deliberately trades token packing for retrieval precision. Chunks
+  // come out smaller and more numerous (more embedding calls, more rows,
+  // slightly higher ingest cost), and a retrieved chunk carries less
+  // surrounding context. We take that trade because cross-unit conflation is
+  // this system's documented failure mode: blending facts across properties
+  // is what produced the invented "Marina in Lagos" (§4), and a confidently
+  // wrong price is far more damaging than a slightly narrower answer.
+  //
+  // Note overlap is applied only BETWEEN PIECES OF ONE OVERSIZED BLOCK, never
+  // across a blank line. Carrying a tail across a real boundary would
+  // reintroduce exactly the cross-unit bleed this policy exists to prevent.
   private chunkText(text: string): string[] {
     const chunkChars = CHUNK_SIZE * CHARS_PER_TOKEN;
     const overlapChars = CHUNK_OVERLAP * CHARS_PER_TOKEN;
     const chunks: string[] = [];
 
-    // Hard-split any paragraph that alone blows the budget BEFORE
-    // accumulating. Without this a PDF table — which extracts as one giant
-    // paragraph with no blank lines — became a single oversized chunk: the
-    // Maryam KB had 22/36 chunks over target (max 3805 chars) and one chunk
-    // holding SIX distinct units, which is exactly the cross-unit conflation
-    // that causes the agent to blend facts between properties (see §4).
-    const paragraphs = text
-      .split(/\n\n+/)
-      .flatMap(para => this.splitOversized(para, chunkChars));
+    const blocks = text.split(/\n\n+/).map(b => b.trim()).filter(Boolean);
 
-    let current = '';
+    // A block below the indexable threshold (a bare heading like
+    // "3. LEADERSHIP") is carried onto the NEXT block rather than dropped.
+    // The old code filtered sub-50-char chunks out entirely, which was
+    // harmless when paragraphs merged but would now SILENTLY DELETE such a
+    // line. A heading is a label for the block that follows, not a unit of
+    // its own, so attaching it is not the cross-unit merging banned above.
+    let pending = '';
 
-    for (const para of paragraphs) {
-      if ((current + para).length > chunkChars && current.length > 0) {
-        chunks.push(current.trim());
-        current = this.tailOverlap(current, overlapChars) + ' ' + para;
-      } else {
-        current = current ? current + '\n\n' + para : para;
+    for (const block of blocks) {
+      const body = pending ? `${pending}\n\n${block}` : block;
+      pending = '';
+
+      if (body.length < MIN_CHUNK_CHARS) {
+        pending = body;
+        continue;
       }
+
+      // Oversized blocks (a PDF table extracts as one giant paragraph with no
+      // blank lines) are still hard-split inside the block — see
+      // splitOversized. Max chunk size stays chunkChars + overlapChars.
+      const pieces = this.splitOversized(body, chunkChars);
+      pieces.forEach((piece, i) => {
+        chunks.push(
+          i === 0 ? piece.trim() : `${this.tailOverlap(pieces[i - 1], overlapChars)} ${piece}`.trim()
+        );
+      });
     }
 
-    if (current.trim().length > 0) {
-      chunks.push(current.trim());
+    // Trailing fragment with nothing after it — attach to the last chunk so
+    // it is never lost.
+    if (pending) {
+      if (chunks.length > 0) chunks[chunks.length - 1] += `\n\n${pending}`;
+      else chunks.push(pending);
     }
 
     if (chunks.length === 0 && text.length > 0) {
       for (let i = 0; i < text.length; i += chunkChars - overlapChars) {
-        chunks.push(text.slice(i, i + chunkChars).trim());
+        const slice = text.slice(i, i + chunkChars).trim();
+        if (slice) chunks.push(slice);
       }
     }
 
-    return chunks.filter(c => c.length > 50);
+    return chunks;
   }
 
   private async embedText(text: string): Promise<number[]> {

@@ -173,11 +173,31 @@ then appended: tone block, KNOWLEDGE BASE context, contact/afterHours/confirmati
   character-bounded (still word-granular, so overlap never starts mid-word), which makes the chunk
   ceiling provable: `chunkChars + overlapChars` = 2200. Verified on the real corpus: max 2180,
   zero chunks over ceiling, and no listing has its ID separated from its Price.
-  **Known remaining limit:** the accumulator still merges consecutive paragraphs up to the budget,
-  so ~700-char unit entries pack 2–3 per chunk (5 such chunks in the Maryam KB). Blank lines
-  between units do NOT currently force a chunk boundary. If the structured re-upload (§8 [9])
-  needs strictly one unit per chunk, that merge policy is the thing to change — it is a deliberate
-  open decision, not an oversight.
+- **A BLANK LINE IS A HARD CHUNK BOUNDARY — the authoring guarantee.** Consecutive blocks are
+  NEVER merged, even when both would fit the budget. **One blank-line-separated block = one
+  chunk**, so a source authored one-unit-per-block yields exactly one chunk per unit. This is the
+  contract the structured-upload guidance in §8 [9] depends on; write KB documents to it.
+  - *The tradeoff, taken deliberately:* chunks come out smaller and more numerous (the Maryam
+    corpus goes 44 → 50 chunks, median 1457, max 1985), so ingest costs more embedding calls and
+    each retrieved chunk carries less surrounding context. We accept that because cross-unit
+    conflation is this system's documented failure mode — blending facts across properties is what
+    produced the invented "Marina in Lagos" — and a confidently wrong price is far worse than a
+    slightly narrower answer. **Retrieval precision beats token packing.**
+  - *Overlap is applied only BETWEEN PIECES OF ONE OVERSIZED BLOCK, never across a blank line.*
+    Carrying a tail across a real boundary would reintroduce exactly the cross-unit bleed the
+    policy exists to prevent. Verified: two adjacent blocks produce two chunks with zero token
+    bleed between them.
+  - *Sub-threshold blocks are carried forward, not dropped.* A block under `MIN_CHUNK_CHARS` (50)
+    — e.g. a bare `3. LEADERSHIP` heading — is prepended to the NEXT block. The old code filtered
+    sub-50-char chunks out entirely, which was harmless while paragraphs merged but under hard
+    boundaries would **silently delete** such a line. A heading labels the block that follows, so
+    attaching it is not the cross-unit merging this policy bans. A trailing fragment with nothing
+    after it attaches to the previous chunk instead.
+  - **This does NOT retroactively fix an existing corpus.** The Maryam PDF still yields 5 chunks
+    holding 2–3 listings each — unchanged by this policy — because that PDF has no blank lines
+    between listings; the boundaries simply aren't in the source. The policy creates the
+    *guarantee*; the restructured re-upload (§8 [9]) is what realises it. Verified on synthetic
+    authored input: 6 units → 6 chunks, exactly one listing each.
 
 ---
 
@@ -778,6 +798,12 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - *Seed content found:* the approved Nizam product KB (`nizam-product-kb.md` — see Tier 3 [8a])
   already has a "What makes a GOOD knowledge document" entry — that's the seed content for the
   Knowledge-page guidance UI here, not something to write from scratch.
+- **The chunker now GUARANTEES the rule this guidance should teach:** a blank line is a hard chunk
+  boundary, so **one blank-line-separated block = one chunk** (§4). That turns "separate each unit
+  with a blank line" from a vague best practice into a mechanical contract with a predictable
+  result, which is exactly the kind of rule that belongs in upload guidelines and a template.
+  Keep blocks self-contained (repeat the project name in every unit block rather than relying on a
+  heading above it), because nothing from a neighbouring block is carried in.
 
 **[9a] Multi-branch & access control (plan of record)**
 - *What:* clients will be able to run MULTIPLE branches (per-location agents, knowledge bases,
