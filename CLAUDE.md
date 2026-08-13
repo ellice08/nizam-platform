@@ -876,6 +876,36 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
   Keep blocks self-contained (repeat the project name in every unit block rather than relying on a
   heading above it), because nothing from a neighbouring block is carried in.
 
+- **SHIPPED (13 Aug 2026) — the guidance, template and structure check are now in the product.**
+  - *Knowledge page guidance panel* (`components/dashboard/KnowledgeGuidance.tsx`) — the three
+    rules always visible ABOVE the uploader, examples/shared-names/file-format/keep-current behind
+    "See a full example". Empty state reframed to explain the agent can only answer from what is
+    uploaded.
+  - *Template* — `frontend/public/nizam-knowledge-template.txt`, served from the FRONTEND origin
+    for the same reason widget.js is (§9): it is a static asset of the frontend, not the API.
+  - *Post-upload structure check* — `assessStructure()` in rag.service.ts, surfaced per file by
+    `POST /api/ingest/upload` as `oneBlockRisk` and rendered as a dismissible AMBER (never
+    destructive) advisory. **Heuristic: flag when a document of ≥3000 chars averages ≥1500 chars
+    per DOCUMENT chunk** (75% of the 2000-char budget). Rationale: a blank line is a hard chunk
+    boundary, so well-authored blocks measure 253–1069 chars on the real corpus, whereas a
+    no-blank-line document can only be split by `splitOversized` and lands near the budget.
+    **Enrichment chunks MUST be excluded from the count** — measured live, a 20,511-char one-block
+    file produced 11 document + 11 enrichment chunks; including enrichment gives avg 932 (not
+    flagged), excluding it gives 1865 (flagged). That exclusion is the whole reason the check
+    works. Verified: real 73-block KB avg 594 → ok; same KB with blank lines stripped avg 1731 →
+    flagged; the template we ship does NOT trip our own warning.
+  - *Agent page* — "System prompt" → **"Custom instructions"**, with helper text stating it
+    REPLACES the default, a short-prompt advisory under 200 chars, and a **Load default
+    instructions** button backed by `GET /api/agents/:agentId/default-prompt`. That endpoint
+    returns the agent's NICHE TEMPLATE (substituted with the current agent/org name), not the
+    runtime one-line fallback, because the point is to give the client a working prompt to edit.
+    It deliberately omits the guardrail prompt that wraps every request — those always apply, and
+    shipping them would imply the client must maintain them.
+  - *Gotcha found while verifying:* the Maryam test agent's `niche` is `hospitality` even though
+    the tenant is a real-estate company, so "Load default instructions" hands it a reservations
+    prompt. Pre-existing onboarding data, not an endpoint bug — but it shows the niche is never
+    re-checked after onboarding, and there is no UI to change it.
+
 **[9a] Multi-branch & access control (plan of record)**
 - *What:* clients will be able to run MULTIPLE branches (per-location agents, knowledge bases,
   teams) with role-based access per branch, offered by plan/tier.
