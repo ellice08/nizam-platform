@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { MessageSquare, Phone, MessageCircle, Smartphone, Building2 } from "lucide-react";
+import { MessageSquare, Phone, MessageCircle, Smartphone } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,11 @@ import {
 } from "@/hooks";
 import { useAuthStore } from "@/store";
 import type { Organisation } from "@/types/api.types";
+import { useAgentsByOrg } from "@/hooks";
+import { BrandingSection } from "./clientDetail/BrandingSection";
+import { BranchesSection } from "./clientDetail/BranchesSection";
+import { AgentNicheSection } from "./clientDetail/AgentNicheSection";
+import { ScopedLinks } from "./clientDetail/ScopedLinks";
 
 const planStyle: Record<string, React.CSSProperties> = {
   pro:        { backgroundColor: "#7A2535", borderColor: "#7A2535", color: "#fff" },
@@ -48,6 +53,33 @@ function PlanBadge({ plan }: { plan: Organisation["plan"] }) {
   return (
     <Badge variant="outline" className={planClass[plan] ?? ""} style={planStyle[plan]}>
       {plan}
+    </Badge>
+  );
+}
+
+const NICHE_LABELS: Record<string, string> = {
+  real_estate: "Real estate",
+  hospitality: "Hospitality",
+};
+
+// Surfaces the agent's niche in the header. When it disagrees with the org's
+// industry it is shown as a warning, because that divergence is exactly how a
+// real-estate client ended up running a hospitality prompt — previously only
+// discoverable by reading the database.
+function NicheBadge({ niche, industry }: { niche: string | null; industry?: string | null }) {
+  if (!niche) {
+    return <Badge variant="outline" className="border-amber-500 text-amber-600">No niche set</Badge>;
+  }
+  const mismatch = !!industry && industry !== niche;
+  return (
+    <Badge
+      variant="outline"
+      className={mismatch ? "border-amber-500 text-amber-600" : "border-border text-muted-foreground"}
+      title={mismatch
+        ? `Agent niche (${NICHE_LABELS[niche] ?? niche}) does not match the client's industry (${NICHE_LABELS[industry] ?? industry})`
+        : "Agent niche"}
+    >
+      {mismatch ? "⚠ " : ""}{NICHE_LABELS[niche] ?? niche}
     </Badge>
   );
 }
@@ -80,6 +112,8 @@ const AdminClientDetail = () => {
   const { data: branches } = useBranches(id ?? "");
   const clientBranchId = branches?.[0]?.id;
   const { data: conversations, isLoading: convsLoading } = useConversations({ limit: 10, branch_id: clientBranchId });
+  const { data: clientAgents } = useAgentsByOrg(id ?? "");
+  const clientAgent = clientAgents?.[0];
   const updateOrg = useUpdateOrganisation();
   const deleteOrg = useDeleteOrganisation();
 
@@ -147,7 +181,10 @@ const AdminClientDetail = () => {
         title={org.name}
         description={`/${org.slug} · joined ${formatDistanceToNow(new Date(org.created_at), { addSuffix: true })}`}
       >
-        <PlanBadge plan={org.plan} />
+        <div className="flex items-center gap-2">
+          <NicheBadge niche={clientAgent?.niche ?? null} industry={org.industry} />
+          <PlanBadge plan={org.plan} />
+        </div>
       </PageHeader>
 
       {/* Stats row */}
@@ -294,28 +331,17 @@ const AdminClientDetail = () => {
             </div>
           )}
 
-          {/* Branches */}
-          <div className="rounded-lg border border-border bg-card overflow-hidden">
-            <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <h2 className="font-display text-base font-semibold">Branches</h2>
-              <span className="ml-auto text-xs text-muted-foreground">{org.branches.length}</span>
-            </div>
-            {org.branches.length === 0 ? (
-              <p className="px-6 py-4 text-sm text-muted-foreground">No branches yet.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {org.branches.map((branch) => (
-                  <li key={branch.id} className="px-6 py-3">
-                    <p className="text-sm font-medium">{branch.name}</p>
-                    {branch.location && (
-                      <p className="text-xs text-muted-foreground mt-0.5">{branch.location}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {/* Branding — wizard Step 2, previously unreachable after onboarding */}
+          {isAdmin && <BrandingSection org={org} />}
+
+          {/* Branches — wizard Step 3, incl. timezone (editable nowhere else) */}
+          {isAdmin && id && <BranchesSection orgId={id} />}
+
+          {/* Agent niche — wizard Step 4's template selector */}
+          {isAdmin && id && <AgentNicheSection orgId={id} />}
+
+          {/* Link-outs to the real tenant pages rather than duplicate editors */}
+          {isAdmin && id && <ScopedLinks orgId={id} orgName={org.name} />}
 
           {/* Danger zone — super_admin only */}
           {isAdmin && (

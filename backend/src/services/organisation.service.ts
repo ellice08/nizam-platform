@@ -14,7 +14,37 @@ class OrganisationService {
       .order('created_at', { ascending: false });
 
     if (error) throw new AppError(error.message);
-    return data ?? [];
+    const orgs = (data ?? []) as Array<Record<string, unknown>>;
+    if (orgs.length === 0) return orgs;
+
+    // Attach each org's agent niche so /admin/clients can show it in the list.
+    // The niche is set once at provisioning from the org's industry and never
+    // resynced, so a mismatch is invisible until someone reads the database —
+    // which is how a real-estate client ran a hospitality prompt. Two flat
+    // queries, not a per-org lookup.
+    const { data: branches } = await supabase
+      .from('branches')
+      .select('id, organisation_id')
+      .in('organisation_id', orgs.map(o => o['id'] as string));
+
+    const branchRows = (branches ?? []) as Array<Record<string, unknown>>;
+    const orgByBranch = new Map<string, string>(
+      branchRows.map(b => [b['id'] as string, b['organisation_id'] as string]),
+    );
+
+    const { data: agents } = await supabase
+      .from('agents')
+      .select('branch_id, niche')
+      .in('branch_id', branchRows.map(b => b['id'] as string));
+
+    const nicheByOrg = new Map<string, string | null>();
+    ((agents ?? []) as Array<Record<string, unknown>>).forEach(a => {
+      const orgId = orgByBranch.get(a['branch_id'] as string);
+      // First agent wins — matches how the dashboard resolves an org's agent.
+      if (orgId && !nicheByOrg.has(orgId)) nicheByOrg.set(orgId, (a['niche'] as string) ?? null);
+    });
+
+    return orgs.map(o => ({ ...o, agent_niche: nicheByOrg.get(o['id'] as string) ?? null }));
   }
 
   async getOrganisationById(orgId: string) {

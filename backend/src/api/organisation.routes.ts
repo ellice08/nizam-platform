@@ -5,8 +5,10 @@ import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { organisationService } from '../services/organisation.service.js';
 import { branchService } from '../services/branch.service.js';
+import { supabase } from '../lib/supabase.js';
 import { notificationService } from '../services/notification.service.js';
 import { ApiResponse } from '../utils/response.js';
+import { AppError } from '../utils/errors.js';
 import { intentService } from '../services/intent.service.js';
 
 const router = express.Router();
@@ -54,6 +56,12 @@ const updateOrganisationSchema = z.object({
 
 const createBranchSchema = z.object({
   name: z.string().min(1),
+  location: z.string().optional(),
+  timezone: z.string().optional(),
+});
+
+const updateBranchSchema = z.object({
+  name: z.string().min(1).optional(),
   location: z.string().optional(),
   timezone: z.string().optional(),
 });
@@ -174,6 +182,49 @@ router.post('/:id/branches', authenticate, requireSuperAdmin, validate(createBra
     req.body as { name: string; location?: string; timezone?: string }
   );
   res.status(201).json(ApiResponse.success(branch, 'Branch created'));
+});
+
+// PATCH /api/organisations/:id/branches/:branchId
+// Post-onboarding branch editing. Timezone in particular was previously set
+// once in the wizard (Step 3) and editable nowhere afterwards, even though
+// after-hours/business-hours behaviour depends on it.
+router.patch('/:id/branches/:branchId', authenticate, requireSuperAdmin, validate(updateBranchSchema), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const branch = await branchService.updateBranch(
+      req.params['branchId'] as string,
+      req.params['id'] as string,
+      req.body as Partial<{ name: string; location: string; timezone: string }>,
+    );
+    res.json(ApiResponse.success(branch, 'Branch updated'));
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/organisations/:id/branches/:branchId
+// Refuses to remove the last branch: org-level routing falls back to the first
+// branch by created_at (CLAUDE.md §2), so an org with zero branches would have
+// no agent, no knowledge scope and no widget target.
+router.delete('/:id/branches/:branchId', authenticate, requireSuperAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const orgId = req.params['id'] as string;
+    const branchId = req.params['branchId'] as string;
+
+    const branches = await branchService.getBranchesByOrg(orgId);
+    if (!branches.some((b: Record<string, unknown>) => b['id'] === branchId)) {
+      throw new AppError('Branch not found', 404);
+    }
+    if (branches.length <= 1) {
+      throw new AppError('Cannot remove the only branch — an organisation must keep at least one.', 400);
+    }
+
+    const { error } = await supabase
+      .from('branches')
+      .delete()
+      .eq('id', branchId)
+      .eq('organisation_id', orgId);
+    if (error) throw new AppError(error.message, 500);
+
+    res.json(ApiResponse.success({ deleted: true }, 'Branch removed'));
+  } catch (err) { next(err); }
 });
 
 export default router;

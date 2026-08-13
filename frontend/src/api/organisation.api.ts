@@ -89,6 +89,22 @@ const createBranch = async (orgId: string, payload: CreateBranchPayload): Promis
   return response.data.data
 }
 
+const updateBranch = async (orgId: string, branchId: string, payload: {
+  name?: string
+  location?: string
+  timezone?: string
+}): Promise<Branch> => {
+  const response = await apiClient.patch<ApiSuccess<Branch>>(
+    `/api/organisations/${orgId}/branches/${branchId}`, payload)
+  return response.data.data
+}
+
+const deleteBranch = async (orgId: string, branchId: string): Promise<{ deleted: boolean }> => {
+  const response = await apiClient.delete<ApiSuccess<{ deleted: boolean }>>(
+    `/api/organisations/${orgId}/branches/${branchId}`)
+  return response.data.data
+}
+
 const deleteOrganisation = async (id: string): Promise<{ deleted: boolean }> => {
   const response = await apiClient.delete<ApiSuccess<{ deleted: boolean }>>(`/api/organisations/${id}`)
   return response.data.data
@@ -114,7 +130,7 @@ const updateAgent = async (agentId: string, payload: UpdateAgentPayload): Promis
   return response.data.data
 }
 
-const getDefaultAgentPrompt = async (agentId: string): Promise<{
+const getDefaultAgentPrompt = async (agentId: string, niche?: string): Promise<{
   prompt: string
   source: 'niche_template' | 'generic'
   niche: string | null
@@ -123,7 +139,7 @@ const getDefaultAgentPrompt = async (agentId: string): Promise<{
     prompt: string
     source: 'niche_template' | 'generic'
     niche: string | null
-  }>>(`/api/agents/${agentId}/default-prompt`)
+  }>>(`/api/agents/${agentId}/default-prompt${niche ? `?niche=${encodeURIComponent(niche)}` : ''}`)
   return response.data.data
 }
 
@@ -294,6 +310,8 @@ const deleteOrgUser = async (
 }
 
 export const organisationApi = {
+  updateBranch,
+  deleteBranch,
   getDefaultAgentPrompt,
   getAllOrganisations,
   getOrganisationById,

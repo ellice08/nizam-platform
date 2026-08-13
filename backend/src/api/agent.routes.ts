@@ -112,7 +112,12 @@ router.get('/:agentId/default-prompt', authenticate, async (req: Request, res: R
     }
 
     const agentName = (agentRow['name'] as string) ?? 'Aria';
-    const niche = agentRow['niche'] as string | null;
+    // ?niche= lets the client-detail niche editor PREVIEW the template it is
+    // about to switch to, before anything is written. Absent, we resolve the
+    // agent's current niche (the "Load default instructions" case).
+    const rawNiche = req.query['niche'];
+    const nicheOverride = typeof rawNiche === 'string' ? rawNiche : undefined;
+    const niche = nicheOverride ?? (agentRow['niche'] as string | null);
 
     let orgName = 'your company';
     if (agentOrgId) {
