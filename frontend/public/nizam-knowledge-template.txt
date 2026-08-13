@@ -1,0 +1,60 @@
+NIZAM KNOWLEDGE TEMPLATE
+Replace the example content below with your own.
+Keep ONE BLANK LINE between every block — that is what lets your agent
+retrieve each item cleanly. Delete any sections you don't need.
+
+--- HOW TO USE THIS TEMPLATE ---
+1. Each block below is one self-contained fact or item.
+2. Repeat the important context (company name, project name) inside every block —
+   never rely on a heading above it.
+3. Write prices, sizes and other specifics explicitly. Your agent will not guess
+   or estimate anything that isn't written here.
+4. Delete these instructions before uploading.
+
+
+[Your Company Name] — company overview
+What the business does, where it operates, and what makes it distinctive. Two or three
+sentences. Include the full legal or trading name here so it is retrievable on its own.
+
+[Your Company Name] — contact information
+Phone: [number]. Email: [address]. Office address: [full address]. Business hours:
+[days and times]. WhatsApp: [link, if any]. Website: [url].
+
+[Your Company Name] — services offered
+List each service with a one-line description of what it involves. If a service is
+announced but not yet available, say so explicitly.
+
+[Product or service name] — [short descriptor]
+Belongs to: [company / project / category]
+Price: [exact figure, or "available on request" — never a range you don't stand behind]
+Key details: [size, capacity, specifications, whatever a customer asks about]
+Availability: [available / sold out / coming soon]
+Description: [one or two sentences a customer would find useful]
+
+[Second product or service name] — [short descriptor]
+Belongs to: [company / project / category]
+Price: [exact figure, or "available on request"]
+Key details: [...]
+Availability: [...]
+Description: [...]
+
+Important — items that share a name
+If two of your items share a name, spell out the difference here so your agent asks
+rather than assumes. Example: "There are two products named Classic: the Classic Sedan
+(₦12,000,000) and the Classic SUV (₦18,500,000)."
+
+Important — items with no published price
+List anything customers ask about that you don't publish a price for, so your agent knows
+to offer a follow-up instead of guessing. Example: "Pricing for [item] is available on
+request only — do not quote a figure."
+
+[Your Company Name] — how enquiries are handled
+How quickly your team responds, which channels customers can use, and what happens after
+someone leaves their details.
+
+[Your Company Name] — frequently asked question: [the question]
+The answer, written out fully. Create one block per question. Include the question wording
+customers actually use, not internal phrasing.
+
+[Your Company Name] — policy: [policy name]
+State the policy plainly, including any exceptions. One block per policy.

@@ -46,6 +46,62 @@ const MIN_CHUNK_CHARS = 50;
  */
 export const MATCH_THRESHOLD = 0.30;
 
+export interface IngestStructureReport {
+  // True when the document looks like ONE GIANT BLOCK rather than
+  // blank-line-separated items — the documented root cause of bad answers (§4).
+  oneBlockRisk: boolean;
+  avgCharsPerChunk: number;
+}
+
+export interface IngestResult {
+  chunksCreated: number;      // document + enrichment, kept for existing callers
+  documentChunks: number;     // chunks from the customer's actual text
+  enrichmentChunks: number;   // LLM-generated Q&A/summary passages
+  textChars: number;          // length of the normalised source text
+  structure: IngestStructureReport;
+}
+
+/**
+ * Detects the "one giant block" upload shape, for an advisory warning.
+ *
+ * HEURISTIC AND WHY: a blank line is a hard chunk boundary, so a well-authored
+ * document yields one chunk per block. Measured on the real Sites & Lifestyle
+ * corpus, those blocks run min 253 / median 587 / max 1069 chars. A document
+ * with NO blank lines can only be split by splitOversized(), which cuts at the
+ * chunk budget — so its chunks all land near `chunkChars` (2000).
+ *
+ * Average chars-per-chunk therefore separates the two shapes cleanly, and we
+ * flag at 1500 = 75% of the 2000 budget: comfortably above a well-structured
+ * document's typical average, and only reachable when most chunks were
+ * produced by hard-splitting rather than by blank lines.
+ *
+ * Two deliberate guards against false positives:
+ *  - Documents under 3000 chars are never flagged. A short document legitimately
+ *    fits in one or two chunks, and saying "this is one big block" about a
+ *    2-paragraph document would be noise.
+ *  - Only DOCUMENT chunks count. Enrichment passages are short and numerous, so
+ *    including them would drag the average down and mask the very shape we are
+ *    trying to detect (an 8000-char single block plus 11 enrichment passages
+ *    averages ~570 — indistinguishable from a well-structured file).
+ *
+ * A block that is itself ~1900 chars will also trip this. That is intended:
+ * such a block is too long for the "one short item per block" rule anyway, so
+ * the advice still applies.
+ */
+const STRUCTURE_MIN_CHARS = 3000;
+const STRUCTURE_AVG_CHARS_LIMIT = 1500;
+
+export function assessStructure(textChars: number, documentChunks: number): IngestStructureReport {
+  const avgCharsPerChunk = documentChunks > 0 ? Math.round(textChars / documentChunks) : 0;
+  return {
+    oneBlockRisk:
+      textChars >= STRUCTURE_MIN_CHARS &&
+      documentChunks > 0 &&
+      avgCharsPerChunk >= STRUCTURE_AVG_CHARS_LIMIT,
+    avgCharsPerChunk,
+  };
+}
+
 // Repairs the text-layer artefacts that document extraction (mainly PDF)
 // leaves behind, BEFORE chunking and embedding. Clients will keep uploading
 // PDFs, so this protects every future tenant rather than one document.
@@ -217,7 +273,7 @@ class RagService {
     sourceType: 'upload' | 'website_crawl';
     sourceUrl?: string;
     metadata?: Record<string, unknown>;
-  }): Promise<{ chunksCreated: number }> {
+  }): Promise<IngestResult> {
     const { text: rawText, branchId, sourceType, sourceUrl, metadata = {} } = params;
 
     if (!rawText || rawText.trim().length < 10) {
@@ -239,6 +295,7 @@ class RagService {
     logger.info(`Ingesting ${chunks.length} chunks for branch ${branchId}`);
 
     let inserted = 0;
+    let documentChunks = 0;
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
@@ -271,6 +328,7 @@ class RagService {
           logger.error(`Failed to insert chunk ${i} for branch ${branchId}: ${error.message}`);
         } else {
           inserted++;
+          documentChunks++;
         }
       } catch (err) {
         logger.error(`Failed to embed chunk ${i}: ${err instanceof Error ? err.message : String(err)}`);
@@ -319,7 +377,13 @@ class RagService {
       logger.error(`Enrichment pass error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    return { chunksCreated: inserted };
+    return {
+      chunksCreated: inserted,
+      documentChunks,
+      enrichmentChunks: inserted - documentChunks,
+      textChars: text.length,
+      structure: assessStructure(text.length, documentChunks),
+    };
   }
 
   private async enrichContent(text: string): Promise<string[]> {

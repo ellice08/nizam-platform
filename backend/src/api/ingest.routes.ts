@@ -78,7 +78,17 @@ router.post(
         throw new AppError('No files provided', 400);
       }
 
-      const results: Array<{ filename: string; chunksCreated: number; error?: string }> = [];
+      const results: Array<{
+        filename: string;
+        chunksCreated: number;
+        // Advisory structure report — lets the Knowledge page warn when a file
+        // indexed successfully but looks like one giant block (see
+        // ragService.assessStructure for the heuristic).
+        documentChunks?: number;
+        textChars?: number;
+        oneBlockRisk?: boolean;
+        error?: string;
+      }> = [];
 
       for (const file of files) {
         try {
@@ -86,7 +96,7 @@ router.post(
 
           const text = await extractText(file.buffer, file.mimetype, file.originalname);
 
-          const { chunksCreated } = await ragService.ingestText({
+          const ingested = await ragService.ingestText({
             text,
             branchId,
             sourceType: 'upload',
@@ -98,7 +108,20 @@ router.post(
             },
           });
 
-          results.push({ filename: file.originalname, chunksCreated });
+          results.push({
+            filename: file.originalname,
+            chunksCreated: ingested.chunksCreated,
+            documentChunks: ingested.documentChunks,
+            textChars: ingested.textChars,
+            oneBlockRisk: ingested.structure.oneBlockRisk,
+          });
+
+          if (ingested.structure.oneBlockRisk) {
+            logger.info(
+              `structure advisory: ${file.originalname} — ${ingested.textChars} chars in ` +
+              `${ingested.documentChunks} document chunk(s), avg ${ingested.structure.avgCharsPerChunk}`,
+            );
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           logger.error(`Failed to process ${file.originalname}: ${message}`);

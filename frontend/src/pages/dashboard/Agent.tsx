@@ -62,6 +62,7 @@ const Agent = () => {
   const [intents, setIntents] = useState<AgentIntent[]>([])
   const [originalIntents, setOriginalIntents] = useState<AgentIntent[]>([])
   const [savingIntents, setSavingIntents] = useState(false)
+  const [loadingDefaultPrompt, setLoadingDefaultPrompt] = useState(false)
 
   useEffect(() => {
     if (agent) {
@@ -91,6 +92,23 @@ const Agent = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent])
+
+  // Populates the textarea with the agent's default instructions so a client
+  // edits a working prompt rather than starting from a blank box. Does NOT
+  // save — the user still reviews and hits Save.
+  const handleLoadDefaultPrompt = async () => {
+    if (!agent?.id) return
+    setLoadingDefaultPrompt(true)
+    try {
+      const { prompt } = await organisationApi.getDefaultAgentPrompt(agent.id)
+      setSystemPrompt(prompt)
+      toast.success('Default instructions loaded — review and save')
+    } catch {
+      toast.error('Could not load the default instructions')
+    } finally {
+      setLoadingDefaultPrompt(false)
+    }
+  }
 
   const handleSave = () => {
     if (!agent) return
@@ -296,17 +314,45 @@ const Agent = () => {
 
               <div>
                 <label className="block text-xs uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-2">
-                  System prompt
+                  Custom instructions
                 </label>
+                <p className="text-xs text-[hsl(var(--text-secondary))] leading-relaxed mb-2">
+                  Advanced. This <span className="text-foreground font-medium">replaces</span> your
+                  agent's default behaviour, so anything the default handles — greeting style, how
+                  it collects contact details, how it hands off to your team — needs to be covered
+                  here too. Leave it empty to use the default, or load the default below and edit it.
+                </p>
                 <textarea
                   className="nz-textarea h-32 w-full"
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Describe how the agent should behave…"
+                  placeholder="Leave empty to use the default behaviour…"
                 />
-                <p className="mt-1.5 text-xs text-[hsl(var(--text-tertiary))]">
-                  Only organisation admins can edit the system prompt.
-                </p>
+
+                <div className="flex flex-wrap items-center gap-3 mt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { void handleLoadDefaultPrompt() }}
+                    disabled={loadingDefaultPrompt || !agent?.id}
+                    className="border-border text-[hsl(var(--text-secondary))]"
+                  >
+                    {loadingDefaultPrompt ? 'Loading…' : 'Load default instructions'}
+                  </Button>
+                  <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                    Only organisation admins can edit these instructions.
+                  </p>
+                </div>
+
+                {/* Advisory: a very short custom prompt strips out behaviour the
+                    default would have provided. Non-blocking, neutral styling. */}
+                {systemPrompt.trim().length > 0 && systemPrompt.trim().length < 200 && (
+                  <p className="mt-2 text-xs text-amber-500/90 leading-relaxed">
+                    This is quite short. Very brief instructions can make your agent less capable
+                    than the default — consider loading the default and editing it instead.
+                  </p>
+                )}
               </div>
 
               <div>

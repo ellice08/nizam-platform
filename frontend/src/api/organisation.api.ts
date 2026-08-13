@@ -114,11 +114,24 @@ const updateAgent = async (agentId: string, payload: UpdateAgentPayload): Promis
   return response.data.data
 }
 
+const getDefaultAgentPrompt = async (agentId: string): Promise<{
+  prompt: string
+  source: 'niche_template' | 'generic'
+  niche: string | null
+}> => {
+  const response = await apiClient.get<ApiSuccess<{
+    prompt: string
+    source: 'niche_template' | 'generic'
+    niche: string | null
+  }>>(`/api/agents/${agentId}/default-prompt`)
+  return response.data.data
+}
+
 const uploadDocuments = async (
   branchId: string,
   files: File[]
 ): Promise<{
-  results: Array<{ filename: string; chunksCreated: number; error?: string }>
+  results: Array<{ filename: string; chunksCreated: number; documentChunks?: number; textChars?: number; oneBlockRisk?: boolean; error?: string }>
   totalChunks: number
 }> => {
   const { data: { session } } = await supabase.auth.getSession()
@@ -136,7 +149,7 @@ const uploadDocuments = async (
       body: formData,
     }
   )
-  const json = await response.json() as { data: { results: Array<{ filename: string; chunksCreated: number; error?: string }>; totalChunks: number }; error?: { message?: string } }
+  const json = await response.json() as { data: { results: Array<{ filename: string; chunksCreated: number; documentChunks?: number; textChars?: number; oneBlockRisk?: boolean; error?: string }>; totalChunks: number }; error?: { message?: string } }
   if (!response.ok) throw new Error(json.error?.message ?? 'Upload failed')
   return json.data
 }
@@ -281,6 +294,7 @@ const deleteOrgUser = async (
 }
 
 export const organisationApi = {
+  getDefaultAgentPrompt,
   getAllOrganisations,
   getOrganisationById,
   createOrganisation,

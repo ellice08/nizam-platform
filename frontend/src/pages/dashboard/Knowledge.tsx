@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { PageHeader } from '@/components/PageHeader'
+import { KnowledgeGuidance } from '@/components/dashboard/KnowledgeGuidance'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -12,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FileText, Globe, Upload, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { FileText, Globe, Upload, Trash2, AlertCircle, CheckCircle2, AlertTriangle, X, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store'
 import { useBranches, useKnowledgeSources, useDeleteKnowledgeSource } from '@/hooks'
@@ -39,8 +40,17 @@ const Knowledge = () => {
   const [uploadResults, setUploadResults] = useState<Array<{
     filename: string
     chunksCreated: number
+    documentChunks?: number
+    textChars?: number
+    oneBlockRisk?: boolean
     error?: string
   }> | null>(null)
+  // Structure advisories the user has dismissed, keyed by filename. Advisory
+  // only — dismissing changes nothing about the indexed document.
+  const [dismissedAdvisories, setDismissedAdvisories] = useState<string[]>([])
+  // Bumping this remounts KnowledgeGuidance with defaultExpanded, so the
+  // advisory's "See the guidelines" link opens the examples in place.
+  const [guidanceKey, setGuidanceKey] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [crawlUrl, setCrawlUrl] = useState('')
   const [crawling, setCrawling] = useState(false)
@@ -168,6 +178,12 @@ const Knowledge = () => {
         description="Upload documents to train your AI agent. Only approved content is used to answer customer questions."
       />
 
+      {/* Authoring guidance — poor structure is the documented root cause of
+          bad agent answers, so this sits ABOVE the uploader, not below it. */}
+      <div className="mb-6">
+        <KnowledgeGuidance key={guidanceKey} defaultExpanded={guidanceKey > 0} />
+      </div>
+
       {/* Upload zone */}
       <div
         className={[
@@ -222,16 +238,48 @@ const Knowledge = () => {
             Upload results
           </p>
           {uploadResults.map(r => (
-            <div key={r.filename} className="flex items-center gap-3 text-sm">
-              {r.error ? (
-                <AlertCircle size={14} strokeWidth={1.5} className="text-destructive shrink-0" />
-              ) : (
-                <CheckCircle2 size={14} strokeWidth={1.5} className="text-[#4CAF50] shrink-0" />
+            <div key={r.filename}>
+              <div className="flex items-center gap-3 text-sm">
+                {r.error ? (
+                  <AlertCircle size={14} strokeWidth={1.5} className="text-destructive shrink-0" />
+                ) : (
+                  <CheckCircle2 size={14} strokeWidth={1.5} className="text-[#4CAF50] shrink-0" />
+                )}
+                <span className="text-foreground flex-1 truncate">{r.filename}</span>
+                <span className="text-[hsl(var(--text-tertiary))] nz-mono">
+                  {r.error ? r.error : `${r.chunksCreated} chunks`}
+                </span>
+              </div>
+
+              {/* Advisory only: the file DID index. Amber, never destructive,
+                  and dismissible — it must not read as a failure. */}
+              {!r.error && r.oneBlockRisk && !dismissedAdvisories.includes(r.filename) && (
+                <div className="mt-2 ml-[26px] rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={13} strokeWidth={1.5} className="text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-[hsl(var(--text-secondary))] leading-relaxed flex-1">
+                      Indexed, but this document looks like one large block. Your agent works best
+                      when each item sits in its own short section separated by a blank line —
+                      otherwise unrelated facts get retrieved together.{' '}
+                      <button
+                        type="button"
+                        onClick={() => setGuidanceKey(k => k + 1)}
+                        className="text-foreground underline underline-offset-2 hover:no-underline"
+                      >
+                        See the guidelines
+                      </button>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setDismissedAdvisories(d => [...d, r.filename])}
+                      aria-label="Dismiss"
+                      className="text-[hsl(var(--text-tertiary))] hover:text-foreground shrink-0"
+                    >
+                      <X size={13} strokeWidth={1.5} />
+                    </button>
+                  </div>
+                </div>
               )}
-              <span className="text-foreground flex-1 truncate">{r.filename}</span>
-              <span className="text-[hsl(var(--text-tertiary))] nz-mono">
-                {r.error ? r.error : `${r.chunksCreated} chunks`}
-              </span>
             </div>
           ))}
         </div>
@@ -260,11 +308,20 @@ const Knowledge = () => {
               className="mx-auto mb-3 text-[hsl(var(--text-tertiary))]"
             />
             <p className="text-sm text-[hsl(var(--text-secondary))]">
-              No documents indexed yet
+              No knowledge yet
             </p>
-            <p className="text-xs text-[hsl(var(--text-tertiary))] mt-1">
-              Upload files above to build your knowledge base
+            <p className="text-xs text-[hsl(var(--text-tertiary))] mt-1 max-w-md mx-auto leading-relaxed">
+              Your agent can only answer from what you upload here — start with your services,
+              prices, and the questions customers ask most.
             </p>
+            <a
+              href="/nizam-knowledge-template.txt"
+              download="nizam-knowledge-template.txt"
+              className="inline-flex items-center gap-1.5 text-xs text-foreground underline underline-offset-2 hover:no-underline mt-3"
+            >
+              <Download size={13} strokeWidth={1.5} />
+              Download the template
+            </a>
           </div>
         ) : (
           <div className="divide-y divide-border">
