@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { nicheLabel } from "@/lib/niches";
 import { useNavigate } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNow } from "date-fns"
@@ -82,6 +83,7 @@ const AdminClients = () => {
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Name</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Industry</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Agent niche</th>
+                <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Agent niche</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Plan</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Joined</th>
                 <th className="px-6 py-3 text-right text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Actions</th>
@@ -123,6 +125,22 @@ const AdminClients = () => {
                         </span>
                       );
                     })()}
+                  </td>
+                  <td className="px-6 py-4">
+                    {org.agent_niche
+                      ? (
+                        <span
+                          className={org.agent_niche !== org.industry
+                            ? "text-amber-600"
+                            : "text-muted-foreground"}
+                          title={org.agent_niche !== org.industry
+                            ? `Agent niche (${nicheLabel(org.agent_niche)}) does not match this client's industry (${industryLabel[org.industry] ?? org.industry})`
+                            : undefined}
+                        >
+                          {org.agent_niche !== org.industry ? "⚠ " : ""}{nicheLabel(org.agent_niche)}
+                        </span>
+                      )
+                      : <span className="text-amber-600" title="No agent niche set">⚠ Not set</span>}
                   </td>
                   <td className="px-6 py-4"><PlanBadge plan={org.plan} /></td>
                   <td className="px-6 py-4 text-muted-foreground">

@@ -281,11 +281,27 @@ const AdminOnboard = () => {
           .replace(/^You are Aria,/m, `You are ${agentName},`)
           .replace(/^You are Aria /m, `You are ${agentName} `)
 
+        // The backend auto-creates the main agent with niche = industry
+        // (organisation.service.ts). If the operator chose a different niche
+        // in Step 4, that auto-created prompt is the wrong template — pull the
+        // chosen niche's template instead of name-substituting the wrong one.
+        let finalPrompt = updatedPrompt
+        if (state.niche !== state.industry) {
+          try {
+            const { prompt } = await organisationApi.getDefaultAgentPrompt(mainAgent.id, state.niche)
+            finalPrompt = prompt
+          } catch {
+            // Non-fatal: fall back to the auto-created prompt. The niche below
+            // is still corrected, so client detail can fix the prompt later.
+          }
+        }
+
         await organisationApi.updateAgent(mainAgent.id, {
           name: agentName,
+          niche: state.niche,
           tone: b0.tone,
           language: b0.language,
-          system_prompt: updatedPrompt,
+          system_prompt: finalPrompt,
           escalation_contacts: b0.escalationContacts.map(
             ({ name, phone, email }) => ({ name, phone, email })
           ),
@@ -317,7 +333,7 @@ const AdminOnboard = () => {
           branch_id: branch.id,
           name: wb?.agentName || 'Aria',
           tone: wb?.tone || 'professional',
-          niche: state.industry,
+          niche: state.niche,
         });
 
         // Create intents for this extra branch agent
@@ -521,7 +537,7 @@ const AdminOnboard = () => {
       case 1: return <Step1Org state={state} set={set} />;
       case 2: return <Step2Branding state={state} set={set} />;
       case 3: return <Step3Branches state={state} setBranch={setBranch} renameBranch={renameBranch} />;
-      case 4: return <Step4Agent state={state} setBranch={setBranch} />;
+      case 4: return <Step4Agent state={state} setBranch={setBranch} set={set} />;
       case 5: return <Step5Knowledge state={state} setBranch={setBranch} />;
       case 6: return <Step6Credentials state={state} set={set} />;
       case 7: return <Step7Review state={state} goto={(s) => setStep(s)} onProvision={onProvision} />;

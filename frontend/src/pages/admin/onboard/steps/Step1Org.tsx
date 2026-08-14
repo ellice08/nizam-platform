@@ -1,4 +1,5 @@
 import { Minus, Plus } from "lucide-react";
+import { defaultNicheForIndustry } from "@/lib/niches";
 import { Field, SectionTitle, StepHeader, Toggle } from "./shared";
 import type { Industry, WizardState } from "../types";
 import { slugify } from "../types";
@@ -43,7 +44,14 @@ export const Step1Org = ({ state, set }: Props) => {
           <select
             className="nz-input"
             value={state.industry}
-            onChange={(e) => set({ industry: e.target.value as Industry })}
+            onChange={(e) => {
+              const industry = e.target.value as Industry;
+              // Niche follows industry until the operator sets it explicitly
+              // in Step 4 — after that their choice wins.
+              set(state.nicheEdited
+                ? { industry }
+                : { industry, niche: defaultNicheForIndustry(industry) });
+            }}
           >
             <option value="real_estate">Real estate agency</option>
             <option value="hospitality">Hospitality (hotel, restaurant, serviced apartment)</option>

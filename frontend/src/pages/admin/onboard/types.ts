@@ -1,5 +1,7 @@
 import type { AgentIntent } from '@/api'
 
+import type { NicheValue } from "@/lib/niches";
+
 export type Industry = "real_estate" | "hospitality" | "other";
 
 export type TelephonyMode =
@@ -60,6 +62,11 @@ export type WizardState = {
   slug: string;
   slugEdited: boolean;
   industry: Industry;
+  // Explicit, operator-confirmed agent niche. Defaults from `industry` but is
+  // a separate field on purpose — it selects the agent's behavioural template
+  // and used to be derived silently, so the two could drift with no signal.
+  niche: NicheValue;
+  nicheEdited: boolean;
   branchCount: number;
   feePaid: boolean;
 
@@ -132,6 +139,8 @@ export const initialState: WizardState = {
   slug: "",
   slugEdited: false,
   industry: "real_estate",
+  niche: "real_estate",
+  nicheEdited: false,
   branchCount: 1,
   feePaid: false,
   logoFile: null,

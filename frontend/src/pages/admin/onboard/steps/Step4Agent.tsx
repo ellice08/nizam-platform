@@ -6,12 +6,17 @@ import { BranchTabs } from "./BranchTabs";
 import type { Branch, WizardState } from "../types";
 import { BusinessHoursEditor } from "@/components/BusinessHoursEditor"
 import { IntentsEditor } from "@/components/IntentsEditor";
+import { NICHE_OPTIONS } from "@/lib/niches";
 
-type Props = { state: WizardState; setBranch: (i: number, patch: Partial<Branch>) => void };
+type Props = {
+  state: WizardState;
+  setBranch: (i: number, patch: Partial<Branch>) => void;
+  set: (patch: Partial<WizardState>) => void;
+};
 
 const tones: Array<Branch["tone"]> = ["professional", "friendly", "formal"];
 
-export const Step4Agent = ({ state, setBranch }: Props) => {
+export const Step4Agent = ({ state, setBranch, set }: Props) => {
   const [active, setActive] = useState(0);
   const b = state.branches[active];
   if (!b) return null;
@@ -22,6 +27,33 @@ export const Step4Agent = ({ state, setBranch }: Props) => {
       <BranchTabs branches={state.branches} active={active} onActive={setActive} />
 
       <div className="space-y-8 max-w-3xl">
+        {/* Niche is an ORG-level choice (one template for the account), shown
+            explicitly so the operator confirms it rather than inheriting it
+            silently from the industry picked in Step 1 — that implicit
+            derivation is how a real-estate client ended up on a hospitality
+            prompt with nobody noticing. */}
+        <div>
+          <Field label="Agent niche" required>
+            <select
+              className="nz-input"
+              value={state.niche}
+              onChange={(e) => set({ niche: e.target.value as typeof state.niche, nicheEdited: true })}
+            >
+              {NICHE_OPTIONS.map((n) => (
+                <option key={n.value} value={n.value}>{n.label}</option>
+              ))}
+            </select>
+          </Field>
+          <p className="mt-2 text-xs text-[hsl(var(--text-tertiary))] leading-relaxed">
+            {NICHE_OPTIONS.find((n) => n.value === state.niche)?.implies}
+          </p>
+          {!state.nicheEdited && (
+            <p className="mt-1 text-xs text-[hsl(var(--text-tertiary))]">
+              Suggested from the industry you chose in Step 1. Change it here if it doesn't fit.
+            </p>
+          )}
+        </div>
+
         <div className="grid md:grid-cols-2 gap-5">
           <Field label="Agent name">
             <input className="nz-input" value={b.agentName} onChange={(e) => setBranch(active, { agentName: e.target.value })} />

@@ -9,16 +9,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import { organisationApi } from '@/api'
 import { useAgentsByOrg } from '@/hooks'
+import { NICHE_OPTIONS, nicheLabel } from '@/lib/niches'
 
 // Agent niche — the wizard sets this from the org's INDUSTRY at provisioning
 // (AdminOnboard.tsx: `niche: state.industry`) and never revisits it, so the
 // two silently diverge. That is how a real-estate client ended up running a
 // hospitality prompt. This is the only place a niche can be corrected.
-const NICHES = [
-  { value: 'real_estate', label: 'Real estate' },
-  { value: 'hospitality', label: 'Hospitality' },
-]
-
 export function AgentNicheSection({ orgId }: { orgId: string }) {
   const queryClient = useQueryClient()
   const { data: agents, isLoading } = useAgentsByOrg(orgId)
@@ -118,7 +114,7 @@ export function AgentNicheSection({ orgId }: { orgId: string }) {
           onChange={e => setSelected(e.target.value)}
         >
           {!agent.niche && <option value="">— not set —</option>}
-          {NICHES.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
+          {NICHE_OPTIONS.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
         </select>
 
         {isCustomised && (
@@ -126,7 +122,7 @@ export function AgentNicheSection({ orgId }: { orgId: string }) {
             <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" strokeWidth={1.5} />
             <p className="text-xs text-muted-foreground leading-relaxed">
               This client has customised their instructions — they differ from the
-              {' '}{NICHES.find(n => n.value === agent.niche)?.label ?? agent.niche} template. Changing
+              {' '}{nicheLabel(agent.niche)} template. Changing
               the niche will not overwrite that unless you explicitly choose to.
             </p>
           </div>
@@ -145,7 +141,7 @@ export function AgentNicheSection({ orgId }: { orgId: string }) {
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Change niche to {NICHES.find(n => n.value === selected)?.label ?? selected}?
+              Change niche to {nicheLabel(selected)}?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">

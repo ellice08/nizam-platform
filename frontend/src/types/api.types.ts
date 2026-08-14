@@ -3,6 +3,9 @@ export interface Organisation {
   name: string
   slug: string
   industry: 'real_estate' | 'hospitality' | 'other'
+  /** Agent's behavioural-template niche, joined in by the org list endpoint.
+      Absent on single-org fetches. */
+  agent_niche?: string | null
   subdomain: string | null
   plan: 'trial' | 'starter' | 'pro' | 'enterprise'
   paystack_customer_id: string | null
