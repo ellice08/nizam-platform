@@ -72,8 +72,8 @@ export function AgentNicheSection({ orgId }: { orgId: string }) {
         niche: selected,
         ...(replacePrompt && previewPrompt ? { system_prompt: previewPrompt } : {}),
       })
-      await queryClient.invalidateQueries({ queryKey: ['agents', orgId] })
-      await queryClient.invalidateQueries()
+      // useAgentsByOrg's key is ['agents', 'org', orgId] — prefix-match it.
+      await queryClient.invalidateQueries({ queryKey: ['agents', 'org', orgId] })
       setConfirmOpen(false)
       toast.success(replacePrompt ? 'Niche and instructions updated' : 'Niche updated — instructions left as they were')
     } catch {

@@ -32,7 +32,10 @@ export function BranchesSection({ orgId }: { orgId: string }) {
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['branches', orgId] })
+  // Must match useBranches' actual key — ['organisations', orgId, 'branches',
+  // tenantOrgId]. Invalidating ['branches', orgId] silently matched nothing, so
+  // a successful save left the old timezone on screen. Prefix-match the org.
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['organisations', orgId] })
 
   const startEdit = (b: Branch) => {
     setAdding(false)

@@ -36,6 +36,7 @@ import {
 import { useAuthStore } from "@/store";
 import type { Organisation } from "@/types/api.types";
 import { useAgentsByOrg } from "@/hooks";
+import { nicheLabel } from "@/lib/niches";
 import { BrandingSection } from "./clientDetail/BrandingSection";
 import { BranchesSection } from "./clientDetail/BranchesSection";
 import { AgentNicheSection } from "./clientDetail/AgentNicheSection";
@@ -57,11 +58,6 @@ function PlanBadge({ plan }: { plan: Organisation["plan"] }) {
   );
 }
 
-const NICHE_LABELS: Record<string, string> = {
-  real_estate: "Real estate",
-  hospitality: "Hospitality",
-};
-
 // Surfaces the agent's niche in the header. When it disagrees with the org's
 // industry it is shown as a warning, because that divergence is exactly how a
 // real-estate client ended up running a hospitality prompt — previously only
@@ -76,10 +72,10 @@ function NicheBadge({ niche, industry }: { niche: string | null; industry?: stri
       variant="outline"
       className={mismatch ? "border-amber-500 text-amber-600" : "border-border text-muted-foreground"}
       title={mismatch
-        ? `Agent niche (${NICHE_LABELS[niche] ?? niche}) does not match the client's industry (${NICHE_LABELS[industry] ?? industry})`
+        ? `Agent niche (${nicheLabel(niche)}) does not match the client's industry (${nicheLabel(industry)})`
         : "Agent niche"}
     >
-      {mismatch ? "⚠ " : ""}{NICHE_LABELS[niche] ?? niche}
+      {mismatch ? "⚠ " : ""}{nicheLabel(niche)}
     </Badge>
   );
 }

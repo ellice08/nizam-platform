@@ -83,7 +83,6 @@ const AdminClients = () => {
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Name</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Industry</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Agent niche</th>
-                <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Agent niche</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Plan</th>
                 <th className="px-6 py-3 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Joined</th>
                 <th className="px-6 py-3 text-right text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">Actions</th>
@@ -110,21 +109,6 @@ const AdminClients = () => {
                   <td className="px-6 py-4 font-medium">{org.name}</td>
                   <td className="px-6 py-4 text-muted-foreground">
                     {industryLabel[org.industry] ?? org.industry}
-                  </td>
-                  <td className="px-6 py-4">
-                    {(() => {
-                      const niche = (org as unknown as { agent_niche?: string | null }).agent_niche ?? null;
-                      if (!niche) return <span className="text-xs text-amber-600">Not set</span>;
-                      const mismatch = !!org.industry && org.industry !== niche;
-                      return (
-                        <span
-                          className={mismatch ? "text-xs text-amber-600" : "text-xs text-muted-foreground"}
-                          title={mismatch ? `Does not match industry (${industryLabel[org.industry] ?? org.industry})` : undefined}
-                        >
-                          {mismatch ? "\u26a0 " : ""}{industryLabel[niche] ?? niche}
-                        </span>
-                      );
-                    })()}
                   </td>
                   <td className="px-6 py-4">
                     {org.agent_niche
