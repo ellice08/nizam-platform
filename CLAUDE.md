@@ -925,6 +925,21 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - *Gotcha:* no new code should hardcode a first-branch assumption from here on — every new
   branch-scoped feature should take an explicit branch_id, not silently fall back to "the first
   one."
+- **UX as originally specified (recovered from earlier project history — this is the plan of
+  record, not a fresh proposal):**
+  - Org admins get a **Branches view** on the dashboard, plus **per-branch drill-down** — i.e.
+    the dashboard gains a branch dimension rather than a single implicit branch.
+  - **Role scoping:** `org_admin` = all branches; `branch_admin` / `branch_staff` = their own
+    branch only; `org_viewer` / `branch_viewer` = read-only at their respective level.
+  - **"Add/remove branches" is an ORG-ADMIN permission** under the locked access model.
+- **DIVERGENCE, not a design choice:** branch add/edit/remove is currently **operator-only**
+  (super-admin, via `/admin/clients/:id` — see §8 Tier 3 [8a]-era work). The tenant dashboard has
+  no branches UI at all. That is a gap against the locked model, not a deliberate decision, and
+  should be closed when this item is built rather than treated as the intended behaviour.
+- **DESIGN-RELEVANT FOR THE LAYOUT PASS (Tier 3 [7]):** this adds a **branch dimension to
+  navigation** — a switcher or scope selector that most dashboard pages must respect, and a
+  Branches view that has no home in today's IA. Worth settling during the layout/nav redesign
+  rather than bolting on afterwards, since it changes what the nav has to express.
 
 **[9b] First-login onboarding tour (final-stage polish)**
 - *What:* an interactive walkthrough for new users on first login — a guided tour (react-joyride
@@ -970,7 +985,15 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
 - WhatsApp: fresh-thread-on-resolved (currently reuses any thread by call_id; agreed future = thread
   on resolved=false + 24h recency).
 - whatsapp_processed_messages pruning (grows unbounded).
-- Resend domain verification (test mode currently).
+- **Booking details missing from the escalation email — template gap only, data already flows.**
+  `claude.service.ts` builds and persists `conversations.booking_details` (date, subject, etc.),
+  but `notificationService.sendEscalationAlert`'s params are `{toEmails, customerName, channel,
+  transcript, question, branchName, urgent}` — booking details are never passed in, so the team
+  gets an escalation email without the booking the customer just asked for. Fix is the email
+  template plus threading the field through the call site; no new capture work needed.
+- **Resend domain verification + sender name.** Still on Resend's test mode, and every email
+  sends from `env.RESEND_FROM_EMAIL` (used by all three templates). Verify the domain and set a
+  proper sender name before clients see these. Config, not code.
 - Notification auto-expiry/dismiss (parked).
 - Post-close voice `chat()` waste (a turn can run after the socket closed — guarded now, but verify).
 - Booking flow occasionally over-asks — mostly fixed; watch for recurrence.
@@ -1023,10 +1046,39 @@ Ordered by the agreed tiers. For each: **what · why · decisions made · open q
     without `data-disable-capture="true"`. The first run put 12 junk chunks into Maryam's KB
     (removed). On a REAL tenant site that behavior is wanted; on a throwaway test page always add
     `data-disable-capture="true"`.
+- **`usage_logs` and `conversation_analysis` exist in the schema but are EMPTY and unwritten —
+  verify before billing work.** Checked live: both tables exist, both have **0 rows**, and
+  `grep` finds **zero references to either in `backend/src`** — nothing populates them. This
+  matters because **usage billing (Tier 5 [12]) depends on `usage_logs`**: metered billing has no
+  data source today, so the first billing task is instrumenting writes, not wiring a provider.
+  Re-check both before scoping that work in case something starts writing to them in between.
 - Sidebar dark/light toggle did not respond to synthetic clicks at its own reported coordinates
   during browser-automation testing (the same button worked when clicked via `element.click()`) —
   most likely a browser-pane coordinate/scaling artifact rather than a product bug, but it was
   never fully explained. Worth a real human click-check on desktop before assuming it's fine.
+
+---
+
+## 9a. Known divergences from the original spec
+
+Decisions that were **locked in the original spec and then never implemented**. Recorded so they
+are not rediscovered later as bugs, or "fixed" by someone assuming the current behaviour was
+unintentional. **Neither is urgent** — both are deliberate deferrals, not defects.
+
+- **Custom subdomain routing was specified and never built.** The original design had each client
+  reachable at `nizam.clientcompany.com` via a CNAME pointing at Vercel, with the app resolving
+  the tenant from the hostname. Today every tenant uses the same origin and resolves scope from
+  the authenticated session instead. `organisations` still carries a `subdomain` column (the
+  update route accepts it, super-admin only), which is the main way someone might infer this
+  works — **it is stored but nothing routes on it.**
+- **Per-niche editable dashboard labels were specified and never built.** Each niche was meant to
+  carry its own configurable dashboard terminology (e.g. an estate agent seeing "Viewings" where
+  a hotel sees "Bookings"). The wizard's `defaultLabelsByIndustry` map in
+  `pages/admin/onboard/types.ts` is the surviving trace — labels exist per industry there, but
+  they are not editable and the dashboard does not read them. Nav and page labels are currently
+  fixed strings for every tenant.
+  - *Relevant to the layout pass (Tier 3 [7]):* if per-niche labels are ever revived, they change
+    what nav items are called per tenant — worth knowing before hard-coding a new nav vocabulary.
 
 ---
 
