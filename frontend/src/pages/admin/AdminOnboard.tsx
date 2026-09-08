@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Info, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -51,7 +52,7 @@ const AdminOnboard = () => {
   const [state, setState] = useState<WizardState>(initialState);
   const [step, setStep] = useState(1);
   const [completed, setCompleted] = useState<Set<number>>(new Set());
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [savedAt, setSavedAt] = useState<string>("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isProvisioning, setIsProvisioning] = useState(false);
@@ -193,9 +194,14 @@ const AdminOnboard = () => {
     setCompleted((c) => new Set(c).add(step));
     setStep(newStep);
     setSaveStatus("saving");
-    await saveDraft(step, buildDraftData());
-    setSaveStatus("saved");
-    setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    const result = await saveDraft(step, buildDraftData());
+    if (result.success) {
+      setSaveStatus("saved");
+      setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    } else {
+      setSaveStatus("error");
+      toast.error(result.error ?? "Failed to save draft — your progress may not be recoverable if you leave.");
+    }
   };
 
   const back = () => {
@@ -694,6 +700,11 @@ const AdminOnboard = () => {
                   <span className="inline-flex items-center gap-1.5 text-[hsl(var(--text-secondary))]">
                     <CheckCircle2 className="h-3.5 w-3.5 text-rose" strokeWidth={1.5} />
                     Draft saved {savedAt && <span className="nz-mono">· {savedAt}</span>}
+                  </span>
+                ) : saveStatus === "error" ? (
+                  <span className="inline-flex items-center gap-1.5 text-destructive">
+                    <X className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    Draft not saved
                   </span>
                 ) : null}
               </div>

@@ -16,6 +16,7 @@ import whatsappRoutes from './whatsapp.routes.js';
 import voiceRoutes from './voice.routes.js';
 import versionRoutes from './version.routes.js';
 import navViewsRoutes from './navViews.routes.js';
+import onboardingDraftRoutes from './onboardingDraft.routes.js';
 
 export function registerRoutes(app: Express): void {
   app.use('/api/version', versionRoutes);
@@ -35,4 +36,5 @@ export function registerRoutes(app: Express): void {
   app.use('/api/whatsapp', whatsappRoutes);
   app.use('/api/voice', voiceRoutes);
   app.use('/api/nav-views', navViewsRoutes);
+  app.use('/api/onboarding-drafts', onboardingDraftRoutes);
 }

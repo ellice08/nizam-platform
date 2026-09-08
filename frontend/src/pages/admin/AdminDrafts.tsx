@@ -5,33 +5,19 @@ import { PageHeader } from "@/components/PageHeader"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FileText, Trash2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { onboardingDraftApi, type OnboardingDraft } from "@/api"
 import { toast } from "sonner"
-
-type Draft = {
-  id: string
-  step_completed: number
-  draft_data: Record<string, unknown>
-  status: string
-  last_saved_at: string
-  created_at: string
-}
 
 const AdminDrafts = () => {
   const navigate = useNavigate()
-  const [drafts, setDrafts] = useState<Draft[]>([])
+  const [drafts, setDrafts] = useState<OnboardingDraft[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchDrafts = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('onboarding_drafts')
-        .select('*')
-        .eq('status', 'in_progress')
-        .order('last_saved_at', { ascending: false })
-      if (error) throw error
-      setDrafts((data ?? []) as Draft[])
+      const data = await onboardingDraftApi.list()
+      setDrafts(data)
     } catch {
       toast.error('Failed to load drafts')
     } finally {
@@ -43,7 +29,9 @@ const AdminDrafts = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await supabase.from('onboarding_drafts').delete().eq('id', id)
+      await onboardingDraftApi.remove(id)
+      // Reflects the actual result, not an assumed one — if the delete call
+      // above throws, this line never runs and the catch below fires instead.
       toast.success('Draft deleted')
       void fetchDrafts()
     } catch {
@@ -51,7 +39,7 @@ const AdminDrafts = () => {
     }
   }
 
-  const draftName = (d: Draft): string => {
+  const draftName = (d: OnboardingDraft): string => {
     const step1 = d.draft_data?.step1 as { name?: string } | undefined
     return step1?.name || 'Untitled draft'
   }
